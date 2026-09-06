@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
 import 'package:tide/services/tide_store.dart';
 import 'package:tide/widgets/tide_button.dart';
+import 'package:tide/widgets/tide_mark.dart';
 
 /// Fixed pumps throughout rather than `pumpAndSettle`: onboarding runs a
 /// drifting backdrop, an orbiting mark and three looping demos, and the
@@ -95,6 +96,28 @@ void main() {
       expect(find.text('What should we track?'), findsNothing);
       expect(find.text('Set the rhythm'), findsNothing);
       expect(find.text('One nudge a day'), findsNothing);
+    });
+
+    testWidgets('nudging a page does not restart its entrance', (tester) async {
+      await tester.pumpWidget(const TideApp());
+      await settle(tester, 900);
+
+      // The mark owns the welcome step's entrance. If its State survives, so
+      // did the ring it had already finished drawing.
+      final before = tester.state(find.byType(TideMark));
+
+      // A drag too short to turn the page, which springs back to where it
+      // started — the gesture that used to rebuild the whole step twice, once
+      // on the way out and once on the way back.
+      await tester.drag(find.byType(PageView), const Offset(-40, 0));
+      await settle(tester);
+
+      expect(find.text('Get started'), findsOneWidget, reason: 'still page one');
+      expect(
+        tester.state(find.byType(TideMark)),
+        same(before),
+        reason: 'the mark was rebuilt from scratch, so its draw-in replayed',
+      );
     });
 
     testWidgets('back walks the flow instead of leaving it', (tester) async {

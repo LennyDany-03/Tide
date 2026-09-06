@@ -292,7 +292,18 @@ class _BackButton extends StatelessWidget {
 /// The perspective entry is small on purpose. Enough that a departing page
 /// reads as turning away; past about 0.0015 the near edge fans out and the
 /// text on it goes soft.
-class _Depth extends StatelessWidget {
+///
+/// **The wrapper shape never changes, and that is load-bearing.** This used
+/// to return the bare child at rest and wrap it only once the page had
+/// moved, on the reasoning that a motionless page should not pay for a
+/// transform. What that actually did was change the widget type sitting at
+/// that position in the tree the instant a finger touched the page, so
+/// Flutter unmounted the whole step and inflated a fresh one — the ring
+/// started drawing again, the copy re-staggered — and then did it a second
+/// time when the drag sprang back and the wrapper disappeared again. A
+/// nudge too small to turn the page restarted the entrance twice. An
+/// identity transform costs one layer; the shape has to stay constant.
+class _Depth extends StatefulWidget {
   const _Depth({
     required this.controller,
     required this.index,
@@ -304,34 +315,62 @@ class _Depth extends StatelessWidget {
   final Widget child;
 
   @override
+  State<_Depth> createState() => _DepthState();
+}
+
+class _DepthState extends State<_Depth> with AutomaticKeepAliveClientMixin {
+  /// Pages hold their state once built.
+  ///
+  /// Without this a page is disposed as soon as it leaves the viewport, so
+  /// walking back through the flow replays every entrance from zero — the
+  /// welcome ring redrawing on the way back is the same wrong note as it
+  /// redrawing after a nudge, just further apart. Keeping them alive is
+  /// only affordable because [_ticking] mutes the ones off screen.
+  @override
+  bool get wantKeepAlive => true;
+
+  /// How far this page sits from the one under the finger, signed. Negative
+  /// means the page is to the left of where the view has scrolled to.
+  double get _delta {
+    final controller = widget.controller;
+    // `page` throws before the view has been laid out, and reads null on
+    // the frame the controller is attached — both mean "sitting on the
+    // initial page", which is what the fallback says.
+    final page = controller.hasClients && controller.position.haveDimensions
+        ? controller.page ?? controller.initialPage.toDouble()
+        : controller.initialPage.toDouble();
+    return (page - widget.index).clamp(-1.0, 1.0);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     final width = MediaQuery.sizeOf(context).width;
 
     return AnimatedBuilder(
-      animation: controller,
-      child: child,
+      animation: widget.controller,
+      child: widget.child,
       builder: (context, child) {
-        // `page` throws before the view has been laid out, and reads null
-        // on the frame the controller is attached — both mean "sitting on
-        // the initial page", which is what the fallback says.
-        final page = controller.hasClients && controller.position.haveDimensions
-            ? controller.page ?? controller.initialPage.toDouble()
-            : controller.initialPage.toDouble();
-
-        final delta = (page - index).clamp(-1.0, 1.0);
+        final delta = _delta;
         final away = delta.abs();
-        if (away == 0) return child!;
 
-        return Opacity(
-          // Faster than the slide, so two pages are never both legible.
-          opacity: (1 - away * 1.4).clamp(0.0, 1.0),
-          child: Transform(
-            alignment: Alignment.center,
-            transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.0011)
-              ..translateByDouble(-delta * width * 0.34, 0, away * 90, 1)
-              ..rotateY(delta * 0.34),
-            child: child,
+        // A page that is kept alive but wholly off screen must not keep
+        // running its demo loop — three of these ticking behind the one you
+        // are reading is three screens' worth of animation nobody can see.
+        return TickerMode(
+          enabled: away < 1,
+          child: Opacity(
+            // Faster than the slide, so two pages are never both legible.
+            // Identity at rest, where `RenderOpacity` skips the layer.
+            opacity: (1 - away * 1.4).clamp(0.0, 1.0),
+            child: Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..setEntry(3, 2, 0.0011)
+                ..translateByDouble(-delta * width * 0.34, 0, away * 90, 1)
+                ..rotateY(delta * 0.34),
+              child: child,
+            ),
           ),
         );
       },
