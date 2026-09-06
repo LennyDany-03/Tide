@@ -89,6 +89,13 @@ class TideButton extends StatelessWidget {
           curve: TideMotion.tabCurve,
           width: expand ? double.infinity : null,
           height: 52,
+          // A full-width button gets its air from the screen margins. One
+          // sized to its own label has none unless it is given some, and
+          // without this the label sits hard against both ends and reads as
+          // clipped rather than compact.
+          padding: expand
+              ? null
+              : const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
             color: enabled ? _fill : _disabledFill,
             borderRadius: TideElevation.radius12,

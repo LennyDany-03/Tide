@@ -135,7 +135,7 @@ class _SwipeLoopDemoState extends _LoopState<SwipeLoopDemo> {
               final back = Curves.easeOutBack.transform(
                 _window(t, _commitAt, 0.60),
               );
-              final drag = width * 0.52 * out * (1 - back);
+              final drag = width * 0.46 * out * (1 - back);
 
               // Logged, held, then cleared for the next pass.
               final done =
@@ -144,41 +144,52 @@ class _SwipeLoopDemoState extends _LoopState<SwipeLoopDemo> {
               final finger =
                   _window(t, 0.06, 0.18) * (1 - _window(t, _commitAt, 0.54));
 
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned.fill(
-                    child: SwipeLogBackground(
-                      offset: drag,
-                      width: width,
-                      phase: t * 2 * math.pi * 3,
-                      radius: TideElevation.radius20,
-                    ),
-                  ),
-                  Transform.translate(
-                    offset: Offset(drag, 0),
-                    child: RippleBurst(
-                      trigger: _ripple,
-                      borderRadius: TideElevation.radius20,
-                      child: _DemoCard(
-                        name: widget.name,
-                        glyph: widget.glyph,
-                        progress: done,
-                        streak: widget.streak + (done > 0.5 ? 1 : 0),
-                        week: [
-                          for (var i = 0; i < 6; i++) i == 2 ? 0.0 : 1.0,
-                          done,
-                        ],
+              // Clipped to its own box. The card genuinely travels off the
+              // edge — that is what a real swipe does — but unclipped it
+              // would paint outside the demo, and the tour runs this inside
+              // a caption panel it must not spill out of.
+              return ClipRect(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: SwipeLogBackground(
+                        offset: drag,
+                        width: width,
+                        phase: t * 2 * math.pi * 3,
+                        radius: TideElevation.radius20,
                       ),
                     ),
-                  ),
-                  if (finger > 0.01)
-                    Positioned(
-                      left: width * 0.30 + drag - _Fingertip.size / 2,
-                      top: _DemoCard.height * 0.62,
-                      child: Opacity(opacity: finger, child: const _Fingertip()),
+                    Transform.translate(
+                      offset: Offset(drag, 0),
+                      child: RippleBurst(
+                        trigger: _ripple,
+                        borderRadius: TideElevation.radius20,
+                        child: _DemoCard(
+                          name: widget.name,
+                          glyph: widget.glyph,
+                          progress: done,
+                          streak: widget.streak + (done > 0.5 ? 1 : 0),
+                          week: [
+                            for (var i = 0; i < 6; i++) i == 2 ? 0.0 : 1.0,
+                            done,
+                          ],
+                        ),
+                      ),
                     ),
-                ],
+                    if (finger > 0.01)
+                      Positioned(
+                        left: width * 0.30 + drag - _Fingertip.size / 2,
+                        // Centred on the card rather than resting on its
+                        // bottom edge, where it read as a bubble falling
+                        // off the row instead of a thumb on it.
+                        top: (_DemoCard.height - _Fingertip.size) / 2,
+                        child: Opacity(
+                          opacity: finger,
+                          child: const _Fingertip(),
+                        ),
+                      ),
+                  ],
+                ),
               );
             },
           );
@@ -229,8 +240,10 @@ class _StreakLoopDemoState extends _LoopState<StreakLoopDemo> {
   @override
   Duration get period => const Duration(milliseconds: 5200);
 
-  /// The day the run would have broken on.
-  static const int _missed = 4;
+  /// The day the run would have broken on, counting the strip from Monday
+  /// as the calendar and the week strip both do. The caption names this day
+  /// out loud, so the index and the word have to agree.
+  static const int _missed = 3;
 
   @override
   Widget build(BuildContext context) {

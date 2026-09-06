@@ -40,13 +40,25 @@ class _GoogleMarkPainter extends CustomPainter {
 
   final Color color;
 
-  /// How much of the ring is drawn. The gap is the lower right, where the
-  /// crossbar comes out.
-  static const double _sweepDegrees = 310;
+  /// How much of the ring is drawn.
+  ///
+  /// The remainder is the opening, and which side it falls on is the whole
+  /// difference between a G and an e. A letter G opens at the *upper*
+  /// right: the arc runs from the bar at three o'clock clockwise all the
+  /// way round and stops short of closing, and the bar then points back
+  /// inward across the gap's underside. Sweeping the other way puts the
+  /// hole below the bar, which is an e — the first version of this did
+  /// exactly that.
+  static const double _sweepDegrees = 292;
+
+  /// Ring thickness as a fraction of the diameter. Google's mark is a heavy
+  /// ring; thinner than this and it stops reading as the logo at the size a
+  /// button actually uses it.
+  static const double _weight = 0.2;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = size.shortestSide * 0.17;
+    final stroke = size.shortestSide * _weight;
     final radius = (size.shortestSide - stroke) / 2;
     final center = size.center(Offset.zero);
 
@@ -56,19 +68,21 @@ class _GoogleMarkPainter extends CustomPainter {
       ..strokeCap = StrokeCap.butt
       ..color = color;
 
-    // From three o'clock, anticlockwise the long way round, stopping short
-    // of where it started so the opening lands under the bar.
+    // From three o'clock, clockwise the long way round, stopping short of
+    // where it started so the opening lands above the bar.
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       0,
-      -_sweepDegrees * math.pi / 180,
+      _sweepDegrees * math.pi / 180,
       false,
       paint,
     );
 
-    // The bar, running in from the arc's terminus to just past the middle.
+    // The bar, running inward from the arc's start to a little past the
+    // middle. Butt caps at both ends, so it meets the ring flush rather
+    // than bulging out of it.
     canvas.drawLine(
-      Offset(center.dx + radius * 0.05, center.dy),
+      Offset(center.dx - radius * 0.12, center.dy),
       Offset(center.dx + radius + stroke / 2, center.dy),
       paint,
     );

@@ -374,7 +374,7 @@ class _AuthScreenState extends State<AuthScreen> {
           variant: TideButtonVariant.secondary,
           phase: _googlePhase,
           enabled: _phase == TideButtonPhase.idle,
-          icon: const GoogleMark(size: 18),
+          icon: const GoogleMark(size: 19),
           onPressed: _continueWithGoogle,
         ),
         const SizedBox(height: 18),

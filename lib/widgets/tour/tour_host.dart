@@ -40,12 +40,25 @@ class TourHost extends StatelessWidget {
         child,
         if (store.tourPending)
           Positioned.fill(
-            child: TourOverlay(
-              onFinish: store.finishTour,
-              onAddHabit: () {
-                store.finishTour();
-                onAddHabit();
-              },
+            // Above the router means above the Navigator, and above the
+            // Navigator there is no Material and therefore no
+            // DefaultTextStyle — every Text falls back to WidgetsApp's error
+            // style and merges its underline into whatever TideType asked
+            // for. That is why the first build of this had a rule under
+            // every line of the caption. One inherited style at the root of
+            // the overlay fixes all of them, including the shared demo's,
+            // which is better than the alternative the celebration overlay
+            // took: `decoration: TextDecoration.none` repeated on each Text,
+            // where the next Text anybody adds is underlined again.
+            child: DefaultTextStyle(
+              style: TideType.body,
+              child: TourOverlay(
+                onFinish: store.finishTour,
+                onAddHabit: () {
+                  store.finishTour();
+                  onAddHabit();
+                },
+              ),
             ),
           ),
       ],
