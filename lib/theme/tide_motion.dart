@@ -114,6 +114,41 @@ abstract final class TideMotion {
   /// The whole-day-complete moment on Home — distinct from a single ripple.
   static const Duration dayComplete = Duration(milliseconds: 1600);
 
+  // --- Celebration ------------------------------------------------------
+
+  /// The themed completion panel arriving, standing, and leaving.
+  ///
+  /// The hold is the number that matters. Under about a second and a half
+  /// the line cannot be read before it starts to go, which turns a reward
+  /// into a flicker; much past two and a half and you are waiting on the
+  /// app to finish congratulating you, every single day. Anything on screen
+  /// this often has to be shorter than it wants to be.
+  static const Duration celebrateIn = Duration(milliseconds: 440);
+  static const Duration celebrateHold = Duration(milliseconds: 1750);
+  static const Duration celebrateOut = Duration(milliseconds: 280);
+
+  /// How long the arcade panel spends filling its XP bar, and the kawaii
+  /// panel spends bobbing once. Both are decoration inside the hold, so
+  /// they have to finish well inside [celebrateHold].
+  static const Duration celebrateFlourish = Duration(milliseconds: 900);
+
+  /// Arcade quantises its motion to this many frames, so the panel arrives
+  /// in visible steps instead of sliding.
+  static const int arcadeSteps = 6;
+
+  // --- Milestone route --------------------------------------------------
+
+  /// The route drawing itself down the screen on arrival, and the lantern
+  /// travelling to where the streak actually stands.
+  ///
+  /// The traveller is slower than the line on purpose: the route is context
+  /// and arrives first, then the eye follows the one moving thing to the
+  /// only part of the screen that is about *you*.
+  static const Duration routeDraw = Duration(milliseconds: 1000);
+  static const Duration routeTravel = Duration(milliseconds: 1400);
+  static const Curve routeCurve = Curves.easeOutCubic;
+  static const Curve routeTravelCurve = Curves.easeOutCubic;
+
   /// Pausing or archiving a habit "drains" its colour away.
   static const Duration drain = Duration(milliseconds: 400);
 

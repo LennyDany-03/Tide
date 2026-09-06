@@ -27,6 +27,7 @@ class SwipeLogBackground extends StatelessWidget {
     required this.phase,
     required this.radius,
     this.freezeAvailable = true,
+    this.freezeOnRight = false,
   });
 
   /// Signed pixels the card has travelled.
@@ -44,8 +45,11 @@ class SwipeLogBackground extends StatelessWidget {
   /// With no freeze tokens left, the left swipe shows a coral refusal
   /// instead of promising something it cannot deliver.
   final bool freezeAvailable;
+  final bool freezeOnRight;
 
-  bool get _completing => offset > 0;
+  bool get _freezing => freezeOnRight ? offset > 0 : offset < 0;
+
+  bool get _completing => !_freezing;
 
   double get _fraction =>
       width == 0 ? 0 : (offset.abs() / width).clamp(0.0, 1.0);
@@ -101,8 +105,8 @@ class SwipeLogBackground extends StatelessWidget {
 
           // The wave trails the finger on the side the swipe came from.
           Positioned(
-            left: _completing ? 0 : null,
-            right: _completing ? null : 0,
+            left: offset > 0 ? 0 : null,
+            right: offset > 0 ? null : 0,
             top: 0,
             bottom: 0,
             width: offset.abs().clamp(0.0, width),
@@ -116,7 +120,7 @@ class SwipeLogBackground extends StatelessWidget {
           ),
 
           Align(
-            alignment: _completing
+            alignment: offset > 0
                 ? Alignment.centerLeft
                 : Alignment.centerRight,
             child: Padding(

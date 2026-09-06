@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/tide_colors.dart';
+import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/gauge_number.dart';
 import '../../../widgets/tide_level.dart';
+import '../../../widgets/tide_surface.dart';
 
 /// The day's headline: how much of today is done, as water standing at a
 /// level behind the figure.
@@ -86,12 +88,21 @@ class HeroStatCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
             children: [
-              _Figure(
-                value: '${(weeklyRate * 100).round()}%',
-                caption: 'this week',
+              Expanded(
+                child: _Figure(
+                  value: '${(weeklyRate * 100).round()}%',
+                  caption: 'this week',
+                  glyph: Icons.show_chart_rounded,
+                ),
               ),
-              const SizedBox(width: 32),
-              _Figure(value: '$bestStreak', caption: 'day best streak'),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _Figure(
+                  value: '$bestStreak',
+                  caption: 'day best streak',
+                  glyph: Icons.local_fire_department_outlined,
+                ),
+              ),
             ],
           ),
         ),
@@ -104,22 +115,52 @@ class HeroStatCard extends StatelessWidget {
 /// rule, no accent mark — the size difference against the hero is already
 /// the whole hierarchy.
 class _Figure extends StatelessWidget {
-  const _Figure({required this.value, required this.caption});
+  const _Figure({
+    required this.value,
+    required this.caption,
+    required this.glyph,
+  });
 
   final String value;
   final String caption;
+  final IconData glyph;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text(value, style: TideType.gauge(17)),
-        const SizedBox(width: 7),
-        Text(caption, style: TideType.labelMuted),
-      ],
+    return TideSurface(
+      radius: TideElevation.radius12,
+      color: TideColors.shelf,
+      padding: const EdgeInsets.fromLTRB(13, 11, 12, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 27,
+            height: 27,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: TideColors.lantern.withValues(alpha: 0.11),
+              borderRadius: TideElevation.radius12,
+            ),
+            child: Icon(glyph, size: 15, color: TideColors.lantern),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: TideType.gauge(19)),
+                const SizedBox(height: 2),
+                Text(
+                  caption,
+                  style: TideType.labelMuted,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

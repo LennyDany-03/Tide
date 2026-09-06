@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../services/models/milestone.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_elevation.dart';
@@ -10,14 +9,13 @@ import '../../widgets/tide_backdrop.dart';
 import '../../widgets/press_scale.dart';
 import 'widgets/badge_grid.dart';
 import 'widgets/share_card_view.dart';
-import 'widgets/unlock_celebration.dart';
 
 /// Milestones.
 ///
 /// A full-screen destination rather than a tab: you come here when
-/// something has happened, not to browse. The unlock celebration is the
-/// rarest and biggest animation in the app, and this is the only place it
-/// plays.
+/// something has happened, not to browse. Unlocks now play above the app's
+/// router so completing a milestone on Today is rewarded immediately; this
+/// screen remains the place to inspect and share the route.
 class AchievementsScreen extends StatefulWidget {
   const AchievementsScreen({super.key});
 
@@ -26,34 +24,8 @@ class AchievementsScreen extends StatefulWidget {
 }
 
 class _AchievementsScreenState extends State<AchievementsScreen> {
-  Milestone? _celebrating;
-
-  @override
-  void initState() {
-    super.initState();
-    // Anything unlocked while the user was elsewhere gets its moment on
-    // arrival rather than being silently already-on.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _playPending());
-  }
-
-  void _playPending() {
-    if (!mounted || _celebrating != null) return;
-    final pending = TideScope.read(context).pendingCelebration;
-    if (pending != null) setState(() => _celebrating = pending);
-  }
-
-  void _finishCelebration() {
-    final milestone = _celebrating;
-    if (milestone == null) return;
-    TideScope.read(context).acknowledgeCelebration(milestone);
-    setState(() => _celebrating = null);
-    // More than one may have surfaced at once; play them in turn.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _playPending());
-  }
-
   void _simulate() {
     TideScope.read(context).simulateNextUnlock();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _playPending());
   }
 
   @override
@@ -144,13 +116,6 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
             ],
           ),
           const Positioned(top: 0, left: 0, right: 0, child: TideTopScrim()),
-          if (_celebrating != null)
-            Positioned.fill(
-              child: UnlockCelebration(
-                milestone: _celebrating!,
-                onDismiss: _finishCelebration,
-              ),
-            ),
         ],
       ),
     );

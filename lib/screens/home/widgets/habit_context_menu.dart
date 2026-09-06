@@ -32,6 +32,8 @@ Future<void> showHabitContextMenu(
   required VoidCallback onEdit,
   required VoidCallback onPause,
   required VoidCallback onDelete,
+  VoidCallback? onComplete,
+  VoidCallback? onLogProgress,
 }) {
   return showGeneralDialog<void>(
     context: context,
@@ -65,6 +67,8 @@ Future<void> showHabitContextMenu(
                   onEdit: onEdit,
                   onPause: onPause,
                   onDelete: onDelete,
+                  onComplete: onComplete,
+                  onLogProgress: onLogProgress,
                 ),
               ),
             ),
@@ -83,6 +87,8 @@ class _Menu extends StatelessWidget {
     required this.onEdit,
     required this.onPause,
     required this.onDelete,
+    this.onComplete,
+    this.onLogProgress,
   });
 
   final Habit habit;
@@ -91,6 +97,8 @@ class _Menu extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onPause;
   final VoidCallback onDelete;
+  final VoidCallback? onComplete;
+  final VoidCallback? onLogProgress;
 
   /// Where the habit stands, said once, so the menu is not four verbs
   /// floating over a screen you can no longer see behind it.
@@ -158,6 +166,30 @@ class _Menu extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onComplete != null) ...[
+                _MenuRow(
+                  icon: Icons.check_rounded,
+                  label: 'Mark complete',
+                  primary: true,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    onComplete!();
+                  },
+                ),
+                const SizedBox(height: 6),
+              ],
+              if (onLogProgress != null) ...[
+                _MenuRow(
+                  icon: Icons.add_task_rounded,
+                  label: 'Log progress',
+                  primary: true,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    onLogProgress!();
+                  },
+                ),
+                const SizedBox(height: 6),
+              ],
               _MenuRow(
                 icon: Icons.insights_rounded,
                 label: 'Habit details',
@@ -208,11 +240,13 @@ class _MenuRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.primary = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
@@ -221,20 +255,23 @@ class _MenuRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          color: TideColors.trench,
+          color: primary
+              ? TideColors.lantern.withValues(alpha: 0.12)
+              : TideColors.trench,
           borderRadius: TideElevation.radius12,
           border: Border.all(color: TideColors.bone.withValues(alpha: 0.06)),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: TideColors.silt),
+            Icon(icon, size: 18, color: primary ? TideColors.lantern : TideColors.silt),
             const SizedBox(width: 12),
             Expanded(child: Text(label, style: TideType.label)),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 17,
-              color: TideColors.silt.withValues(alpha: 0.5),
-            ),
+            if (primary)
+              Icon(
+                Icons.arrow_forward_rounded,
+                size: 17,
+                color: TideColors.lantern.withValues(alpha: 0.8),
+              ),
           ],
         ),
       ),

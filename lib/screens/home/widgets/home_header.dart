@@ -16,10 +16,16 @@ import '../../../widgets/press_scale.dart';
 /// material to it. The title is important because it is 34px and nothing
 /// near it is; that costs nothing and works better.
 class HomeHeader extends StatelessWidget {
-  const HomeHeader({super.key, required this.date, required this.onMilestones});
+  const HomeHeader({
+    super.key,
+    required this.date,
+    required this.onMilestones,
+    required this.onAddHabit,
+  });
 
   final DateTime date;
   final VoidCallback onMilestones;
+  final VoidCallback onAddHabit;
 
   /// "Sunday, 6 September" — written the way a person says it. The previous
   /// line was `SUN · 6 SEP`, which is chrome: abbreviated, tracked out,
@@ -53,6 +59,27 @@ class HomeHeader extends StatelessWidget {
               glyph: TideGlyph.sparkle,
               size: 19,
               color: TideColors.bone,
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        PressScale(
+          onTap: onAddHabit,
+          child: Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: TideColors.lantern.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: TideColors.lantern.withValues(alpha: 0.24),
+              ),
+            ),
+            child: const Icon(
+              Icons.add_rounded,
+              size: 20,
+              color: TideColors.lantern,
             ),
           ),
         ),

@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
-import '../../config/app_routes.dart';
-import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
 import '../../widgets/tide_backdrop.dart';
-import '../../widgets/tide_fab.dart';
 import '../../widgets/tide_tab_bar.dart';
 
 /// The frame around the four tabs.
@@ -49,9 +46,6 @@ class TideShell extends StatelessWidget {
   /// is a button that has nothing to do with reviewing. A pushed screen —
   /// habit detail — carries its own controls at the bottom of the page,
   /// which the FAB would otherwise sit directly on top of.
-  bool _showFab(BuildContext context) =>
-      navigationShell.currentIndex == 0 && _atTabRoot(context);
-
   void _onTap(int index) {
     navigationShell.goBranch(
       index,
@@ -59,13 +53,6 @@ class TideShell extends StatelessWidget {
       // standard escape hatch out of a pushed detail screen.
       initialLocation: index == navigationShell.currentIndex,
     );
-  }
-
-  void _onAdd(BuildContext context) {
-    final store = TideScope.read(context);
-    // The paywall is contextual: it appears at the moment the free ceiling
-    // actually blocks something, never as a nag.
-    context.push(store.canAddHabit ? Routes.newHabit : Routes.upgrade);
   }
 
   @override
@@ -92,14 +79,6 @@ class TideShell extends StatelessWidget {
             ),
           ),
           const Positioned(top: 0, left: 0, right: 0, child: TideTopScrim()),
-          Positioned(
-            right: 20,
-            bottom: TideTabBar.reservedHeight(context) + 14,
-            child: TideFabSlot(
-              visible: _showFab(context),
-              child: TideFab(onPressed: () => _onAdd(context)),
-            ),
-          ),
         ],
       ),
       bottomNavigationBar: TideTabBar(

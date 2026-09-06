@@ -9,7 +9,6 @@ import '../../theme/tide_typography.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/tide_button.dart';
 import '../../widgets/tide_tab_bar.dart';
-import 'widgets/day_complete_overlay.dart';
 import 'widgets/habit_card.dart';
 import 'widgets/habit_context_menu.dart';
 import 'widgets/habit_log_sheet.dart';
@@ -27,9 +26,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _dayCompleteTick = 0;
-  bool _wasDayComplete = false;
-
   /// The seven days behind a habit card's strip, oldest first.
   List<DateTime> _week() {
     final today = DateTime.now();
@@ -58,7 +54,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void _log(Habit habit, num amount) {
     final store = TideScope.read(context);
     store.log(habit.id, amount: amount);
-    _checkDayComplete();
   }
 
   void _freeze(Habit habit) {
@@ -75,20 +70,10 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       return;
     }
-    _checkDayComplete();
   }
 
   /// Fires the day-complete moment once, on the transition into a finished
   /// day — never on a rebuild that happens to find the day already done.
-  void _checkDayComplete() {
-    final summary = TideScope.read(context).today;
-    final complete = summary.isFullyLogged;
-    if (complete && !_wasDayComplete) {
-      setState(() => _dayCompleteTick++);
-    }
-    _wasDayComplete = complete;
-  }
-
   /// Counted habits log from their own sheet, one unit at a time.
   ///
   /// Routed through [_log] rather than writing to the store from inside the
@@ -112,6 +97,12 @@ class _HomeScreenState extends State<HomeScreen> {
       onEdit: () => context.push(Routes.editHabit(habit.id)),
       onPause: () => store.togglePause(habit.id),
       onDelete: () => store.deleteHabit(habit.id),
+      onComplete: habit.type == HabitType.binary
+          ? () => _log(habit, habit.target)
+          : null,
+      onLogProgress: habit.type == HabitType.binary
+          ? null
+          : () => _openLogSheet(habit),
     );
   }
 
@@ -126,7 +117,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final store = TideScope.of(context);
     final habits = store.habits;
     final summary = store.today;
-    _wasDayComplete = summary.isFullyLogged;
 
     return Stack(
       children: [
@@ -146,6 +136,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: HomeHeader(
                     date: DateTime.now(),
                     onMilestones: () => context.push(Routes.milestones),
+                    onAddHabit: () => context.push(
+                      store.canAddHabit ? Routes.newHabit : Routes.upgrade,
+                    ),
                   ),
                 ),
               ),
@@ -195,10 +188,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           streak: StreakCalculator.currentStreak(habit),
                           weekLevels: _weekLevels(habit),
                           frozenDays: _weekFrozen(habit),
-                          onOpen: () => context.push(Routes.habit(habit.id)),
                           onMenu: () => _openMenu(habit),
-                          onLog: (amount) => _log(habit, amount),
                           onCount: () => _openLogSheet(habit),
+                          onComplete: () => _log(habit, habit.target),
                           onFreeze: () => _freeze(habit),
                         );
                       },
@@ -215,7 +207,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        Positioned.fill(child: DayCompleteOverlay(trigger: _dayCompleteTick)),
       ],
     );
   }

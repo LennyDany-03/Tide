@@ -7,6 +7,7 @@ import 'config/app_routes.dart';
 import 'services/tide_scope.dart';
 import 'services/tide_store.dart';
 import 'theme/tide_theme.dart';
+import 'widgets/celebration/celebration_host.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +56,11 @@ class _TideAppState extends State<TideApp> {
           ).clamp(minScaleFactor: 0.9, maxScaleFactor: 1.2);
           return MediaQuery(
             data: MediaQuery.of(context).copyWith(textScaler: scale),
-            child: child ?? const SizedBox.shrink(),
+            // Completion may be logged from Today, the calendar, a detail
+            // screen or a sheet. Keeping this above the router gives all of
+            // them the same reward without duplicating UI glue in four
+            // interaction paths.
+            child: CelebrationHost(child: child ?? const SizedBox.shrink()),
           );
         },
       ),
