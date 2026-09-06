@@ -34,7 +34,8 @@ class TideSheet extends StatelessWidget {
 
   final VoidCallback? onDismiss;
 
-  /// Small caps line above the title — "TIDE PRO".
+  /// A short line above the title — "Tide Pro". Sentence case; it names
+  /// the sheet, it is not a category stamp.
   final String? eyebrow;
 
   /// Pinned below the scrolling body: the primary action.
@@ -54,7 +55,7 @@ class TideSheet extends StatelessWidget {
         ),
         child: Container(
           decoration: BoxDecoration(
-            color: TideColors.shallow,
+            color: TideColors.shelf,
             borderRadius: TideElevation.sheetRadius,
             boxShadow: TideElevation.floating,
           ),
@@ -132,7 +133,7 @@ class _Header extends StatelessWidget {
                   Text(
                     eyebrow!,
                     style: TideType.sectionHeader.copyWith(
-                      color: TideColors.foamCyan,
+                      color: TideColors.lantern,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -165,13 +166,13 @@ class SheetDismissButton extends StatelessWidget {
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-          color: TideColors.well,
-          borderRadius: TideElevation.radius8,
+          color: TideColors.trench,
+          borderRadius: TideElevation.radius12,
         ),
         child: const Icon(
           Icons.close_rounded,
           size: 18,
-          color: TideColors.textMuted,
+          color: TideColors.silt,
         ),
       ),
     );

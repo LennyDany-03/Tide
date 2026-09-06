@@ -72,7 +72,7 @@ class _ShareSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return TideSheet(
       title: milestone.name,
-      eyebrow: 'MILESTONE',
+      eyebrow: 'Milestone',
       onDismiss: () => Navigator.of(context).pop(),
       maxHeightFactor: 0.82,
       footer: TideButton(
@@ -155,26 +155,26 @@ class _DevelopingCardState extends State<_DevelopingCard>
         aspectRatio: 4 / 5,
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: TideElevation.radius24,
+            borderRadius: TideElevation.radius20,
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [TideColors.shallow, TideColors.deepWater],
+              colors: [TideColors.shelf, TideColors.deepWater],
             ),
             border: Border.all(
-              color: TideColors.foamCyan.withValues(alpha: 0.22),
+              color: TideColors.lantern.withValues(alpha: 0.22),
             ),
           ),
           padding: const EdgeInsets.all(26),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('TIDE', style: TideType.sectionHeader),
+              Text('Tide', style: TideType.sectionHeader),
               const Spacer(),
               HabitGlyph(
                 glyph: widget.milestone.glyph,
                 size: 46,
-                color: TideColors.foamCyan,
+                color: TideColors.lantern,
                 strokeWidth: 2.2,
               ),
               const SizedBox(height: 22),
@@ -185,7 +185,7 @@ class _DevelopingCardState extends State<_DevelopingCard>
               const SizedBox(height: 8),
               Text(
                 '${widget.streak} days, unbroken',
-                style: TideType.gauge(15, color: TideColors.tideBlue),
+                style: TideType.gauge(15, color: TideColors.lantern),
               ),
               const Spacer(),
               Text(widget.accountName, style: TideType.labelMuted),

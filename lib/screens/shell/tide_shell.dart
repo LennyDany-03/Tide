@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
-import '../../config/app_routes.dart';
-import '../../services/tide_scope.dart';
+import '../../config/tour_catalog.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
 import '../../widgets/tide_backdrop.dart';
-import '../../widgets/tide_fab.dart';
 import '../../widgets/tide_tab_bar.dart';
+import '../../widgets/tour/tour_anchor.dart';
 
 /// The frame around the four tabs.
 ///
@@ -41,13 +40,14 @@ class TideShell extends StatelessWidget {
     return TideTab.all.any((tab) => tab.path == location);
   }
 
-  /// Where the add action belongs: the three list tabs, and only at their
-  /// root. Settings has nothing to add, and a pushed screen — habit detail —
-  /// carries its own controls at the bottom of the page, which the FAB would
-  /// otherwise sit directly on top of.
-  bool _showFab(BuildContext context) =>
-      navigationShell.currentIndex != 3 && _atTabRoot(context);
-
+  /// Where the add action belongs: Today, and only at its root.
+  ///
+  /// It used to ride along on History and Insights too. Those two screens
+  /// are for reading back what already happened — putting the app's one
+  /// primary action on them means the brightest object on a review screen
+  /// is a button that has nothing to do with reviewing. A pushed screen —
+  /// habit detail — carries its own controls at the bottom of the page,
+  /// which the FAB would otherwise sit directly on top of.
   void _onTap(int index) {
     navigationShell.goBranch(
       index,
@@ -55,13 +55,6 @@ class TideShell extends StatelessWidget {
       // standard escape hatch out of a pushed detail screen.
       initialLocation: index == navigationShell.currentIndex,
     );
-  }
-
-  void _onAdd(BuildContext context) {
-    final store = TideScope.read(context);
-    // The paywall is contextual: it appears at the moment the free ceiling
-    // actually blocks something, never as a nag.
-    context.push(store.canAddHabit ? Routes.newHabit : Routes.upgrade);
   }
 
   @override
@@ -88,20 +81,19 @@ class TideShell extends StatelessWidget {
             ),
           ),
           const Positioned(top: 0, left: 0, right: 0, child: TideTopScrim()),
-          Positioned(
-            right: 20,
-            bottom: TideTabBar.reservedHeight(context) + 14,
-            child: TideFabSlot(
-              visible: _showFab(context),
-              child: TideFab(onPressed: () => _onAdd(context)),
-            ),
-          ),
         ],
       ),
-      bottomNavigationBar: TideTabBar(
-        currentIndex: navigationShell.currentIndex,
-        onTap: _onTap,
-        tabs: TideTab.all,
+      // Anchored so the guided tour can point at the four destinations.
+      // This is the reason the tour overlay is mounted above the router
+      // rather than inside the shell: the bar is in the Scaffold's own
+      // bottom slot, outside every tab body.
+      bottomNavigationBar: TourAnchor(
+        stop: TourStop.tabs,
+        child: TideTabBar(
+          currentIndex: navigationShell.currentIndex,
+          onTap: _onTap,
+          tabs: TideTab.all,
+        ),
       ),
     );
   }
@@ -139,11 +131,50 @@ class _BranchStackState extends State<_BranchStack>
   // to look up a TickerMode.
   late final AnimationController _settle;
 
+  /// What the settle is driving the offset along, while it is running.
+  ///
+  /// Held in a field and read by one permanent listener. Attaching a fresh
+  /// listener per gesture leaked them: a settle that is stopped part-way
+  /// never completes, so the callback that would have detached it never
+  /// ran.
+  Animation<double>? _travel;
+
   /// How far the page has been carried, in pixels. Negative is a swipe
   /// left, which brings the *next* tab in from the right.
   double _drag = 0;
 
   double _width = 0;
+
+  /// The branch this stack paints as selected.
+  ///
+  /// Owned here rather than read straight off the widget. A committed swipe
+  /// re-bases the offset onto the arriving branch in the same frame the
+  /// finger lifts, while the shell's own index arrives a beat later —
+  /// painting from the shell's index leaves a frame where the offset says
+  /// the page is arriving from one side while the index still says the
+  /// branch on the other side is selected, which flashes a third screen
+  /// through the gap.
+  late int _index;
+
+  /// The branch a commit has handed over to, until the shell catches up.
+  /// An index change matching this one is our own swipe landing rather than
+  /// a tab tap.
+  int? _handedOver;
+
+  /// Whether the page is being moved, or has just been moved, by hand.
+  ///
+  /// A swipe carries both branches bodily across the screen, so nothing may
+  /// fade during one — and nothing may fade at the *end* of one either. The
+  /// branch left behind is already off the page by then; fading it out from
+  /// there means first snapping it back to the middle, which paints the tab
+  /// you just left directly on top of the one you arrived at for the length
+  /// of a crossfade. That ghost is what this flag exists to prevent, and it
+  /// is why the flag stays set after the page comes to rest: the landing
+  /// frame is the one that has to snap.
+  ///
+  /// A tab tap is the opposite case — it moves nothing, so the crossfade is
+  /// the whole transition. Tapping clears the flag again.
+  bool _byHand = false;
 
   /// Invalidates a settle that is still running when a new gesture starts,
   /// so its completion cannot commit a swipe the user has since grabbed
@@ -162,10 +193,11 @@ class _BranchStackState extends State<_BranchStack>
 
   bool get _moving => _drag != 0;
 
-  /// The branch being pulled in beside the current one, if any.
+  /// The branch alongside the current one: the one being pulled in during a
+  /// drag, and the one being carried away once a swipe has committed.
   int? get _incoming {
     if (_drag == 0) return null;
-    final next = _drag < 0 ? widget.currentIndex + 1 : widget.currentIndex - 1;
+    final next = _drag < 0 ? _index + 1 : _index - 1;
     if (next < 0 || next >= widget.branches.length) return null;
     return next;
   }
@@ -173,25 +205,63 @@ class _BranchStackState extends State<_BranchStack>
   @override
   void initState() {
     super.initState();
-    _settle = AnimationController(vsync: this);
+    _index = widget.currentIndex;
+    _settle = AnimationController(vsync: this)..addListener(_onSettleTick);
+  }
+
+  @override
+  void didUpdateWidget(_BranchStack old) {
+    super.didUpdateWidget(old);
+    if (old.currentIndex == widget.currentIndex) return;
+
+    if (widget.currentIndex == _handedOver) {
+      // Our own swipe landing. The offset was re-based onto this branch the
+      // moment the finger lifted and the shell is only now catching up;
+      // re-basing again here would jump the page a whole screen.
+      _handedOver = null;
+      return;
+    }
+
+    // A tab tap. It moves nothing by itself, so the crossfade is the whole
+    // transition — unless it arrives mid-swipe, where snapping the
+    // half-carried page away beats fading it back over the top of the tab
+    // being tapped to.
+    _handedOver = null;
+    _byHand = _moving;
+    _index = widget.currentIndex;
+    _stopSettle();
+    _drag = 0;
   }
 
   @override
   void dispose() {
-    _settle.dispose();
+    _settle
+      ..removeListener(_onSettleTick)
+      ..dispose();
     super.dispose();
   }
 
-  void _onStart(DragStartDetails details) {
+  void _onSettleTick() {
+    final travel = _travel;
+    if (travel == null) return;
+    setState(() => _drag = travel.value);
+  }
+
+  void _stopSettle() {
     _gesture++;
     _settle.stop();
+    _travel = null;
+  }
+
+  void _onStart(DragStartDetails details) {
+    _stopSettle();
+    _byHand = true;
   }
 
   void _onUpdate(DragUpdateDetails details) {
     final heading = _drag + details.delta.dx;
-    final atStart = widget.currentIndex == 0 && heading > 0;
-    final atEnd =
-        widget.currentIndex == widget.branches.length - 1 && heading < 0;
+    final atStart = _index == 0 && heading > 0;
+    final atEnd = _index == widget.branches.length - 1 && heading < 0;
     final scale = (atStart || atEnd) ? _resistance : 1.0;
 
     setState(() {
@@ -226,38 +296,38 @@ class _BranchStackState extends State<_BranchStack>
   /// snapping to the new tab once everything had already come to rest.
   /// Re-basing lets the pill travel while the page is still moving.
   void _commit(int target) {
-    setState(() => _drag += target > widget.currentIndex ? _width : -_width);
+    final forward = target > _index;
+    setState(() {
+      _drag += forward ? _width : -_width;
+      _index = target;
+      _handedOver = target;
+    });
     widget.onSwipeTo(target);
     _slideTo(0);
   }
 
   void _slideTo(double to) {
-    final from = _drag;
-    if (from == to) return;
+    if (_drag == to) return;
 
     final token = ++_gesture;
-    _settle
-      ..stop()
-      ..reset()
-      ..duration = TideMotion.tabSwitch;
-
-    final travel = _settle.drive(
+    _travel = _settle.drive(
       Tween<double>(
-        begin: from,
+        begin: _drag,
         end: to,
       ).chain(CurveTween(curve: TideMotion.tabCurve)),
     );
 
-    void tick() {
-      if (token != _gesture) return;
-      setState(() => _drag = travel.value);
-    }
-
-    travel.addListener(tick);
-    _settle.forward().whenComplete(() {
-      travel.removeListener(tick);
-      if (mounted && token == _gesture) setState(() => _drag = to);
-    });
+    _settle
+      ..stop()
+      ..duration = TideMotion.tabSwitch
+      ..forward(from: 0).whenComplete(() {
+        // A settle stopped part-way never completes, so arriving here means
+        // the page really did come to rest — though a tab tap can still
+        // have moved the goalposts, which the token catches.
+        if (!mounted || token != _gesture) return;
+        _travel = null;
+        setState(() => _drag = to);
+      });
   }
 
   @override
@@ -282,9 +352,10 @@ class _BranchStackState extends State<_BranchStack>
         children: [
           for (var i = 0; i < widget.branches.length; i++)
             _Branch(
-              active: i == widget.currentIndex,
-              shown: i == widget.currentIndex || i == incoming,
+              active: i == _index,
+              shown: i == _index || i == incoming,
               moving: _moving,
+              snap: _byHand,
               dx: _offsetOf(i, incoming),
               child: widget.branches[i],
             ),
@@ -294,11 +365,11 @@ class _BranchStackState extends State<_BranchStack>
   }
 
   double _offsetOf(int index, int? incoming) {
-    if (index == widget.currentIndex) return _drag;
+    if (index == _index) return _drag;
     if (incoming == null || index != incoming) return 0;
-    // The arriving branch is parked one screen away on the side it comes
-    // from, and rides in with the drag.
-    return _drag + (incoming > widget.currentIndex ? _width : -_width);
+    // The branch alongside is parked one screen away on the side it comes
+    // from, and rides along with the drag.
+    return _drag + (incoming > _index ? _width : -_width);
   }
 }
 
@@ -308,13 +379,14 @@ class _BranchStackState extends State<_BranchStack>
 /// horizontally when the page is swiped. The widget structure is identical
 /// either way — swapping between two shapes here would remount the branch
 /// navigator underneath and throw its routes away — so the difference is
-/// carried entirely by the durations, which drop to zero while a finger is
-/// driving the movement.
+/// carried entirely by the durations, which drop to zero for anything the
+/// hand is driving.
 class _Branch extends StatelessWidget {
   const _Branch({
     required this.active,
     required this.shown,
     required this.moving,
+    required this.snap,
     required this.dx,
     required this.child,
   });
@@ -322,13 +394,25 @@ class _Branch extends StatelessWidget {
   /// The branch the shell currently considers selected.
   final bool active;
 
-  /// Painted this frame: the selected branch, plus the one arriving beside
-  /// it during a swipe.
+  /// Painted this frame: the selected branch, plus the one alongside it
+  /// during a swipe.
   final bool shown;
 
+  /// The page is physically in motion — mid-drag or mid-settle.
   final bool moving;
+
+  /// Fade and lift instantly rather than over the tab-switch duration.
+  ///
+  /// Set for the whole life of a swipe, including the frame it lands on:
+  /// the branch being left behind has to go the instant it stops being
+  /// painted, because by then it is off-screen and any fade would first
+  /// snap it back over the top of the branch that replaced it.
+  final bool snap;
+
   final double dx;
   final Widget child;
+
+  Duration get _duration => snap ? Duration.zero : TideMotion.tabSwitch;
 
   @override
   Widget build(BuildContext context) {
@@ -336,11 +420,11 @@ class _Branch extends StatelessWidget {
       offset: Offset(dx, 0),
       child: AnimatedOpacity(
         opacity: shown ? 1 : 0,
-        duration: moving ? Duration.zero : TideMotion.tabSwitch,
+        duration: _duration,
         curve: TideMotion.tabCurve,
         child: AnimatedSlide(
           offset: (active || moving) ? Offset.zero : const Offset(0, 0.012),
-          duration: moving ? Duration.zero : TideMotion.tabSwitch,
+          duration: _duration,
           curve: TideMotion.tabCurve,
           child: IgnorePointer(
             // Nothing takes input mid-swipe: a tap landing on the page you

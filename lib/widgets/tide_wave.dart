@@ -40,7 +40,7 @@ class TideWave extends StatelessWidget {
       painter: TideWavePainter(
         amplitude: amplitude,
         phase: phase,
-        color: color ?? TideColors.tideBlue,
+        color: color ?? TideColors.lantern,
         strokeWidth: strokeWidth,
         fill: fill,
         waves: waves,

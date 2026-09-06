@@ -9,7 +9,6 @@ import '../../widgets/stagger_list.dart';
 import '../../widgets/tide_button.dart';
 import '../../widgets/tide_sheet.dart';
 import 'widgets/feature_row.dart';
-import 'widgets/glow_cta.dart';
 import 'widgets/pricing_tier_card.dart';
 
 /// The paywall.
@@ -49,7 +48,7 @@ class _UpgradeSheetState extends State<UpgradeSheet> {
     final atLimit = !store.canAddHabit;
 
     return TideSheet(
-      eyebrow: 'TIDE PRO',
+      eyebrow: 'Tide Pro',
       title: atLimit
           ? 'You have filled your five free habits'
           : 'Room for every loop',
@@ -58,7 +57,11 @@ class _UpgradeSheetState extends State<UpgradeSheet> {
       footer: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          GlowCta(
+          // A plain primary button. The CTA used to breathe on a slow
+          // repeating glow; a button that pulses at you is applying
+          // pressure, which is not the relationship this screen wants, and
+          // it was the only looping animation on the sheet.
+          TideButton(
             label: _lifetime ? 'Start Pro — \$39 once' : 'Start Pro — \$3/mo',
             phase: _phase,
             onPressed: _purchase,
@@ -130,7 +133,7 @@ class _UpgradeSheetState extends State<UpgradeSheet> {
               padding: const EdgeInsets.only(top: 14),
               child: Text(
                 'You are already on Pro.',
-                style: TideType.label.copyWith(color: TideColors.foamCyan),
+                style: TideType.label.copyWith(color: TideColors.lantern),
                 textAlign: TextAlign.center,
               ),
             ),

@@ -121,8 +121,8 @@ class _WaveRefreshIndicatorState extends State<WaveRefreshIndicator>
                       amplitude: _refreshing ? 1 : _fraction,
                       phase: _crest.value * 6.28,
                       color: _armed || _refreshing
-                          ? TideColors.tideBlue
-                          : TideColors.textMuted,
+                          ? TideColors.lantern
+                          : TideColors.silt,
                       strokeWidth: 2,
                       waves: 1.4,
                     );

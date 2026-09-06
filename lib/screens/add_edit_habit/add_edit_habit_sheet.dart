@@ -229,13 +229,19 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
       },
       child: RippleBurst(
         trigger: _savedTick,
-        color: TideColors.kelpGreen,
+        color: TideColors.lantern,
         origin: Alignment.bottomCenter,
         intensity: 1.6,
         child: TideSheet(
           title: _isEditing ? 'Edit habit' : 'New habit',
           leading: TideFabMorphTarget(
-            child: HabitGlyph(glyph: _glyph, size: 16),
+            // Ground colour, because the disc under it is solid lantern —
+            // the glyph was inheriting the accent and disappearing into it.
+            child: HabitGlyph(
+              glyph: _glyph,
+              size: 16,
+              color: TideColors.deepWater,
+            ),
           ),
           onDismiss: _attemptDismiss,
           footer: Column(
@@ -272,7 +278,7 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
         ),
         const SizedBox(height: 22),
 
-        _label('NAME'),
+        _label('Name'),
         NameField(
           controller: _name,
           errorTick: _errorTick,
@@ -280,14 +286,14 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
         ),
         const SizedBox(height: 20),
 
-        _label('ICON'),
+        _label('Icon'),
         IconPicker(
           selected: _glyph,
           onChanged: (glyph) => _edit(() => _glyph = glyph),
         ),
         const SizedBox(height: 20),
 
-        _label('TYPE'),
+        _label('Type'),
         SegmentedPill(
           labels: [for (final type in HabitType.values) type.label],
           selectedIndex: HabitType.values.indexOf(_type),
@@ -302,7 +308,7 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
         ),
         const SizedBox(height: 20),
 
-        _label('DAYS'),
+        _label('Days'),
         DaySelector(
           days: _days,
           onChanged: (days) => _edit(() => _days = days),
@@ -335,6 +341,11 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
     );
   }
 
+  /// A field label.
+  ///
+  /// Sentence case. These were tracked-out capitals — NAME, ICON, TYPE,
+  /// DAYS — which is the loudest possible way to label a text box, and put
+  /// four shouting labels above the four quietest controls in the app.
   Widget _label(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),

@@ -9,8 +9,16 @@ import '../../../widgets/press_scale.dart';
 /// One day in the month grid.
 ///
 /// The fill rises from the bottom in proportion to how much of that day was
-/// completed — a water level, not a colour code. A day at 40% looks half
-/// full, which is a more honest reading than a single "partial" tint.
+/// completed — a water level, not a colour code. A day at 40% looks 40% full,
+/// which is a more honest reading than a single "partial" tint, and it is the
+/// same gesture as the tide on Home at a much smaller size.
+///
+/// Both layers are painted inside the clip, the empty ground first and the
+/// water over it, rather than letting the empty state fall through to a
+/// container's own background. Relying on the container meant a half-filled
+/// day showed a band of bare page above its waterline while a wholly empty
+/// day showed the cell colour — so a day that was 80% done looked damaged
+/// rather than nearly finished.
 class DayCell extends StatelessWidget {
   const DayCell({
     super.key,
@@ -36,6 +44,8 @@ class DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dim = outsideMonth ? 0.4 : 1.0;
+
     return PressScale(
       onTap: isFuture ? null : onTap,
       enabled: !isFuture,
@@ -53,53 +63,57 @@ class DayCell extends StatelessWidget {
             curve: Curves.easeOutCubic,
           ),
           builder: (context, t, _) {
-            return Container(
-              decoration: BoxDecoration(
-                color: TideColors.well.withValues(
-                  alpha: outsideMonth ? 0.35 : 1,
-                ),
-                borderRadius: TideElevation.radius8,
-                border: isToday
-                    ? Border.all(
-                        color: TideColors.foamCyan.withValues(alpha: 0.75),
-                        width: 1.4,
-                      )
-                    : null,
-              ),
-              child: ClipRRect(
-                borderRadius: TideElevation.radius8,
-                child: Stack(
-                  children: [
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: FractionallySizedBox(
-                        heightFactor: (ratio * t).clamp(0.0, 1.0),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: TideColors.intensity(
-                              ratio,
-                            ).withValues(alpha: outsideMonth ? 0.3 : 1),
-                          ),
-                          // Without a child, DecoratedBox collapses to the
-                          // smallest allowed size — zero width here — and
-                          // the fill silently never paints.
-                          child: const SizedBox.expand(),
+            final level = (ratio * t).clamp(0.0, 1.0);
+
+            return ClipRRect(
+              borderRadius: TideElevation.radius12,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // The empty ground, always full-bleed inside the clip.
+                  ColoredBox(
+                    color: TideColors.bone.withValues(alpha: 0.06 * dim),
+                  ),
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: FractionallySizedBox(
+                      heightFactor: level,
+                      child: ColoredBox(
+                        color: TideColors.intensity(ratio).withValues(
+                          alpha: TideColors.intensity(ratio).a * dim,
+                        ),
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                  if (isToday)
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: TideElevation.radius12,
+                        border: Border.all(
+                          color: TideColors.lantern.withValues(alpha: 0.9),
+                          width: 1.4,
                         ),
                       ),
                     ),
-                    Center(
-                      child: Text(
-                        '$day',
-                        style: TideType.gauge(
-                          12.5,
-                          color: outsideMonth || isFuture
-                              ? TideColors.textMuted
-                              : TideColors.textPrimary,
-                        ),
+                  Center(
+                    child: Text(
+                      '$day',
+                      style: TideType.gauge(
+                        12.5,
+                        // Once the water is over the middle of the cell the
+                        // figure is sitting on solid lantern, and warm ink on
+                        // a warm fill is unreadable. Past that point it flips
+                        // to the ground colour.
+                        color: level > 0.55
+                            ? TideColors.deepWater
+                            : outsideMonth || isFuture
+                            ? TideColors.silt
+                            : TideColors.bone,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             );
           },

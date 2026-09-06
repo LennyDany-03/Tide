@@ -42,8 +42,6 @@ flutter:
         - asset: assets/fonts/Manrope-Bold.ttf
           weight: 700
 
-    # Numeric readouts — tabular figures
-    - family: JetBrains Mono
-      fonts:
-        - asset: assets/fonts/JetBrainsMono-Medium.ttf
-          weight: 500
+    # Numeric readouts use Space Grotesk. It descends from Space Mono, so its
+    # figures are already uniform width and the odometer stays stable without
+    # shipping a third family.

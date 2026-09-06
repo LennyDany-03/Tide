@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../config/app_constants.dart';
 import '../config/milestone_catalog.dart';
 import '../config/seed_data.dart';
+import 'models/celebration_cue.dart';
 import 'models/day_summary.dart';
 import 'models/habit.dart';
 import 'models/milestone.dart';
@@ -23,9 +24,29 @@ class TideStore extends ChangeNotifier {
   List<Habit> _habits;
   late Set<String> _acknowledgedMilestones;
 
+  /// Bumped on every cue so the overlay has a fresh widget identity.
+  int _cueNonce = 0;
+
   // --- Profile / preferences -------------------------------------------
 
   String accountName = 'Jules Ramirez';
+  String accountEmail = 'jules@tide.app';
+
+  /// Whether an account has been created or signed into this session.
+  ///
+  /// Front-end only — there is no service behind it, the same way there is
+  /// no persistence behind the habits. What it genuinely decides is which
+  /// history the app opens on: a new account throws the demo data away so
+  /// Today starts empty, a returning one keeps it.
+  bool signedIn = false;
+
+  /// Today should run the guided tour the next time it is built.
+  ///
+  /// Armed by [signUp] rather than by finishing onboarding, because the
+  /// tour points at a real screen and only makes sense once there is one to
+  /// point at.
+  bool tourPending = false;
+
   bool isPro = false;
   bool dailyReminders = true;
   bool quietHours = false;
@@ -124,6 +145,22 @@ class TideStore extends ChangeNotifier {
   double rateOf(Habit habit, {int days = 30}) =>
       StreakCalculator.completionRate(habit, days: days);
 
+  // --- Celebration cues -------------------------------------------------
+
+  CelebrationCue? _pendingHabitCue;
+
+  /// A habit that has just been finished and not yet been celebrated.
+  ///
+  /// Read by the celebration overlay mounted above the router, so the
+  /// reward plays wherever the log was made from.
+  CelebrationCue? get pendingHabitCue => _pendingHabitCue;
+
+  void clearHabitCue() {
+    if (_pendingHabitCue == null) return;
+    _pendingHabitCue = null;
+    notifyListeners();
+  }
+
   // --- Milestones -------------------------------------------------------
 
   List<MilestoneStatus> get milestones {
@@ -180,13 +217,50 @@ class TideStore extends ChangeNotifier {
   /// Logs [amount] against [habitId] for [date], replacing whatever was
   /// there. Passing null logs the habit's full target.
   void log(String habitId, {num? amount, DateTime? date}) {
+    final day = DateUtils.dateOnly(date ?? DateTime.now());
+    final before = habitById(habitId);
+    final wasComplete = before?.isCompleteOn(day) ?? false;
+
     _mutate(habitId, (habit) {
-      final day = DateUtils.dateOnly(date ?? DateTime.now());
       final logs = Map<DateTime, num>.from(habit.logs);
       logs[day] = amount ?? habit.target;
       final frozen = Set<DateTime>.from(habit.frozenDays)..remove(day);
       return habit.copyWith(logs: logs, frozenDays: frozen);
     });
+
+    _raiseCue(habitId, day: day, wasComplete: wasComplete);
+  }
+
+  /// Raises a celebration cue if this log is the one that finished the
+  /// habit.
+  ///
+  /// Two guards, both of them deliberate. It fires on the *transition* into
+  /// complete, so topping a quantity habit up from 8 to 9 is silent — the
+  /// reward belongs to the glass that finished the target, not to every one
+  /// after it. And it fires only for today: backfilling a missed Tuesday
+  /// from the calendar is bookkeeping, and throwing a full-screen party
+  /// over tidying up last week's history would cheapen the one that happens
+  /// when you actually do the thing.
+  void _raiseCue(
+    String habitId, {
+    required DateTime day,
+    required bool wasComplete,
+  }) {
+    if (wasComplete) return;
+    if (day != DateUtils.dateOnly(DateTime.now())) return;
+
+    final habit = habitById(habitId);
+    if (habit == null || !habit.isCompleteOn(day)) return;
+
+    _pendingHabitCue = CelebrationCue(
+      habitId: habit.id,
+      habitName: habit.name,
+      type: CelebrationCueType.completion,
+      streak: StreakCalculator.currentStreak(habit),
+      dayComplete: summaryFor(day).isFullyLogged,
+      nonce: _cueNonce++,
+    );
+    notifyListeners();
   }
 
   /// Clears a day's log — used by the context menu and by tapping an
@@ -204,12 +278,39 @@ class TideStore extends ChangeNotifier {
   bool freeze(String habitId, {DateTime? date}) {
     final habit = habitById(habitId);
     if (habit == null || habit.freezesRemaining <= 0) return false;
+    final day = DateUtils.dateOnly(date ?? DateTime.now());
+    if (habit.isFrozenOn(day)) return false;
 
     _mutate(habitId, (h) {
-      final day = DateUtils.dateOnly(date ?? DateTime.now());
       return h.copyWith(
         frozenDays: Set<DateTime>.from(h.frozenDays)..add(day),
         freezesRemaining: h.freezesRemaining - 1,
+      );
+    });
+    _pendingHabitCue = CelebrationCue(
+      habitId: habit.id,
+      habitName: habit.name,
+      type: CelebrationCueType.freeze,
+      streak: StreakCalculator.currentStreak(habit),
+      dayComplete: false,
+      nonce: _cueNonce++,
+    );
+    notifyListeners();
+    return true;
+  }
+
+  /// Reverses a freeze for a day and returns its token to this habit.
+  bool unfreeze(String habitId, {DateTime? date}) {
+    final habit = habitById(habitId);
+    final day = DateUtils.dateOnly(date ?? DateTime.now());
+    if (habit == null || !habit.isFrozenOn(day)) return false;
+
+    _mutate(habitId, (h) {
+      final frozen = Set<DateTime>.from(h.frozenDays)..remove(day);
+      return h.copyWith(
+        frozenDays: frozen,
+        freezesRemaining:
+            (h.freezesRemaining + 1).clamp(0, h.freezeAllowance).toInt(),
       );
     });
     return true;
@@ -241,6 +342,7 @@ class TideStore extends ChangeNotifier {
     _habits = [];
     _acknowledgedMilestones = {};
     _simulatedBonus = 0;
+    _pendingHabitCue = null;
     notifyListeners();
   }
 
@@ -249,18 +351,53 @@ class TideStore extends ChangeNotifier {
   void restoreSeed() {
     _habits = SeedData.habits();
     _simulatedBonus = 0;
+    _pendingHabitCue = null;
     _acknowledgedMilestones = _unlockedIds().toSet();
     notifyListeners();
   }
 
-  void completeOnboarding(List<Habit> chosen) {
-    if (chosen.isNotEmpty) _habits = chosen;
+  /// The intro has been read, or skipped. Distinct from [signedIn]: this
+  /// only decides whether first run replays the explanation.
+  void completeOnboarding() {
+    if (onboardingComplete) return;
     onboardingComplete = true;
     notifyListeners();
   }
 
-  void skipOnboarding() {
+  /// A brand-new account.
+  ///
+  /// The seeded demo history is thrown away here rather than at launch, so
+  /// the store still opens on real data for anyone dropped straight into
+  /// the shell — tests, deep links, and the returning-user path through
+  /// [signIn]. Signing up is the one moment where an empty app is the
+  /// honest thing to show, and [tourPending] is what keeps that emptiness
+  /// from reading as a broken screen.
+  void signUp({required String name, required String email}) {
+    final trimmed = name.trim();
+    accountName = trimmed.isEmpty ? 'You' : trimmed;
+    accountEmail = email.trim();
+    signedIn = true;
     onboardingComplete = true;
+    tourPending = true;
+
+    _habits = [];
+    _acknowledgedMilestones = {};
+    _simulatedBonus = 0;
+    _pendingHabitCue = null;
+    notifyListeners();
+  }
+
+  /// A returning account, which arrives with the history it already had.
+  void signIn({required String email}) {
+    accountEmail = email.trim();
+    signedIn = true;
+    onboardingComplete = true;
+    notifyListeners();
+  }
+
+  void finishTour() {
+    if (!tourPending) return;
+    tourPending = false;
     notifyListeners();
   }
 

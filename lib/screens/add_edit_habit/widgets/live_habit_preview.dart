@@ -42,7 +42,7 @@ class LiveHabitPreview extends StatelessWidget {
 
     return TideSurface(
       radius: TideElevation.radius12,
-      color: TideColors.well,
+      color: TideColors.trench,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       child: Row(
         children: [
@@ -52,7 +52,7 @@ class LiveHabitPreview extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: TideColors.tideBlue, width: 2.5),
+              border: Border.all(color: TideColors.lantern, width: 2.5),
             ),
             child: Center(child: HabitGlyph(glyph: glyph, size: 14)),
           ),
@@ -70,7 +70,7 @@ class LiveHabitPreview extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$_schedule · ${type.gestureHint}',
+                  '$_schedule, ${type.gestureHint}',
                   style: TideType.labelMuted,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -79,7 +79,7 @@ class LiveHabitPreview extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Text('LIVE', style: TideType.sectionHeader.copyWith(fontSize: 9.5)),
+          Text('Preview', style: TideType.labelMuted),
         ],
       ),
     );

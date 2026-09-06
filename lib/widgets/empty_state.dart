@@ -34,8 +34,8 @@ class TideEmptyState extends StatelessWidget {
           children: [
             TideRingBreathing(size: ringSize, strokeWidth: 3),
             const SizedBox(height: 28),
-            Text(title, style: TideType.heading, textAlign: TextAlign.center),
-            const SizedBox(height: 8),
+            Text(title, style: TideType.hero, textAlign: TextAlign.center),
+            const SizedBox(height: 10),
             Text(body, style: TideType.bodyMuted, textAlign: TextAlign.center),
             if (action != null) ...[const SizedBox(height: 22), action!],
           ],
@@ -59,7 +59,7 @@ class TideEmptyNote extends StatelessWidget {
       child: Center(
         child: Text(
           message,
-          style: TideType.labelMuted.copyWith(color: TideColors.textMuted),
+          style: TideType.labelMuted.copyWith(color: TideColors.silt),
           textAlign: TextAlign.center,
         ),
       ),

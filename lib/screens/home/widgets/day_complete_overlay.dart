@@ -69,8 +69,8 @@ class _DayCompleteOverlayState extends State<DayCompleteOverlay>
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
                       colors: [
-                        TideColors.kelpGreen.withValues(alpha: 0.22 * presence),
-                        TideColors.foamCyan.withValues(alpha: 0.05 * presence),
+                        TideColors.lantern.withValues(alpha: 0.22 * presence),
+                        TideColors.lantern.withValues(alpha: 0.05 * presence),
                         Colors.transparent,
                       ],
                       stops: const [0, 0.35, 0.75],
@@ -78,10 +78,14 @@ class _DayCompleteOverlayState extends State<DayCompleteOverlay>
                   ),
                 ),
               ),
+              // Clear of the FAB rather than level with it. At 118 the
+              // message sat exactly behind the add button, so the one
+              // sentence the app says on its best moment was half hidden
+              // behind a control nobody is about to press.
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: 118,
+                bottom: 230,
                 child: Opacity(
                   opacity: presence,
                   child: Transform.translate(
@@ -90,8 +94,8 @@ class _DayCompleteOverlayState extends State<DayCompleteOverlay>
                       children: [
                         Text(
                           'Day complete',
-                          style: TideType.heading.copyWith(
-                            color: TideColors.foamCyan,
+                          style: TideType.hero.copyWith(
+                            color: TideColors.lantern,
                           ),
                         ),
                         const SizedBox(height: 4),

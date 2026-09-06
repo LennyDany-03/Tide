@@ -20,11 +20,11 @@ class FeatureRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Icon(Icons.check_rounded, size: 17, color: TideColors.tideBlue),
+        const Icon(Icons.check_rounded, size: 17, color: TideColors.lantern),
         const SizedBox(width: 12),
         Expanded(child: Text(label, style: TideType.body)),
         const SizedBox(width: 12),
-        Text(freeLimit, style: TideType.gauge(12, color: TideColors.textMuted)),
+        Text(freeLimit, style: TideType.gauge(12, color: TideColors.silt)),
       ],
     );
   }

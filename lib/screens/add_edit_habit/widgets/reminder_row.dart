@@ -36,7 +36,7 @@ class ReminderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TideSurface(
-      color: TideColors.well,
+      color: TideColors.trench,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,8 +56,8 @@ class ReminderRow extends StatelessWidget {
                     style: TideType.gauge(
                       15,
                       color: enabled
-                          ? TideColors.tideBlue
-                          : TideColors.textMuted,
+                          ? TideColors.lantern
+                          : TideColors.silt,
                     ),
                   ),
                 ),

@@ -13,7 +13,7 @@ class TrendChart extends StatefulWidget {
   const TrendChart({
     super.key,
     required this.values,
-    this.color = TideColors.tideBlue,
+    this.color = TideColors.lantern,
     this.height = 96,
     this.strokeWidth = 2,
     this.showEndDot = true,

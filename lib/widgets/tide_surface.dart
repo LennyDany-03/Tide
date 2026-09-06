@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../theme/tide_colors.dart';
 import '../theme/tide_elevation.dart';
-import '../theme/tide_gradients.dart';
 
-/// A card, sheet, row or chip — anything that sits above the page.
+/// A card, sheet or raised row — anything sitting above the page.
 ///
-/// Carries the whole elevation recipe: the shallow fill, the radius, one of
-/// the two shadow sets, and the 1px inner highlight along the top edge that
-/// keeps a flat surface from looking like a hole.
+/// Flat. The fill is a solid step up from the page, and the only modelling
+/// is a one-pixel lit line along the top edge. That is the whole recipe.
+///
+/// This used to paint a diagonal ramp on every surface in the app. A ramp
+/// on one card reads as light falling across it; a ramp on all of them
+/// reads as texture, and texture everywhere is the thing that makes an
+/// interface look busy rather than expensive. Luminance separation does the
+/// same job silently, which is why the palette was rebuilt to give it
+/// enough room to work.
 class TideSurface extends StatelessWidget {
   const TideSurface({
     super.key,
     required this.child,
-    this.radius = TideElevation.radius16,
+    this.radius = TideElevation.radius20,
     this.color,
     this.gradient,
     this.floating = false,
@@ -27,30 +33,28 @@ class TideSurface extends StatelessWidget {
 
   final Widget child;
   final BorderRadius radius;
+
+  /// Defaults to [TideColors.shelf]. Pass [TideColors.shoal] for something
+  /// sitting one step further forward.
   final Color? color;
 
-  /// The surface ramp. Defaults to [TideGradients.surface] — lifted at the
-  /// top-left, falling toward deep water at the bottom-right — so every
-  /// card in the app is lit from one direction without asking. Reach for
-  /// another [TideGradients] ramp rather than writing one here; an explicit
-  /// [color] still wins, for the handful of surfaces that are deliberately
-  /// flat.
+  /// Escape hatch for the two surfaces that genuinely carry a ramp — the
+  /// tide curve and the tab bar's glass. Everything else stays flat.
   final Gradient? gradient;
 
-  /// Floating surfaces (FAB, sheets, context menus) take the deeper shadow.
+  /// Floating surfaces (sheets, context menus) take the deep shadow. Cards
+  /// take none.
   final bool floating;
 
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
   final BoxBorder? border;
 
-  /// The top inner highlight. Off for recessed wells, which should read as
-  /// carved *into* the surface rather than raised off it.
+  /// The lit top edge. Off for recessed wells, which should read as carved
+  /// into a surface rather than raised off it.
   final bool highlight;
 
-  /// Escape hatch for the FAB's glow. Everything else should use [floating].
   final List<BoxShadow>? shadows;
-
   final double? width;
   final double? height;
 
@@ -61,8 +65,8 @@ class TideSurface extends StatelessWidget {
       height: height,
       margin: margin,
       decoration: BoxDecoration(
-        color: color,
-        gradient: color == null ? (gradient ?? TideGradients.surface) : null,
+        color: gradient == null ? (color ?? TideColors.shelf) : null,
+        gradient: gradient,
         borderRadius: radius,
         border: border,
         boxShadow:
@@ -101,8 +105,12 @@ class TideSurface extends StatelessWidget {
   }
 }
 
-/// A recessed well: the inverse of [TideSurface]. Used for empty heatmap
-/// cells, text inputs and the inactive track behind a sliding pill.
+/// A recess cut into a surface: inputs, empty grid cells, the inactive
+/// track behind a sliding pill.
+///
+/// Flat [TideColors.trench], and no lit edge — a hole does not catch the
+/// light that a raised face does. That single omission is what separates it
+/// from [TideSurface]; it needs no gradient to read as carved.
 class TideWell extends StatelessWidget {
   const TideWell({
     super.key,
@@ -110,7 +118,6 @@ class TideWell extends StatelessWidget {
     this.radius = TideElevation.radius12,
     this.padding,
     this.color,
-    this.gradient,
     this.border,
   });
 
@@ -118,11 +125,6 @@ class TideWell extends StatelessWidget {
   final BorderRadius radius;
   final EdgeInsetsGeometry? padding;
   final Color? color;
-
-  /// Defaults to [TideGradients.well] — lit from below, which is what makes
-  /// the surface read as carved into the card rather than sitting on it.
-  final Gradient? gradient;
-
   final BoxBorder? border;
 
   @override
@@ -130,8 +132,7 @@ class TideWell extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: color,
-        gradient: color == null ? (gradient ?? TideGradients.well) : null,
+        color: color ?? TideColors.trench,
         borderRadius: radius,
         border: border,
       ),

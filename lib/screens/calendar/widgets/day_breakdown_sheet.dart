@@ -107,11 +107,14 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Frozen is ice, logged is the accent. Both used to be lantern, so a
+    // day you held and a day you earned came back identical apart from the
+    // word beside them.
     final color = entry.frozen
-        ? TideColors.foamCyan
+        ? TideColors.frost
         : entry.complete
-        ? TideColors.kelpGreen
-        : TideColors.textMuted;
+        ? TideColors.lantern
+        : TideColors.silt;
 
     final status = entry.frozen
         ? 'frozen'
@@ -123,7 +126,7 @@ class _Row extends StatelessWidget {
 
     return TideSurface(
       radius: TideElevation.radius12,
-      color: TideColors.well,
+      color: TideColors.trench,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [

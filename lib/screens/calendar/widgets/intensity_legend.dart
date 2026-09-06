@@ -5,8 +5,10 @@ import '../../../theme/tide_typography.dart';
 
 /// The key for the grid's fill levels.
 ///
-/// Drawn from the same [TideColors.intensity] ramp the cells use, so the
-/// legend cannot drift out of step with what it is explaining.
+/// Five swatches at the same size and radius as a day cell, drawn from the
+/// same [TideColors.intensity] ramp, so the legend cannot drift out of step
+/// with what it explains — and so it reads as a sample of the grid rather
+/// than as a gradient bar, which is a different object entirely.
 class IntensityLegend extends StatelessWidget {
   const IntensityLegend({super.key});
 
@@ -14,26 +16,21 @@ class IntensityLegend extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text('less', style: TideType.labelMuted.copyWith(fontSize: 11)),
+        Text('None', style: TideType.labelMuted),
         const SizedBox(width: 10),
-        Expanded(
-          child: Container(
-            height: 3,
+        for (final level in const [0.0, 0.25, 0.5, 0.75, 1.0]) ...[
+          if (level > 0) const SizedBox(width: 4),
+          Container(
+            width: 13,
+            height: 13,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(3),
-              gradient: LinearGradient(
-                colors: [
-                  TideColors.intensity(0.05),
-                  TideColors.intensity(0.4),
-                  TideColors.intensity(0.75),
-                  TideColors.intensity(1),
-                ],
-              ),
+              color: TideColors.intensity(level),
+              borderRadius: BorderRadius.circular(4),
             ),
           ),
-        ),
+        ],
         const SizedBox(width: 10),
-        Text('all logged', style: TideType.labelMuted.copyWith(fontSize: 11)),
+        Text('All logged', style: TideType.labelMuted),
       ],
     );
   }

@@ -2,17 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../theme/tide_colors.dart';
 import '../theme/tide_elevation.dart';
-import '../theme/tide_gradients.dart';
 import '../theme/tide_motion.dart';
 import '../theme/tide_typography.dart';
 import 'press_scale.dart';
 import 'tide_ring.dart';
 
 enum TideButtonVariant {
-  /// Tide blue fill — the one primary action on a screen.
+  /// Solid lantern — the one primary action on a screen.
   primary,
 
-  /// Shallow surface — everything alongside a primary.
+  /// A plain surface — everything alongside a primary.
   secondary,
 
   /// Text only, for dismissals and low-stakes navigation.
@@ -54,53 +53,57 @@ class TideButton extends StatelessWidget {
 
   bool get _interactive => enabled && phase == TideButtonPhase.idle;
 
-  /// Only the primary button is lit; the other two are surfaces, and a
-  /// surface that glows is a surface competing with the one action on the
-  /// screen that matters.
-  Gradient? get _gradient => switch (variant) {
-    TideButtonVariant.primary => TideGradients.accent,
-    TideButtonVariant.secondary => TideGradients.surface,
+  /// Solid fills, no ramps. A warm accent block on near-black water is
+  /// already the loudest thing on any screen it appears on; a gradient
+  /// across it adds nothing except the look of a template.
+  Color? get _fill => switch (variant) {
+    TideButtonVariant.primary => TideColors.lantern,
+    TideButtonVariant.secondary => TideColors.shelf,
     TideButtonVariant.ghost => null,
   };
 
   Color get _foreground => switch (variant) {
     TideButtonVariant.primary => TideColors.deepWater,
-    TideButtonVariant.secondary => TideColors.textPrimary,
-    TideButtonVariant.ghost => TideColors.textMuted,
+    TideButtonVariant.secondary => TideColors.bone,
+    TideButtonVariant.ghost => TideColors.silt,
   };
+
+  /// A disabled primary goes neutral rather than dim.
+  ///
+  /// Fading the fill to 40% turned the accent into a muddy olive that reads
+  /// as a rendering fault rather than as an unavailable control. Dropping
+  /// the colour entirely says "not yet" without inventing a shade that is
+  /// not in the palette.
+  Color? get _disabledFill =>
+      variant == TideButtonVariant.ghost ? null : TideColors.shelf;
 
   @override
   Widget build(BuildContext context) {
-    final opacity = enabled ? 1.0 : 0.4;
-
     return PressScale(
       onTap: _interactive ? onPressed : null,
       enabled: _interactive && onPressed != null,
       child: Opacity(
-        opacity: opacity,
+        opacity: 1,
         child: AnimatedContainer(
           duration: TideMotion.tabSwitch,
           curve: TideMotion.tabCurve,
           width: expand ? double.infinity : null,
           height: 52,
+          // A full-width button gets its air from the screen margins. One
+          // sized to its own label has none unless it is given some, and
+          // without this the label sits hard against both ends and reads as
+          // clipped rather than compact.
+          padding: expand
+              ? null
+              : const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
-            gradient: _gradient,
+            color: enabled ? _fill : _disabledFill,
             borderRadius: TideElevation.radius12,
-            boxShadow:
-                shadows ??
-                (variant == TideButtonVariant.primary
-                    ? [
-                        ...TideElevation.resting,
-                        BoxShadow(
-                          color: TideColors.tideBlue.withValues(alpha: 0.28),
-                          blurRadius: 22,
-                          spreadRadius: -6,
-                          offset: const Offset(0, 6),
-                        ),
-                      ]
-                    : null),
+            // No glow. The primary button does not need to emit light to be
+            // found — it is the only warm block on the screen.
+            boxShadow: shadows,
             border: variant == TideButtonVariant.secondary
-                ? Border.all(color: TideColors.divider)
+                ? Border.all(color: TideColors.hairline)
                 : null,
           ),
           alignment: Alignment.center,
@@ -124,7 +127,9 @@ class TideButton extends StatelessWidget {
                   if (icon != null) ...[icon!, const SizedBox(width: 8)],
                   Text(
                     label,
-                    style: TideType.button.copyWith(color: _foreground),
+                    style: TideType.button.copyWith(
+                      color: enabled ? _foreground : TideColors.silt,
+                    ),
                   ),
                 ],
               ),

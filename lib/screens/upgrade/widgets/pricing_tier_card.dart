@@ -31,14 +31,14 @@ class PricingTierCard extends StatelessWidget {
         duration: TideMotion.tabSwitch,
         curve: TideMotion.tabCurve,
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        // Neutral selection, like every other picker in the app: accent
+        // means progress here, not "you tapped this", and a warm wash under
+        // the price would compete with the button that takes the payment.
         decoration: BoxDecoration(
-          color: selected
-              ? TideColors.tideBlue.withValues(alpha: 0.10)
-              : TideColors.well,
+          color: TideColors.bone.withValues(alpha: selected ? 0.10 : 0.035),
           borderRadius: TideElevation.radius12,
           border: Border.all(
-            color: selected
-                ? TideColors.tideBlue.withValues(alpha: 0.6)
+            color: selected ? TideColors.bone.withValues(alpha: 0.35)
                 : Colors.transparent,
             width: 1.4,
           ),
@@ -53,7 +53,7 @@ class PricingTierCard extends StatelessWidget {
               price,
               style: TideType.gauge(
                 24,
-                color: selected ? TideColors.textPrimary : TideColors.textMuted,
+                color: selected ? TideColors.bone : TideColors.silt,
               ),
             ),
             const SizedBox(height: 6),

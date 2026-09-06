@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../screens/achievements/achievements_screen.dart';
 import '../screens/add_edit_habit/add_edit_habit_sheet.dart';
+import '../screens/auth/auth_screen.dart';
 import '../screens/calendar/calendar_screen.dart';
 import '../screens/habit_detail/habit_detail_screen.dart';
 import '../screens/home/home_screen.dart';
@@ -17,6 +18,7 @@ import '../widgets/tide_sheet.dart';
 /// Route names, so no screen has to hardcode a path string.
 abstract final class Routes {
   static const onboarding = '/onboarding';
+  static const auth = '/auth';
   static const today = '/today';
   static const history = '/history';
   static const insights = '/insights';
@@ -42,6 +44,39 @@ abstract final class AppRoutes {
         GoRoute(
           path: Routes.onboarding,
           builder: (context, state) => const OnboardingScreen(),
+        ),
+
+        // Sign-up and log-in. A `go` rather than a push in both directions:
+        // onboarding and the form are two halves of one entry sequence, and
+        // leaving either on a stack means a back gesture inside the app can
+        // land on the account screen of an account you already have.
+        GoRoute(
+          path: Routes.auth,
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
+            key: state.pageKey,
+            transitionDuration: TideMotion.morph,
+            reverseTransitionDuration: TideMotion.sheetOut,
+            // Rises and settles, catching the ring the closing onboarding
+            // step is shrinking toward. A plain fade here left the mark
+            // materialising at the top of a still page.
+            transitionsBuilder: (context, animation, secondary, child) {
+              final eased = CurvedAnimation(
+                parent: animation,
+                curve: TideMotion.sheetCurve,
+              );
+              return FadeTransition(
+                opacity: eased,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.06),
+                    end: Offset.zero,
+                  ).animate(eased),
+                  child: child,
+                ),
+              );
+            },
+            child: const AuthScreen(),
+          ),
         ),
 
         // The four tabs. A branch keeps its own navigator, so pushing habit

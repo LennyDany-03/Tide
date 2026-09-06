@@ -23,8 +23,8 @@ class BadgeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final unlocked = status.unlocked;
     final accent = unlocked
-        ? TideColors.foamCyan
-        : TideColors.drained(TideColors.tideBlue, 0.8);
+        ? TideColors.lantern
+        : TideColors.drained(TideColors.lantern, 0.8);
 
     return PressScale(
       onTap: onTap,
@@ -32,10 +32,10 @@ class BadgeTile extends StatelessWidget {
       child: Opacity(
         opacity: unlocked ? 1 : 0.42,
         child: TideSurface(
-          radius: TideElevation.radius16,
+          radius: TideElevation.radius20,
           color: unlocked
-              ? Color.lerp(TideColors.shallow, TideColors.foamCyan, 0.05)
-              : TideColors.well,
+              ? Color.lerp(TideColors.shelf, TideColors.lantern, 0.05)
+              : TideColors.trench,
           highlight: unlocked,
           shadows: unlocked ? TideElevation.resting : const [],
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 18),
@@ -54,8 +54,8 @@ class BadgeTile extends StatelessWidget {
                 status.milestone.name,
                 style: TideType.label.copyWith(
                   color: unlocked
-                      ? TideColors.textPrimary
-                      : TideColors.textMuted,
+                      ? TideColors.bone
+                      : TideColors.silt,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -64,7 +64,7 @@ class BadgeTile extends StatelessWidget {
               const SizedBox(height: 5),
               Text(
                 status.milestone.caption,
-                style: TideType.gauge(11, color: TideColors.textMuted),
+                style: TideType.gauge(11, color: TideColors.silt),
               ),
             ],
           ),

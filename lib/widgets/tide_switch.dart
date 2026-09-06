@@ -14,8 +14,8 @@ class TideSwitch extends StatelessWidget {
     super.key,
     required this.value,
     required this.onChanged,
-    this.width = 46,
-    this.height = 27,
+    this.width = 42,
+    this.height = 24,
   });
 
   final bool value;
@@ -47,15 +47,14 @@ class TideSwitch extends StatelessWidget {
             width: width,
             height: height,
             decoration: BoxDecoration(
-              color: Color.lerp(TideColors.well, TideColors.tideBlue, colorT),
-              borderRadius: BorderRadius.circular(height),
-              border: Border.all(
-                color: Color.lerp(
-                  TideColors.textMuted.withValues(alpha: 0.3),
-                  TideColors.tideBlue,
-                  colorT,
-                )!,
+              // No border. An outlined track plus a filled track plus a
+              // knob is three edges describing one control.
+              color: Color.lerp(
+                TideColors.bone.withValues(alpha: 0.10),
+                TideColors.lantern,
+                colorT,
               ),
+              borderRadius: BorderRadius.circular(height),
             ),
             child: Stack(
               children: [
@@ -67,8 +66,8 @@ class TideSwitch extends StatelessWidget {
                     height: knob,
                     decoration: BoxDecoration(
                       color: Color.lerp(
-                        TideColors.textMuted,
-                        TideColors.textPrimary,
+                        TideColors.silt,
+                        TideColors.deepWater,
                         colorT,
                       ),
                       shape: BoxShape.circle,

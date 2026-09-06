@@ -4,40 +4,62 @@ import 'package:flutter/services.dart';
 import '../../../services/models/habit.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
-import '../../../theme/tide_gradients.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/habit_glyph.dart';
-import '../../../widgets/hold_to_fill.dart';
 import '../../../widgets/press_scale.dart';
-import '../../../widgets/ripple_burst.dart';
 import '../../../widgets/ripple_strip.dart';
 import '../../../widgets/tide_ring.dart';
 import '../../../widgets/tide_surface.dart';
-import 'swipe_log_background.dart';
+import '../../../widgets/swipe_log_background.dart';
 
 /// One habit on Home, and the gesture surface for logging it.
+///
+/// An enclosed card. The list spent a while as full-bleed rows separated by
+/// a hairline, on the argument that a panel carried no information the
+/// content inside it did not already carry. True, and beside the point: on
+/// a near-black ground four hairlines do not read as four objects, they
+/// read as ruling on a page, and the habit you are aiming a thumb at has no
+/// edge to it. Giving each habit a fill one step off the page, a hairline
+/// all the way round and a 20px radius is what makes it a thing you can
+/// pick up rather than a line of text with a gesture attached.
+///
+/// The fill is [TideColors.shelf] rather than the page colour — one step of
+/// luminance, no gradient — and it is opaque, which is what still lets the
+/// card slide cleanly over the swipe backdrop when it is dragged.
 ///
 /// The card divides into two handles, and the division is the same on every
 /// card in the app:
 ///
-/// * **The glyph** manages the habit — tap opens detail, long-press raises
-///   the context menu.
-/// * **The body** logs it — binary habits are swiped, quantity and duration
-///   habits are held.
+/// * **The ring** opens the habit — a tap goes to detail.
+/// * **The body** logs it — binary habits are swiped, and a habit with a
+///   count opens the log sheet, where its units are metered out one at a
+///   time.
 ///
-/// That split is what lets held habits keep a long-press menu without the
-/// two gestures fighting each other for the same pixels.
+/// **A long press anywhere on the card** raises the context menu. It used
+/// to be reachable only from the ring, which is a 34px target for the one
+/// gesture people go looking for when they want to edit or delete
+/// something — so in practice the menu was not reachable at all. Long press
+/// and horizontal drag settle in the gesture arena on their own (movement
+/// picks the drag, stillness picks the press), so the whole card can carry
+/// both without the two fighting.
+///
+/// The body used to hold-to-log a counted habit in place, sweeping the
+/// whole target under one finger. Two problems: the only outcomes were
+/// nothing and all ten, and a slow gesture sat on a card you scroll past.
+/// The counting moved to a surface of its own.
 class HabitCard extends StatefulWidget {
   const HabitCard({
     super.key,
     required this.habit,
     required this.streak,
     required this.weekLevels,
-    required this.onOpen,
+    required this.frozenDays,
     required this.onMenu,
-    required this.onLog,
+    required this.onCount,
+    required this.onComplete,
     required this.onFreeze,
+    required this.onUnfreeze,
   });
 
   final Habit habit;
@@ -46,16 +68,30 @@ class HabitCard extends StatefulWidget {
   /// Seven completion levels, oldest first.
   final List<double> weekLevels;
 
-  final VoidCallback onOpen;
+  /// Which of those seven days were frozen rather than logged, so the strip
+  /// can shade them cold. Same length and order as [weekLevels].
+  final List<bool> frozenDays;
+
   final VoidCallback onMenu;
 
-  /// Called with the amount to log — the full target for a swipe, the held
-  /// fraction of it for a hold.
-  final ValueChanged<num> onLog;
+  /// Opens the count drawer when a measured habit is tapped.
+  final VoidCallback onCount;
 
+  final VoidCallback onComplete;
+
+  /// Called with the amount to log — the full target, from a swipe.
   final VoidCallback onFreeze;
+  final VoidCallback onUnfreeze;
 
+  /// Taller than the hairline rows it replaced: a card needs its content to
+  /// sit off its own edges, not just off its neighbours.
   static const double height = 78;
+
+  /// Vertical air between two cards. Enough that the gap reads as ground
+  /// showing through rather than as a thick divider.
+  static const double gap = 10;
+
+  static const BorderRadius radius = TideElevation.radius20;
 
   @override
   State<HabitCard> createState() => _HabitCardState();
@@ -63,15 +99,14 @@ class HabitCard extends StatefulWidget {
 
 class _HabitCardState extends State<HabitCard>
     with SingleTickerProviderStateMixin {
-  // Built eagerly in initState rather than lazily: a card that is disposed
-  // without ever being dragged would otherwise construct its controller
-  // inside dispose(), which is too late to look up a TickerMode.
+  // Built eagerly in initState rather than lazily: a row disposed without
+  // ever being dragged would otherwise construct its controller inside
+  // dispose(), which is too late to look up a TickerMode.
   late final AnimationController _settle;
 
   double _drag = 0;
   double _phase = 0;
   double _cardWidth = 0;
-  int _rippleTick = 0;
 
   bool get _done =>
       widget.habit.isCompleteOn(DateTime.now()) ||
@@ -96,15 +131,19 @@ class _HabitCardState extends State<HabitCard>
     super.dispose();
   }
 
-  // --- Swipe (binary habits) -------------------------------------------
+  // --- Swipe ------------------------------------------------------------
 
   void _onDragUpdate(DragUpdateDetails details) {
     setState(() {
       _drag += details.delta.dx;
-      // Resistance past the commit point, so the card never slides right
-      // off the screen and the threshold stays findable by feel.
+      // Resistance past the commit point, so the row never slides right off
+      // the screen and the threshold stays findable by feel.
       final limit = _cardWidth * 0.62;
-      _drag = _drag.clamp(-limit, limit);
+      // A measured habit is completed in its count drawer, not by a
+      // binary check gesture. Do not even reveal the gold check side for
+      // it: showing an action that will spring back is misleading.
+      final max = widget.habit.type == HabitType.binary ? limit : 0.0;
+      _drag = _drag.clamp(-limit, max);
       _phase += details.delta.dx * 0.03;
     });
   }
@@ -113,63 +152,46 @@ class _HabitCardState extends State<HabitCard>
     final fraction = _cardWidth == 0 ? 0.0 : _drag.abs() / _cardWidth;
 
     if (fraction >= TideMotion.swipeThreshold) {
-      if (_drag > 0) {
+      if (_drag > 0 && widget.habit.type == HabitType.binary) {
         _commitLog();
+      } else if (_drag < 0) {
+        _frozen ? _commitUnfreeze() : _commitFreeze();
       } else {
-        _commitFreeze();
+        _animateDragHome(TideMotion.swipeCancel, TideMotion.swipeCancelCurve);
       }
       return;
     }
-    _springBack();
+    _animateDragHome(TideMotion.swipeCancel, TideMotion.swipeCancelCurve);
   }
 
-  void _springBack() {
-    final from = _drag;
-    _settle
-      ..reset()
-      ..duration = TideMotion.swipeCancel;
-
-    final animation = _settle.drive(
-      Tween<double>(
-        begin: from,
-        end: 0,
-      ).chain(CurveTween(curve: TideMotion.swipeCancelCurve)),
-    );
-
-    void tick() => setState(() => _drag = animation.value);
-    animation.addListener(tick);
-    _settle.forward().whenComplete(() {
-      animation.removeListener(tick);
-      if (mounted) setState(() => _drag = 0);
-    });
-  }
-
-  /// Snap into place, then hand off to the store. The ripple fires here so
-  /// the reward starts before the list has finished reordering.
+  /// Binary habits deliberately keep their quick check-off gesture. Counted
+  /// habits never call this path: their exact amount belongs in the drawer.
   void _commitLog() {
     HapticFeedback.mediumImpact();
-    setState(() => _rippleTick++);
-    _snapHome();
-    widget.onLog(widget.habit.target);
+    _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
+    widget.onComplete();
   }
 
   void _commitFreeze() {
     HapticFeedback.mediumImpact();
-    _snapHome();
+    _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
     widget.onFreeze();
   }
 
-  void _snapHome() {
+  void _commitUnfreeze() {
+    HapticFeedback.selectionClick();
+    _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
+    widget.onUnfreeze();
+  }
+
+  void _animateDragHome(Duration duration, Curve curve) {
     final from = _drag;
     _settle
       ..reset()
-      ..duration = TideMotion.swipeSettle;
+      ..duration = duration;
 
     final animation = _settle.drive(
-      Tween<double>(
-        begin: from,
-        end: 0,
-      ).chain(CurveTween(curve: Curves.easeOutCubic)),
+      Tween<double>(begin: from, end: 0).chain(CurveTween(curve: curve)),
     );
 
     void tick() => setState(() => _drag = animation.value);
@@ -180,38 +202,24 @@ class _HabitCardState extends State<HabitCard>
     });
   }
 
-  // --- Hold (quantity / duration habits) --------------------------------
-
-  void _commitHold(double fraction) {
-    final amount = (widget.habit.target * fraction).ceil();
-    setState(() => _rippleTick++);
-    widget.onLog(amount.clamp(0, widget.habit.target));
-  }
-
   // --- Copy -------------------------------------------------------------
 
-  String get _hint {
-    if (_frozen) return 'frozen · streak held';
-    if (_done) return 'logged';
-
-    return switch (widget.habit.type) {
-      HabitType.binary => 'swipe right to log',
-      HabitType.quantity ||
-      HabitType.duration => 'hold to log · ${_amountLabel()}',
-    };
+  /// The second line, and only when there is something to say.
+  ///
+  /// This used to spell out the gesture on every row forever — "swipe right
+  /// to log" under all four habits, every day. An affordance label that
+  /// never retires stops being help and becomes noise, and the ring already
+  /// shows where the habit stands.
+  String? get _detail {
+    if (_frozen) return 'frozen, streak held';
+    if (_done) return null;
+    if (widget.habit.type == HabitType.binary) return null;
+    return '${_amount()} of ${widget.habit.target}';
   }
 
-  String _amountLabel() {
+  String _amount() {
     final amount = widget.habit.amountOn(DateTime.now());
-    final shown = amount == amount.roundToDouble() ? amount.round() : amount;
-    return '$shown/${widget.habit.target}';
-  }
-
-  /// The trailing pill: the streak, unless a quantity habit is part-way
-  /// through today, in which case the amount is the more useful number.
-  String get _pillLabel {
-    final partial = widget.habit.type != HabitType.binary && !_done;
-    return partial ? _amountLabel() : '${widget.streak}';
+    return '${amount == amount.roundToDouble() ? amount.round() : amount}';
   }
 
   @override
@@ -223,23 +231,22 @@ class _HabitCardState extends State<HabitCard>
         return SizedBox(
           height: HabitCard.height,
           child: Stack(
+            clipBehavior: Clip.hardEdge,
             children: [
               Positioned.fill(
                 child: SwipeLogBackground(
                   offset: _drag,
                   width: _cardWidth,
                   phase: _phase,
+                  radius: HabitCard.radius,
                   freezeAvailable: widget.habit.freezesRemaining > 0,
+                  freezeOnRight: false,
+                  unfreezing: _frozen,
                 ),
               ),
               Transform.translate(
                 offset: Offset(_drag, 0),
-                child: RippleBurst(
-                  trigger: _rippleTick,
-                  color: TideColors.kelpGreen,
-                  borderRadius: TideElevation.radius16,
-                  child: _body(),
-                ),
+                child: _body(),
               ),
             ],
           ),
@@ -249,184 +256,134 @@ class _HabitCardState extends State<HabitCard>
   }
 
   Widget _body() {
-    final surface = TideSurface(
-      radius: TideElevation.radius16,
+    final detail = _detail;
+
+    final row = TideSurface(
       height: HabitCard.height,
-      // Completed cards wash kelp green — the state is carried by the
-      // surface itself, not by a badge bolted onto it. Frozen rows wash
-      // foam instead, so the two held states never read as the same thing.
-      gradient: TideGradients.habitRow(
-        tint: _frozen
-            ? TideColors.foamCyan
-            : _done
-            ? TideColors.kelpGreen
-            : null,
-        amount: _frozen ? 0.08 : 0.11,
-      ),
-      shadows: _done
-          ? [
-              ...TideElevation.resting,
-              BoxShadow(
-                color: TideColors.kelpGreen.withValues(alpha: 0.12),
-                blurRadius: 18,
-                spreadRadius: -8,
-                offset: const Offset(0, 4),
-              ),
-            ]
-          : null,
+      radius: HabitCard.radius,
+      color: _fill,
+      border: Border.all(color: _edge),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Row(
         children: [
-          _glyphHandle(),
+          _ringHandle(),
           const SizedBox(width: 14),
-          Expanded(child: _details()),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  widget.habit.name,
+                  style: TideType.heading.copyWith(
+                    color: _done ? TideColors.silt : TideColors.bone,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (detail != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    detail,
+                    style: _frozen
+                        ? TideType.labelMuted.copyWith(
+                            color: TideColors.frost.withValues(alpha: 0.75),
+                          )
+                        : TideType.labelMuted,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
           const SizedBox(width: 12),
-          _streakPill(),
+          RippleStrip(levels: widget.weekLevels, frozen: widget.frozenDays),
+          const SizedBox(width: 14),
+          SizedBox(
+            width: 24,
+            child: Text(
+              '${widget.streak}',
+              textAlign: TextAlign.right,
+              style: TideType.gauge(
+                17,
+                color: _done ? _stateHue : TideColors.silt,
+              ),
+            ),
+          ),
         ],
       ),
     );
 
-    // Binary habits swipe; held habits hold. One gesture per card body.
-    if (widget.habit.type == HabitType.binary) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragUpdate: _onDragUpdate,
-        onHorizontalDragEnd: _onDragEnd,
-        onTap: widget.onOpen,
-        child: surface,
-      );
-    }
-
-    return HoldToFill(
-      commitOnRelease: true,
-      sweep: TideMotion.holdToLogSweep,
-      startProgress: _progress,
-      onCommit: _commitHold,
-      onTap: widget.onOpen,
-      builder: (context, progress, holding) {
-        return Stack(
-          children: [
-            surface,
-            if (holding)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: ClipRRect(
-                    borderRadius: TideElevation.radius16,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: progress,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: TideGradients.accentWash(alpha: 0.16),
-                          ),
-                          child: const SizedBox.expand(),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  /// The management handle. Deliberately its own hit target so a long-press
-  /// here never competes with the hold-to-log gesture on the body.
-  Widget _glyphHandle() {
-    final ringColor = _frozen
-        ? TideColors.foamCyan
-        : _done
-        ? TideColors.kelpGreen
-        : TideColors.tideBlue;
-
-    return PressScale(
-      onTap: widget.onOpen,
+    // Tap and long press ride on the card itself. A shallower press than the
+    // global default — 0.97 on a full-width card is a lurch, where the same
+    // ratio on a chip is a nudge.
+    final pressable = PressScale(
+      scale: 0.985,
+      // A measured habit opens its logging drawer on tap. Binary habits are
+      // deliberately tap-silent: their complete action lives in More so a
+      // fast scroll can never turn into an accidental check-off.
+      onTap: widget.habit.type == HabitType.binary ? null : widget.onCount,
       onLongPress: widget.onMenu,
-      child: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          // A ring with nothing in it yet gets no glow, so the row's one
-          // point of light always means "there is progress here".
-          boxShadow: [
-            BoxShadow(
-              color: ringColor.withValues(
-                alpha: 0.30 * (_done ? 1 : _progress),
-              ),
-              blurRadius: 14,
-              spreadRadius: -4,
-            ),
-          ],
-        ),
-        child: TideRing(
-          progress: _done ? 1 : _progress,
-          size: 36,
-          strokeWidth: 2.5,
-          color: ringColor,
-          child: HabitGlyph(
-            glyph: widget.habit.glyph,
-            size: 14,
-            color: ringColor,
-          ),
-        ),
-      ),
+      child: row,
+    );
+
+    // Right reveals the warm check on the left for binary habits; left
+    // reveals the ice freeze on the right for every habit. Counted habits
+    // still use their drawer for progress, so their right swipe returns.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      child: pressable,
     );
   }
 
-  Widget _details() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          widget.habit.name,
-          style: TideType.heading,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 9),
-        Row(
-          children: [
-            SizedBox(
-              width: 66,
-              child: RippleStrip(
-                levels: widget.weekLevels,
-                color: _done ? TideColors.kelpGreen : null,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _hint,
-                style: TideType.labelMuted.copyWith(
-                  color: _done ? TideColors.kelpGreen : TideColors.textMuted,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
+  /// The card fill. One step of luminance off the page, tinted very
+  /// slightly once the day is settled — warm where it was earned, cold
+  /// where it was frozen, at the lowest intensity either hue is used at
+  /// anywhere.
+  Color get _fill {
+    if (_frozen) return Color.lerp(TideColors.shelf, TideColors.frost, 0.05)!;
+    if (_done) return Color.lerp(TideColors.shelf, TideColors.lantern, 0.05)!;
+    return TideColors.shelf;
   }
 
-  Widget _streakPill() {
-    final done = _done;
-    final color = done ? TideColors.kelpGreen : TideColors.tideBlue;
+  /// Ice for a frozen day, the accent for an earned one.
+  ///
+  /// A frozen card used to be lantern throughout — the same ring, border and
+  /// figure as a habit that was actually completed — so the only thing
+  /// separating "I did this" from "I bought a day off" was a line of small
+  /// grey text. Temperature carries it now.
+  Color get _stateHue => _frozen ? TideColors.frost : TideColors.lantern;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-      decoration: BoxDecoration(
-        gradient: done
-            ? TideGradients.completedWash(alpha: 0.20)
-            : TideGradients.accentWash(alpha: 0.16),
-        borderRadius: TideElevation.radius8,
-        border: Border.all(color: color.withValues(alpha: 0.22)),
+  /// The hairline round the card, and the only place its state is spelled
+  /// out on the edge rather than inside it.
+  ///
+  /// Kept low on purpose. A brighter warm edge on a finished habit made the
+  /// two done cards the loudest things in a list whose whole job is to show
+  /// what is still outstanding — done is already carried by a full ring, a
+  /// silt name and a lantern streak figure, and it does not need a fourth
+  /// signal competing for the eye.
+  Color get _edge {
+    if (_frozen) return TideColors.frost.withValues(alpha: 0.2);
+    if (_done) return TideColors.lantern.withValues(alpha: 0.18);
+    return TideColors.hairline;
+  }
+
+  /// The glyph is informational on Home. Pressing and holding it opens the
+  /// same action menu as pressing and holding the row.
+  Widget _ringHandle() {
+    return TideRing(
+      progress: _done ? 1 : _progress,
+      size: 34,
+      strokeWidth: 2,
+      color: _stateHue,
+      child: HabitGlyph(
+        glyph: widget.habit.glyph,
+        size: 14,
+        color: _done ? _stateHue : TideColors.bone.withValues(alpha: 0.75),
       ),
-      child: Text(_pillLabel, style: TideType.gaugeSmall(color: color)),
     );
   }
 }

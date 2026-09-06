@@ -163,6 +163,154 @@ class _HoldToFillState extends State<HoldToFill>
   }
 }
 
+/// The hold gesture that banks exactly one unit, once per hold.
+///
+/// [HoldToFill] sweeps a single fill to a single commit — hold, release, one
+/// thing happens. That is right for a habit that is done or not done, and
+/// wrong for one with a count: a single sweep across a ten-unit target banks
+/// all ten in one gesture, so the only two outcomes available are nothing
+/// and everything.
+///
+/// This counts, but it counts on demand. Pressing down starts a lap;
+/// completing the lap banks one unit and then *disarms* the control until
+/// the finger lifts. It does not fire on touch-down, and it never repeats.
+/// The next unit costs another hold.
+///
+/// The version before this did both of those things, and that is the bug
+/// this shape exists to fix. A unit landed the instant you touched the
+/// button and another every 260ms after, so a thumb resting on an
+/// eight-glass target ran it from empty to full in under two seconds. None
+/// of it was addressable: you could not stop on six, because six went past
+/// before you had finished reacting to five. Making a unit cost one
+/// deliberate hold is what puts the number back under the user's control.
+///
+/// A hold that has banked its unit sits at a full lap rather than draining,
+/// so "this hold is spent, lift and go again" is visible and not just felt.
+class HoldToStep extends StatefulWidget {
+  const HoldToStep({
+    super.key,
+    required this.builder,
+    required this.onStep,
+    this.stepDuration = TideMotion.holdUnit,
+    this.enabled = true,
+  });
+
+  /// Rebuilt as the current lap fills. [progress] is 0..1 through the unit
+  /// being held for, not through the target.
+  ///
+  /// A lap sitting at 1 while [holding] is still true is a hold that has
+  /// already banked — call sites read that pair to say so.
+  final Widget Function(BuildContext context, double progress, bool holding)
+  builder;
+
+  /// One unit. Fires once per completed hold, and never on touch-down.
+  final VoidCallback onStep;
+
+  final Duration stepDuration;
+
+  /// Goes false when there is nothing left to count — a hold in progress
+  /// stops there rather than running on against a target already reached.
+  final bool enabled;
+
+  @override
+  State<HoldToStep> createState() => _HoldToStepState();
+}
+
+class _HoldToStepState extends State<HoldToStep>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _lap;
+
+  bool _holding = false;
+
+  /// True once the current hold has banked its unit. Cleared on release,
+  /// which is the thing that forces a fresh hold for the next one.
+  bool _banked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lap = AnimationController(vsync: this, duration: widget.stepDuration)
+      ..addListener(_onTick)
+      ..addStatusListener(_onLap);
+  }
+
+  @override
+  void didUpdateWidget(HoldToStep old) {
+    super.didUpdateWidget(old);
+    if (old.stepDuration != widget.stepDuration) {
+      _lap.duration = widget.stepDuration;
+    }
+    // The last unit is what turns this off, and the finger is still down
+    // when it lands. Stopping here rather than waiting for the release is
+    // what makes the control go quiet the moment the target is reached.
+    // Mutated directly: this runs inside a build that is already happening.
+    if (!widget.enabled && _holding) {
+      _holding = false;
+      _banked = false;
+      _lap
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _lap
+      ..removeListener(_onTick)
+      ..removeStatusListener(_onLap)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onTick() => setState(() {});
+
+  /// The lap closed. Bank one unit and stop there — deliberately *not*
+  /// restarting the lap is the whole difference from the metronome this
+  /// replaced.
+  void _onLap(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !_holding || _banked) return;
+    setState(() => _banked = true);
+    HapticFeedback.mediumImpact();
+    widget.onStep();
+  }
+
+  void _start() {
+    if (!widget.enabled) return;
+    setState(() {
+      _holding = true;
+      _banked = false;
+    });
+    // Acknowledges the press without logging anything. The press is not the
+    // commit any more; it is the start of one.
+    HapticFeedback.selectionClick();
+    _lap.forward(from: 0);
+  }
+
+  void _end() {
+    if (!_holding) return;
+    setState(() {
+      _holding = false;
+      _banked = false;
+    });
+    _lap
+      ..stop()
+      // Draining rather than cutting makes plain that the lap is spent —
+      // whether it banked a unit or was let go of before it could.
+      ..animateBack(0, duration: TideMotion.swipeSettle, curve: Curves.easeOut);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _start(),
+      onTapUp: (_) => _end(),
+      onTapCancel: _end,
+      child: widget.builder(context, _lap.value, _holding),
+    );
+  }
+}
+
 /// A destructive action behind a coral hold-to-fill ring.
 ///
 /// Used identically by Habit detail's delete, the add/edit sheet's delete,

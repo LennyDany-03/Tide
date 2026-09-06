@@ -64,11 +64,11 @@ class TideRing extends StatelessWidget {
         painter: _TideRingPainter(
           progress: value,
           strokeWidth: strokeWidth,
-          color: color ?? TideColors.tideBlue,
+          color: color ?? TideColors.lantern,
           trackColor:
               trackColor ??
               (showTrack
-                  ? TideColors.textMuted.withValues(alpha: 0.18)
+                  ? TideColors.silt.withValues(alpha: 0.18)
                   : Colors.transparent),
         ),
         child: child == null ? null : Center(child: child),
@@ -245,7 +245,7 @@ class _TideRingBreathingState extends State<TideRingBreathing>
             strokeWidth: widget.strokeWidth,
             animate: false,
             showTrack: false,
-            color: TideColors.tideBlue.withValues(alpha: 0.25 + 0.35 * t),
+            color: TideColors.lantern.withValues(alpha: 0.25 + 0.35 * t),
             child: widget.child,
           ),
         );

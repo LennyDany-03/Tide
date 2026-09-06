@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 
 import 'tide_colors.dart';
 import 'tide_elevation.dart';
-import 'tide_gradients.dart';
 import 'tide_typography.dart';
 
 /// Assembles the Material theme from the Tide tokens.
@@ -14,15 +13,15 @@ import 'tide_typography.dart';
 abstract final class TideTheme {
   static ThemeData get dark {
     const scheme = ColorScheme.dark(
-      primary: TideColors.tideBlue,
+      primary: TideColors.lantern,
       onPrimary: TideColors.deepWater,
-      secondary: TideColors.foamCyan,
+      secondary: TideColors.lantern,
       onSecondary: TideColors.deepWater,
-      tertiary: TideColors.kelpGreen,
+      tertiary: TideColors.lantern,
       error: TideColors.coral,
-      onError: TideColors.textPrimary,
-      surface: TideColors.shallow,
-      onSurface: TideColors.textPrimary,
+      onError: TideColors.bone,
+      surface: TideColors.shelf,
+      onSurface: TideColors.bone,
     );
 
     return ThemeData(
@@ -41,12 +40,12 @@ abstract final class TideTheme {
       splashFactory: NoSplash.splashFactory,
 
       textSelectionTheme: TextSelectionThemeData(
-        cursorColor: TideColors.tideBlue,
-        selectionColor: TideColors.tideBlue.withValues(alpha: 0.3),
-        selectionHandleColor: TideColors.tideBlue,
+        cursorColor: TideColors.lantern,
+        selectionColor: TideColors.lantern.withValues(alpha: 0.3),
+        selectionHandleColor: TideColors.lantern,
       ),
       dividerTheme: DividerThemeData(
-        color: TideColors.divider,
+        color: TideColors.hairline,
         thickness: 1,
         space: 1,
       ),
@@ -55,11 +54,30 @@ abstract final class TideTheme {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
+      // Left unstyled, a snackbar is the one Material default that still
+      // showed through: `fixed` behaviour paints an edge-to-edge slab in
+      // `inverseSurface`, which on a dark scheme is a near-white band with
+      // square corners sitting on top of the tab bar. Floating, shoal-filled
+      // and hairlined, it becomes the same object as every other raised
+      // surface in the app.
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: TideColors.shoal,
+        contentTextStyle: TideType.label,
+        actionTextColor: TideColors.lantern,
+        elevation: 0,
+        showCloseIcon: false,
+        insetPadding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        shape: RoundedRectangleBorder(
+          borderRadius: TideElevation.radius12,
+          side: BorderSide(color: TideColors.bone.withValues(alpha: 0.08)),
+        ),
+      ),
       dialogTheme: DialogThemeData(
-        backgroundColor: TideColors.raised,
+        backgroundColor: TideColors.shoal,
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
-          borderRadius: TideElevation.radius24,
+          borderRadius: TideElevation.radius20,
         ),
       ),
       // One transition family on every platform. go_router supplies the
@@ -75,15 +93,12 @@ abstract final class TideTheme {
 
   /// Light status-bar icons on the deep-water ground, edge-to-edge.
   ///
-  /// The navigation bar takes the *bottom* of the page gradient rather than
-  /// flat deep water. The ground darkens as it falls, so matching the token
-  /// would leave a visibly lighter strip pasted below the darkest part of
-  /// the screen — the exact seam the gradient exists to remove.
+  /// The ground is flat now, so the navigation bar simply takes the token.
   static final SystemUiOverlayStyle overlayStyle = SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
     statusBarBrightness: Brightness.dark,
-    systemNavigationBarColor: TideGradients.page.colors.last,
+    systemNavigationBarColor: TideColors.deepWater,
     systemNavigationBarDividerColor: Colors.transparent,
     systemNavigationBarIconBrightness: Brightness.light,
     systemNavigationBarContrastEnforced: false,
