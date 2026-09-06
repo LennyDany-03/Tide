@@ -4,8 +4,8 @@ import 'tide_glyph.dart';
 
 /// What "done" means for a habit, and therefore which gesture logs it.
 ///
-/// Binary habits are swiped; quantity and duration habits are held, filling
-/// in real time the longer the hold lasts.
+/// Binary habits are swiped on the row itself; quantity and duration habits
+/// open a sheet where the count is held out one unit at a time.
 enum HabitType {
   binary,
   quantity,
@@ -20,8 +20,8 @@ enum HabitType {
   /// The one-line hint shown under a habit name on Home.
   String get gestureHint => switch (this) {
     HabitType.binary => 'swipe right to log',
-    HabitType.quantity => 'hold to log',
-    HabitType.duration => 'hold to log',
+    HabitType.quantity => 'tap to count up',
+    HabitType.duration => 'tap to count up',
   };
 
   bool get isHeld => this != HabitType.binary;

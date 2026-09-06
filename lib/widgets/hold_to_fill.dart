@@ -163,6 +163,130 @@ class _HoldToFillState extends State<HoldToFill>
   }
 }
 
+/// The hold gesture, metered out one unit at a time.
+///
+/// [HoldToFill] sweeps a single fill to a single commit — hold, release,
+/// one thing happens. That is right for logging a habit that is done or not
+/// done, and wrong for one with a count: a single sweep across a ten-unit
+/// target banks all ten in one gesture, so the only two outcomes available
+/// are nothing and everything.
+///
+/// This is the same gesture with a metronome under it. The fill runs one
+/// lap, fires one unit, and starts again, so ten units are ten beats you
+/// can stop between. Touching down fires the first unit immediately, which
+/// makes a plain tap worth exactly one — the same control does both.
+class HoldToStep extends StatefulWidget {
+  const HoldToStep({
+    super.key,
+    required this.builder,
+    required this.onStep,
+    this.stepDuration = TideMotion.holdStep,
+    this.enabled = true,
+  });
+
+  /// Rebuilt as the current lap fills. [progress] is 0..1 through the unit
+  /// being counted out, not through the target.
+  final Widget Function(BuildContext context, double progress, bool holding)
+  builder;
+
+  /// One unit. Fires on touch down and again on every completed lap.
+  final VoidCallback onStep;
+
+  final Duration stepDuration;
+
+  /// Goes false when there is nothing left to count — a hold in progress
+  /// stops there rather than running on against a target already reached.
+  final bool enabled;
+
+  @override
+  State<HoldToStep> createState() => _HoldToStepState();
+}
+
+class _HoldToStepState extends State<HoldToStep>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _lap;
+
+  bool _holding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lap = AnimationController(vsync: this, duration: widget.stepDuration)
+      ..addListener(_onTick)
+      ..addStatusListener(_onLap);
+  }
+
+  @override
+  void didUpdateWidget(HoldToStep old) {
+    super.didUpdateWidget(old);
+    if (old.stepDuration != widget.stepDuration) {
+      _lap.duration = widget.stepDuration;
+    }
+    // The last step is what turns this off, and the finger is still down
+    // when it lands. Stopping here rather than waiting for the release is
+    // what makes the control go quiet the moment the target is reached.
+    // Mutated directly: this runs inside a build that is already happening.
+    if (!widget.enabled && _holding) {
+      _holding = false;
+      _lap
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _lap
+      ..removeListener(_onTick)
+      ..removeStatusListener(_onLap)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onTick() => setState(() {});
+
+  void _onLap(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !_holding) return;
+    _step();
+    // Guarded above and re-entrant-safe: restarting fires a `forward`
+    // status straight back through here, which the guard turns away.
+    if (_holding) _lap.forward(from: 0);
+  }
+
+  void _step() {
+    HapticFeedback.selectionClick();
+    widget.onStep();
+  }
+
+  void _start() {
+    if (!widget.enabled) return;
+    setState(() => _holding = true);
+    _step();
+    _lap.forward(from: 0);
+  }
+
+  void _end() {
+    if (!_holding) return;
+    setState(() => _holding = false);
+    _lap
+      ..stop()
+      // Draining the part-finished lap rather than cutting it makes plain
+      // that nothing was banked for it.
+      ..animateBack(0, duration: TideMotion.swipeSettle, curve: Curves.easeOut);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _start(),
+      onTapUp: (_) => _end(),
+      onTapCancel: _end,
+      child: widget.builder(context, _lap.value, _holding),
+    );
+  }
+}
+
 /// A destructive action behind a coral hold-to-fill ring.
 ///
 /// Used identically by Habit detail's delete, the add/edit sheet's delete,

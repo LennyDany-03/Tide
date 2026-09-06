@@ -6,7 +6,6 @@ import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/habit_glyph.dart';
-import '../../../widgets/hold_to_fill.dart';
 import '../../../widgets/press_scale.dart';
 import '../../../widgets/ripple_burst.dart';
 import '../../../widgets/ripple_strip.dart';
@@ -30,11 +29,17 @@ import 'swipe_log_background.dart';
 ///
 /// * **The ring** manages the habit — tap opens detail, long-press raises
 ///   the context menu.
-/// * **The body** logs it — binary habits are swiped, quantity and duration
-///   habits are held.
+/// * **The body** logs it — binary habits are swiped, and a habit with a
+///   count opens the log sheet, where its units are metered out one at a
+///   time.
 ///
-/// That split is what lets held habits keep a long-press menu without the
-/// two gestures fighting each other for the same pixels.
+/// That split is what lets a row keep a long-press menu without the two
+/// gestures fighting each other for the same pixels.
+///
+/// The body used to hold-to-log a counted habit in place, sweeping the
+/// whole target under one finger. Two problems: the only outcomes were
+/// nothing and all ten, and a slow gesture sat on a row you scroll past.
+/// The counting moved to a surface of its own.
 class HabitCard extends StatefulWidget {
   const HabitCard({
     super.key,
@@ -44,6 +49,7 @@ class HabitCard extends StatefulWidget {
     required this.onOpen,
     required this.onMenu,
     required this.onLog,
+    required this.onCount,
     required this.onFreeze,
   });
 
@@ -56,9 +62,11 @@ class HabitCard extends StatefulWidget {
   final VoidCallback onOpen;
   final VoidCallback onMenu;
 
-  /// Called with the amount to log — the full target for a swipe, the held
-  /// fraction of it for a hold.
+  /// Called with the amount to log — the full target, from a swipe.
   final ValueChanged<num> onLog;
+
+  /// Opens the counting surface, for a habit whose target has parts.
+  final VoidCallback onCount;
 
   final VoidCallback onFreeze;
 
@@ -161,14 +169,6 @@ class _HabitCardState extends State<HabitCard>
       animation.removeListener(tick);
       if (mounted) setState(() => _drag = 0);
     });
-  }
-
-  // --- Hold (quantity / duration habits) --------------------------------
-
-  void _commitHold(double fraction) {
-    final amount = (widget.habit.target * fraction).ceil();
-    setState(() => _rippleTick++);
-    widget.onLog(amount.clamp(0, widget.habit.target));
   }
 
   // --- Copy -------------------------------------------------------------
@@ -280,7 +280,8 @@ class _HabitCardState extends State<HabitCard>
       ),
     );
 
-    // Binary habits swipe; held habits hold. One gesture per row body.
+    // One gesture per row body: binary habits swipe, counted habits open
+    // the sheet that counts them.
     if (widget.habit.type == HabitType.binary) {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -291,34 +292,10 @@ class _HabitCardState extends State<HabitCard>
       );
     }
 
-    return HoldToFill(
-      commitOnRelease: true,
-      sweep: TideMotion.holdToLogSweep,
-      startProgress: _progress,
-      onCommit: _commitHold,
-      onTap: widget.onOpen,
-      builder: (context, progress, holding) {
-        return Stack(
-          children: [
-            row,
-            if (holding)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: FractionallySizedBox(
-                      widthFactor: progress,
-                      child: ColoredBox(
-                        color: TideColors.lantern.withValues(alpha: 0.10),
-                        child: const SizedBox.expand(),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onCount,
+      child: row,
     );
   }
 

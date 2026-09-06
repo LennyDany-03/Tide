@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/tide_colors.dart';
-import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../widgets/tide_wave.dart';
 
@@ -57,8 +56,13 @@ class SwipeLogBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     if (offset.abs() < 1) return const SizedBox.shrink();
 
-    return ClipRRect(
-      borderRadius: TideElevation.radius20,
+    // Square, not rounded. A habit row is a row — full-bleed, separated
+    // from the next one by a hairline — so a rounded panel behind it has
+    // corners that belong to no shape on the screen: they cut into the
+    // hairline above and below, and the square row sliding across them
+    // leaves a curved sliver of tint hanging off each end. The clip is
+    // still needed to keep the wave inside the row it belongs to.
+    return ClipRect(
       child: Stack(
         children: [
           Positioned.fill(

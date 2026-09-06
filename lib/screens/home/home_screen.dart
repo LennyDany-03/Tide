@@ -12,6 +12,7 @@ import '../../widgets/tide_tab_bar.dart';
 import 'widgets/day_complete_overlay.dart';
 import 'widgets/habit_card.dart';
 import 'widgets/habit_context_menu.dart';
+import 'widgets/habit_log_sheet.dart';
 import 'widgets/hero_stat_card.dart';
 import 'widgets/home_header.dart';
 import 'widgets/reordering_habit_list.dart';
@@ -72,6 +73,19 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _dayCompleteTick++);
     }
     _wasDayComplete = complete;
+  }
+
+  /// Counted habits log from their own sheet, one unit at a time.
+  ///
+  /// Routed through [_log] rather than writing to the store from inside the
+  /// sheet, so the last unit of the last habit still lands the day-complete
+  /// moment out here.
+  void _openLogSheet(Habit habit) {
+    showHabitLogSheet(
+      context,
+      habitId: habit.id,
+      onLog: (amount) => _log(habit, amount),
+    );
   }
 
   void _openMenu(Habit habit) {
@@ -167,6 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           onOpen: () => context.push(Routes.habit(habit.id)),
                           onMenu: () => _openMenu(habit),
                           onLog: (amount) => _log(habit, amount),
+                          onCount: () => _openLogSheet(habit),
                           onFreeze: () => _freeze(habit),
                         );
                       },

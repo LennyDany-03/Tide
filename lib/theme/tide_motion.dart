@@ -84,8 +84,14 @@ abstract final class TideMotion {
   /// Hold-to-fill: how long a hold must be sustained to commit.
   static const Duration holdToCommit = Duration(milliseconds: 1200);
 
-  /// Hold-to-log on quantity habits fills the target over this long.
-  static const Duration holdToLogSweep = Duration(milliseconds: 2400);
+  /// One unit of a quantity or duration habit, counted out while the log
+  /// sheet's control is held.
+  ///
+  /// Long enough that every unit is a beat you can hear and stop on, short
+  /// enough that a ten-unit target is a couple of seconds rather than a
+  /// chore. A single sweep across the whole target is faster and logs the
+  /// lot before you can react to any of it.
+  static const Duration holdStep = Duration(milliseconds: 260);
 
   // --- Feedback ---------------------------------------------------------
 
