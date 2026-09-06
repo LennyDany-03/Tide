@@ -72,6 +72,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _unfreeze(Habit habit) {
+    TideScope.read(context).unfreeze(habit.id);
+  }
+
   /// Fires the day-complete moment once, on the transition into a finished
   /// day — never on a rebuild that happens to find the day already done.
   /// Counted habits log from their own sheet, one unit at a time.
@@ -192,6 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           onCount: () => _openLogSheet(habit),
                           onComplete: () => _log(habit, habit.target),
                           onFreeze: () => _freeze(habit),
+                          onUnfreeze: () => _unfreeze(habit),
                         );
                       },
                     ),

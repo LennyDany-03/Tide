@@ -282,6 +282,23 @@ class TideStore extends ChangeNotifier {
     return true;
   }
 
+  /// Reverses a freeze for a day and returns its token to this habit.
+  bool unfreeze(String habitId, {DateTime? date}) {
+    final habit = habitById(habitId);
+    final day = DateUtils.dateOnly(date ?? DateTime.now());
+    if (habit == null || !habit.isFrozenOn(day)) return false;
+
+    _mutate(habitId, (h) {
+      final frozen = Set<DateTime>.from(h.frozenDays)..remove(day);
+      return h.copyWith(
+        frozenDays: frozen,
+        freezesRemaining:
+            (h.freezesRemaining + 1).clamp(0, h.freezeAllowance).toInt(),
+      );
+    });
+    return true;
+  }
+
   void addHabit(Habit habit) {
     _habits = [..._habits, habit];
     notifyListeners();

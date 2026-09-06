@@ -28,6 +28,7 @@ class SwipeLogBackground extends StatelessWidget {
     required this.radius,
     this.freezeAvailable = true,
     this.freezeOnRight = false,
+    this.unfreezing = false,
   });
 
   /// Signed pixels the card has travelled.
@@ -46,6 +47,7 @@ class SwipeLogBackground extends StatelessWidget {
   /// instead of promising something it cannot deliver.
   final bool freezeAvailable;
   final bool freezeOnRight;
+  final bool unfreezing;
 
   bool get _freezing => freezeOnRight ? offset > 0 : offset < 0;
 
@@ -83,6 +85,7 @@ class SwipeLogBackground extends StatelessWidget {
 
   IconData get _icon {
     if (_completing) return Icons.check_rounded;
+    if (unfreezing) return Icons.undo_rounded;
     return freezeAvailable ? Icons.ac_unit_rounded : Icons.block_rounded;
   }
 

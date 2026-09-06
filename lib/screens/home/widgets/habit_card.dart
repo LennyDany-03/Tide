@@ -59,6 +59,7 @@ class HabitCard extends StatefulWidget {
     required this.onCount,
     required this.onComplete,
     required this.onFreeze,
+    required this.onUnfreeze,
   });
 
   final Habit habit;
@@ -80,6 +81,7 @@ class HabitCard extends StatefulWidget {
 
   /// Called with the amount to log — the full target, from a swipe.
   final VoidCallback onFreeze;
+  final VoidCallback onUnfreeze;
 
   /// Taller than the hairline rows it replaced: a card needs its content to
   /// sit off its own edges, not just off its neighbours.
@@ -153,7 +155,7 @@ class _HabitCardState extends State<HabitCard>
       if (_drag > 0 && widget.habit.type == HabitType.binary) {
         _commitLog();
       } else if (_drag < 0) {
-        _commitFreeze();
+        _frozen ? _commitUnfreeze() : _commitFreeze();
       } else {
         _animateDragHome(TideMotion.swipeCancel, TideMotion.swipeCancelCurve);
       }
@@ -174,6 +176,12 @@ class _HabitCardState extends State<HabitCard>
     HapticFeedback.mediumImpact();
     _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
     widget.onFreeze();
+  }
+
+  void _commitUnfreeze() {
+    HapticFeedback.selectionClick();
+    _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
+    widget.onUnfreeze();
   }
 
   void _animateDragHome(Duration duration, Curve curve) {
@@ -233,6 +241,7 @@ class _HabitCardState extends State<HabitCard>
                   radius: HabitCard.radius,
                   freezeAvailable: widget.habit.freezesRemaining > 0,
                   freezeOnRight: false,
+                  unfreezing: _frozen,
                 ),
               ),
               Transform.translate(
