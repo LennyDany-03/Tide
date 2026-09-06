@@ -107,8 +107,11 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Frozen is ice, logged is the accent. Both used to be lantern, so a
+    // day you held and a day you earned came back identical apart from the
+    // word beside them.
     final color = entry.frozen
-        ? TideColors.lantern
+        ? TideColors.frost
         : entry.complete
         ? TideColors.lantern
         : TideColors.silt;

@@ -30,16 +30,30 @@ class _HomeScreenState extends State<HomeScreen> {
   int _dayCompleteTick = 0;
   bool _wasDayComplete = false;
 
+  /// The seven days behind a habit card's strip, oldest first.
+  List<DateTime> _week() {
+    final today = DateTime.now();
+    return [for (var i = 0; i < 7; i++) today.subtract(Duration(days: 6 - i))];
+  }
+
   /// Seven completion levels for the strip on a habit card, oldest first.
   List<double> _weekLevels(Habit habit) {
-    final today = DateTime.now();
-    return List<double>.generate(7, (i) {
-      final day = today.subtract(Duration(days: 6 - i));
-      if (!habit.isScheduledOn(day)) return 0;
-      if (habit.isFrozenOn(day)) return 0.5;
-      return habit.progressOn(day);
-    });
+    return [
+      for (final day in _week())
+        if (!habit.isScheduledOn(day))
+          0.0
+        else if (habit.isFrozenOn(day))
+          0.5
+        else
+          habit.progressOn(day),
+    ];
   }
+
+  /// Which of those seven were frozen. Kept alongside the levels rather
+  /// than folded into them: a frozen day and a half-logged day both sit at
+  /// 0.5, and they should not come out the same colour.
+  List<bool> _weekFrozen(Habit habit) =>
+      [for (final day in _week()) habit.isFrozenOn(day)];
 
   void _log(Habit habit, num amount) {
     final store = TideScope.read(context);
@@ -180,6 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           habit: habit,
                           streak: StreakCalculator.currentStreak(habit),
                           weekLevels: _weekLevels(habit),
+                          frozenDays: _weekFrozen(habit),
                           onOpen: () => context.push(Routes.habit(habit.id)),
                           onMenu: () => _openMenu(habit),
                           onLog: (amount) => _log(habit, amount),

@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 
 /// The complete Tide palette.
 ///
-/// Seven tokens, and the discipline that makes them work is what is *not*
-/// here: there is no second bright accent and no separate "completed" hue.
+/// The discipline that makes it work is what is *not* here: there is no
+/// second bright accent and no separate "completed" hue.
 ///
 /// The organising idea is that the water is the ground and the light is the
 /// accent. Deep water is the entire canvas rather than a colour applied to
 /// things on it, the ink is warm, and [lantern] is the only chromatic mark
-/// in the app. A screen lit by one warm source over cold water has a
+/// in the app.
+///
+/// Two hues sit outside that and are not accents: [coral] for destruction
+/// and [frost] for a frozen day. Both are reserved — each one means exactly
+/// one thing, and nothing else may reach for them. That is what keeps them
+/// from becoming a second and third accent by drift. A screen lit by one warm source over cold water has a
 /// temperature to it; a screen where every element is a different shade of
 /// the same cool blue does not, which is the failure this palette replaces.
 abstract final class TideColors {
@@ -55,6 +60,20 @@ abstract final class TideColors {
   /// Destructive only. Deliberately the rarest thing on screen.
   static const coral = Color(0xFFD2685C);
 
+  /// Frozen only. A cold near-white — the temperature opposite of
+  /// [lantern], and the one other place this palette admits a hue.
+  ///
+  /// A freeze holds a streak; it does not advance one, and it must not read
+  /// as though it did. The left swipe used to paint itself in lantern,
+  /// exactly like the right one: same tint, same wave, same warmth, telling
+  /// the two apart only by which icon had faded in. Ice is the obvious
+  /// reading of "held, not earned", and cold against a warm accent is a
+  /// distinction the eye makes before it reads anything.
+  ///
+  /// This is not a second accent. Nothing reaches for it except a freeze,
+  /// the same way nothing reaches for [coral] except destruction.
+  static const frost = Color(0xFFD3E9F4);
+
   // --- Derived ----------------------------------------------------------
 
   /// Hairline separator. Warm, like the ink it divides.
@@ -68,18 +87,21 @@ abstract final class TideColors {
 
   // --- Intensity --------------------------------------------------------
 
-  /// Lantern at completion level [t] in 0..1 — the single source of truth
-  /// for "how full is this", shared by the heatmap, the calendar cells and
-  /// the week strips so a given level always reads the same everywhere.
+  /// The accent at completion level [t] in 0..1 — the single source of
+  /// truth for "how full is this", shared by the heatmap, the calendar
+  /// cells and the week strips so a given level always reads the same
+  /// everywhere.
   ///
   /// Zero is a faint ink wash rather than transparent or a trench. A cell
   /// darker than the page reads as a hole punched in the grid, and at these
   /// sizes a hole is indistinguishable from missing data — the week strip
   /// has to show seven days whether or not anything happened on them.
-  static Color intensity(double t) {
+  /// Pass [hue] to shade a cell in something other than the accent — the
+  /// only caller that does is a frozen day, which is [frost].
+  static Color intensity(double t, {Color hue = lantern}) {
     final level = t.clamp(0.0, 1.0);
     if (level <= 0) return bone.withValues(alpha: 0.07);
-    return lantern.withValues(alpha: 0.16 + 0.84 * Curves.easeIn.transform(level));
+    return hue.withValues(alpha: 0.16 + 0.84 * Curves.easeIn.transform(level));
   }
 
   /// Desaturated [color], for the drain transition on a paused habit and

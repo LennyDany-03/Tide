@@ -104,15 +104,19 @@ class MonthHeatmap extends StatelessWidget {
     final future = date.isAfter(today);
     final scheduled = habit.isScheduledOn(date);
 
+    final frozen = !future && scheduled && habit.isFrozenOn(date);
     final level = future || !scheduled
         ? 0.0
-        : habit.isFrozenOn(date)
+        : frozen
         ? 0.45
         : habit.progressOn(date);
 
     return _HeatCell(
       size: _cellSize,
       level: level,
+      // A frozen day sits at the same level as a half-logged one, so the
+      // hue is the only thing that separates them.
+      frozen: frozen,
       // Staggering by day index is what makes the fill sweep across the
       // month instead of appearing all at once.
       delay: TideMotion.cellStep * index,
@@ -128,6 +132,7 @@ class _HeatCell extends StatelessWidget {
     required this.level,
     required this.delay,
     required this.dimmed,
+    required this.frozen,
     required this.isToday,
   });
 
@@ -135,6 +140,7 @@ class _HeatCell extends StatelessWidget {
   final double level;
   final Duration delay;
   final bool dimmed;
+  final bool frozen;
   final bool isToday;
 
   @override
@@ -158,8 +164,12 @@ class _HeatCell extends StatelessWidget {
           // An unlogged day is a faint ink wash, matching the calendar's
           // empty cell. Anything darker than the page reads as a hole.
           final empty = TideColors.bone.withValues(alpha: 0.06);
-          final target = dimmed ? empty.withValues(alpha: 0.03)
-              : TideColors.intensity(level);
+          final target = dimmed
+              ? empty.withValues(alpha: 0.03)
+              : TideColors.intensity(
+                  level,
+                  hue: frozen ? TideColors.frost : TideColors.lantern,
+                );
 
           return Transform.scale(
             scale: 0.82 + 0.18 * t,

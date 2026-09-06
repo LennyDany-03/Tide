@@ -113,14 +113,25 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Future<void> _finish() async {
     final store = TideScope.read(context);
-    // The morph runs first so the ring is already travelling when the route
-    // changes — the two screens overlap rather than cutting.
-    await _morph.forward();
+
+    // The morph starts first so the ring is already travelling when the
+    // route changes, but the route change does *not* wait for it to land.
+    // Awaiting the whole sweep left a real gap: onboarding finished fading
+    // to nothing and then held an empty page until the navigation ran, and
+    // that dead frame is what read as the animation breaking. Handing over
+    // partway through means Home is arriving while the ring is still on its
+    // way out, which is the overlap the morph was for.
+    _morph.forward();
+    await Future<void>.delayed(_handOff);
     if (!mounted) return;
 
     store.completeOnboarding(_buildHabits());
     context.go(Routes.today);
   }
+
+  /// How far into the morph Home takes over. Late enough that the ring has
+  /// visibly moved, early enough that nothing is ever fully gone first.
+  static const Duration _handOff = Duration(milliseconds: 300);
 
   void _skip() {
     TideScope.read(context).skipOnboarding();
@@ -143,26 +154,36 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
               child: Column(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TideLineGauge(
-                          progress: (_step + 1) / _stepCount,
-                        ),
-                      ),
-                      const SizedBox(width: 18),
-                      // Always visible, never de-emphasised.
-                      PressScale(
-                        onTap: _skip,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 8,
+                  // The chrome leaves with everything else. It used to sit
+                  // outside the exit fade, so the last thing onboarding did
+                  // was dissolve the ring, the copy and the button and then
+                  // hold a blank screen carrying a full progress bar and a
+                  // Skip link — the two least important things on the page
+                  // were the only two that survived it.
+                  _ExitFade(
+                    morph: _morph,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TideLineGauge(
+                            progress: (_step + 1) / _stepCount,
                           ),
-                          child: Text('Skip', style: TideType.labelMuted),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 18),
+                        // Always visible while the flow is running, never
+                        // de-emphasised.
+                        PressScale(
+                          onTap: _skip,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 8,
+                            ),
+                            child: Text('Skip', style: TideType.labelMuted),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 22),
                   Expanded(
@@ -203,10 +224,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  AnimatedBuilder(
-                    animation: _morph,
-                    builder: (context, child) =>
-                        Opacity(opacity: 1 - _morph.value, child: child),
+                  _ExitFade(
+                    morph: _morph,
                     child: Column(
                       children: [
                         TideButton(
@@ -239,5 +258,32 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   int _indexOf(int chosenPosition) {
     final sorted = _selected.toList()..sort();
     return sorted[chosenPosition];
+  }
+}
+
+/// Everything that is not the ring, leaving as the screen hands off.
+///
+/// Faster than the morph it rides on, so the page has cleared before the
+/// ring finishes travelling and the ring is unambiguously the thing being
+/// carried across rather than one more element in a crossfade.
+class _ExitFade extends StatelessWidget {
+  const _ExitFade({required this.morph, required this.child});
+
+  final Animation<double> morph;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: morph,
+      builder: (context, child) => IgnorePointer(
+        ignoring: morph.value > 0,
+        child: Opacity(
+          opacity: (1 - morph.value * 2.2).clamp(0.0, 1.0),
+          child: child,
+        ),
+      ),
+      child: child,
+    );
   }
 }

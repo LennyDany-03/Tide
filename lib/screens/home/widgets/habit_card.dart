@@ -55,6 +55,7 @@ class HabitCard extends StatefulWidget {
     required this.habit,
     required this.streak,
     required this.weekLevels,
+    required this.frozenDays,
     required this.onOpen,
     required this.onMenu,
     required this.onLog,
@@ -67,6 +68,10 @@ class HabitCard extends StatefulWidget {
 
   /// Seven completion levels, oldest first.
   final List<double> weekLevels;
+
+  /// Which of those seven days were frozen rather than logged, so the strip
+  /// can shade them cold. Same length and order as [weekLevels].
+  final List<bool> frozenDays;
 
   final VoidCallback onOpen;
   final VoidCallback onMenu;
@@ -273,7 +278,11 @@ class _HabitCardState extends State<HabitCard>
                   const SizedBox(height: 4),
                   Text(
                     detail,
-                    style: TideType.labelMuted,
+                    style: _frozen
+                        ? TideType.labelMuted.copyWith(
+                            color: TideColors.frost.withValues(alpha: 0.75),
+                          )
+                        : TideType.labelMuted,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -282,7 +291,7 @@ class _HabitCardState extends State<HabitCard>
             ),
           ),
           const SizedBox(width: 12),
-          RippleStrip(levels: widget.weekLevels),
+          RippleStrip(levels: widget.weekLevels, frozen: widget.frozenDays),
           const SizedBox(width: 14),
           SizedBox(
             width: 24,
@@ -291,7 +300,7 @@ class _HabitCardState extends State<HabitCard>
               textAlign: TextAlign.right,
               style: TideType.gauge(
                 17,
-                color: _done ? TideColors.lantern : TideColors.silt,
+                color: _done ? _stateHue : TideColors.silt,
               ),
             ),
           ),
@@ -323,12 +332,23 @@ class _HabitCardState extends State<HabitCard>
     );
   }
 
-  /// The card fill. One step of luminance off the page, warmed very
-  /// slightly once the habit is done — the same accent as everything else,
-  /// at the lowest intensity it is used at anywhere.
-  Color get _fill => _done
-      ? Color.lerp(TideColors.shelf, TideColors.lantern, 0.05)!
-      : TideColors.shelf;
+  /// The card fill. One step of luminance off the page, tinted very
+  /// slightly once the day is settled — warm where it was earned, cold
+  /// where it was frozen, at the lowest intensity either hue is used at
+  /// anywhere.
+  Color get _fill {
+    if (_frozen) return Color.lerp(TideColors.shelf, TideColors.frost, 0.05)!;
+    if (_done) return Color.lerp(TideColors.shelf, TideColors.lantern, 0.05)!;
+    return TideColors.shelf;
+  }
+
+  /// Ice for a frozen day, the accent for an earned one.
+  ///
+  /// A frozen card used to be lantern throughout — the same ring, border and
+  /// figure as a habit that was actually completed — so the only thing
+  /// separating "I did this" from "I bought a day off" was a line of small
+  /// grey text. Temperature carries it now.
+  Color get _stateHue => _frozen ? TideColors.frost : TideColors.lantern;
 
   /// The hairline round the card, and the only place its state is spelled
   /// out on the edge rather than inside it.
@@ -339,7 +359,7 @@ class _HabitCardState extends State<HabitCard>
   /// silt name and a lantern streak figure, and it does not need a fourth
   /// signal competing for the eye.
   Color get _edge {
-    if (_frozen) return TideColors.lantern.withValues(alpha: 0.16);
+    if (_frozen) return TideColors.frost.withValues(alpha: 0.2);
     if (_done) return TideColors.lantern.withValues(alpha: 0.18);
     return TideColors.hairline;
   }
@@ -355,15 +375,11 @@ class _HabitCardState extends State<HabitCard>
         progress: _done ? 1 : _progress,
         size: 34,
         strokeWidth: 2,
-        color: _frozen
-            ? TideColors.lantern.withValues(alpha: 0.55)
-            : TideColors.lantern,
+        color: _stateHue,
         child: HabitGlyph(
           glyph: widget.habit.glyph,
           size: 14,
-          color: _done
-              ? TideColors.lantern
-              : TideColors.bone.withValues(alpha: 0.75),
+          color: _done ? _stateHue : TideColors.bone.withValues(alpha: 0.75),
         ),
       ),
     );

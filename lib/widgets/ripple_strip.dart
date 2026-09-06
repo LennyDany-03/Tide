@@ -21,6 +21,7 @@ class RippleStrip extends StatelessWidget {
   const RippleStrip({
     super.key,
     required this.levels,
+    this.frozen,
     this.height = 8,
     this.spacing = 3,
     this.color,
@@ -29,6 +30,12 @@ class RippleStrip extends StatelessWidget {
 
   /// Seven values in 0..1, oldest first.
   final List<double> levels;
+
+  /// Which of those days were frozen rather than logged, same length and
+  /// order. A frozen cell is shaded in [TideColors.frost] instead of the
+  /// accent, so a week that was held and a week that was earned do not read
+  /// as the same week.
+  final List<bool>? frozen;
 
   /// Cell size. Square, so this is the width too.
   final double height;
@@ -54,6 +61,7 @@ class RippleStrip extends StatelessWidget {
             level: levels[i],
             size: height,
             color: color,
+            frozen: frozen != null && i < frozen!.length && frozen![i],
             animate: animate,
             // Filling left to right, the way the week actually ran.
             delay: TideMotion.cellStep * i * 2,
@@ -69,6 +77,7 @@ class _Cell extends StatelessWidget {
     required this.level,
     required this.size,
     required this.color,
+    required this.frozen,
     required this.animate,
     required this.delay,
   });
@@ -76,13 +85,17 @@ class _Cell extends StatelessWidget {
   final double level;
   final double size;
   final Color? color;
+  final bool frozen;
   final bool animate;
   final Duration delay;
 
   @override
   Widget build(BuildContext context) {
     final target = color == null
-        ? TideColors.intensity(level)
+        ? TideColors.intensity(
+            level,
+            hue: frozen ? TideColors.frost : TideColors.lantern,
+          )
         : Color.lerp(
             TideColors.bone.withValues(alpha: 0.07),
             color,

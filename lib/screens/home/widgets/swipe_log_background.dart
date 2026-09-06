@@ -6,11 +6,19 @@ import '../../../widgets/tide_wave.dart';
 
 /// What sits behind a card as it is swiped.
 ///
-/// Right is completion — a tide-blue wave trails the finger and a checkmark
-/// scales in as the threshold approaches. Left is a streak freeze — a frozen
-/// drop, in foam cyan, because it preserves the loop rather than advancing
-/// it. The two directions never share an icon or a colour, so a half-started
-/// swipe already tells you which one you are doing.
+/// Right is completion: a warm [TideColors.lantern] wave trails the finger
+/// and a checkmark scales in as the threshold approaches. Left is a streak
+/// freeze, and it is cold — [TideColors.frost] ice, a snowflake, and a wave
+/// held almost flat, because a freeze preserves the loop rather than
+/// advancing it.
+///
+/// The two directions must never share a colour, and for a while they did.
+/// The freeze side was written for a `foamCyan` that the redesign deleted,
+/// so it fell back to lantern and both swipes came out the same warm amber
+/// with the same rolling wave — identical until an icon had faded far
+/// enough in to read. Temperature is the fastest distinction available
+/// here: warm is earned, cold is held, and you know which one you are doing
+/// before the card has travelled a centimetre.
 class SwipeLogBackground extends StatelessWidget {
   const SwipeLogBackground({
     super.key,
@@ -49,8 +57,25 @@ class SwipeLogBackground extends StatelessWidget {
 
   Color get _color {
     if (_completing) return TideColors.lantern;
-    return freezeAvailable ? TideColors.lantern : TideColors.coral;
+    return freezeAvailable ? TideColors.frost : TideColors.coral;
   }
+
+  /// Ice sits at a lower alpha than the accent does.
+  ///
+  /// [TideColors.frost] is a near-white, so it carries far more luminance
+  /// per unit of alpha than lantern; matched numerically the freeze side
+  /// blows out into a grey slab while the log side is still a tint.
+  double get _tintAlpha {
+    final base = _completing ? 0.10 : 0.06;
+    final gain = _completing ? 0.14 : 0.10;
+    return base + gain * _approach;
+  }
+
+  /// A frozen surface does not roll. The wave is flattened almost out on
+  /// the freeze side so the ice reads as set rather than as water that
+  /// happens to be a different colour.
+  double get _amplitude =>
+      _completing ? 0.4 + 0.6 * _approach : 0.06 + 0.1 * _approach;
 
   IconData get _icon {
     if (_completing) return Icons.check_rounded;
@@ -71,9 +96,7 @@ class SwipeLogBackground extends StatelessWidget {
       child: Stack(
         children: [
           Positioned.fill(
-            child: ColoredBox(
-              color: _color.withValues(alpha: 0.10 + 0.14 * _approach),
-            ),
+            child: ColoredBox(color: _color.withValues(alpha: _tintAlpha)),
           ),
 
           // The wave trails the finger on the side the swipe came from.
@@ -84,7 +107,7 @@ class SwipeLogBackground extends StatelessWidget {
             bottom: 0,
             width: offset.abs().clamp(0.0, width),
             child: TideWave(
-              amplitude: 0.4 + 0.6 * _approach,
+              amplitude: _amplitude,
               phase: phase,
               color: _color,
               fill: true,

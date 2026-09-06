@@ -54,6 +54,25 @@ abstract final class TideTheme {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
+      // Left unstyled, a snackbar is the one Material default that still
+      // showed through: `fixed` behaviour paints an edge-to-edge slab in
+      // `inverseSurface`, which on a dark scheme is a near-white band with
+      // square corners sitting on top of the tab bar. Floating, shoal-filled
+      // and hairlined, it becomes the same object as every other raised
+      // surface in the app.
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: TideColors.shoal,
+        contentTextStyle: TideType.label,
+        actionTextColor: TideColors.lantern,
+        elevation: 0,
+        showCloseIcon: false,
+        insetPadding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        shape: RoundedRectangleBorder(
+          borderRadius: TideElevation.radius12,
+          side: BorderSide(color: TideColors.bone.withValues(alpha: 0.08)),
+        ),
+      ),
       dialogTheme: DialogThemeData(
         backgroundColor: TideColors.shoal,
         surfaceTintColor: Colors.transparent,

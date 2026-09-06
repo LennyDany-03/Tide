@@ -25,25 +25,36 @@ class ReadyStep extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Spacer(flex: 2),
-        Transform.scale(
-          // Grows and drifts up toward where Home's hero stat sits, so the
-          // exit reads as travel rather than as a fade.
-          scale: 1 + 1.6 * Curves.easeInCubic.transform(morph),
-          child: Opacity(
-            opacity: 1 - morph,
-            child: TideRing(
-              progress: 1,
-              size: 150,
-              strokeWidth: 4,
-              animate: true,
-              showTrack: false,
-              duration: TideMotion.ringFill,
-              child: Container(
-                width: 13,
-                height: 13,
-                decoration: const BoxDecoration(
-                  color: TideColors.lantern,
-                  shape: BoxShape.circle,
+        Transform.translate(
+          // The drift this comment has always described and never did. The
+          // ring only ever scaled, so the exit read as a thing swelling in
+          // place and dissolving — the opposite of a hand-off. Rising as it
+          // grows is what makes it travel toward where Home's hero sits.
+          offset: Offset(0, -110 * Curves.easeInCubic.transform(morph)),
+          child: Transform.scale(
+            scale: 1 + 1.15 * Curves.easeInCubic.transform(morph),
+            child: Opacity(
+              // Held opaque well into the move, then dropped fast. Fading
+              // linearly from the first frame meant the ring was already
+              // half gone before it had gone anywhere.
+              opacity: (1 - Curves.easeInCubic.transform(morph) * 1.45).clamp(
+                0.0,
+                1.0,
+              ),
+              child: TideRing(
+                progress: 1,
+                size: 150,
+                strokeWidth: 4,
+                animate: true,
+                showTrack: false,
+                duration: TideMotion.ringFill,
+                child: Container(
+                  width: 13,
+                  height: 13,
+                  decoration: const BoxDecoration(
+                    color: TideColors.lantern,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
             ),
@@ -51,7 +62,10 @@ class ReadyStep extends StatelessWidget {
         ),
         const SizedBox(height: 44),
         Opacity(
-          opacity: 1 - morph,
+          // Gone by the time the ring is halfway up. Text travelling with a
+          // morph reads as the whole page sliding; text leaving first reads
+          // as the ring being handed on.
+          opacity: (1 - morph * 2.2).clamp(0.0, 1.0),
           child: Column(
             children: [
               Text('The loop is set', style: TideType.hero),
