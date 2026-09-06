@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
+import '../../config/tour_catalog.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
 import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_tab_bar.dart';
+import '../../widgets/tour/tour_anchor.dart';
 
 /// The frame around the four tabs.
 ///
@@ -81,10 +83,17 @@ class TideShell extends StatelessWidget {
           const Positioned(top: 0, left: 0, right: 0, child: TideTopScrim()),
         ],
       ),
-      bottomNavigationBar: TideTabBar(
-        currentIndex: navigationShell.currentIndex,
-        onTap: _onTap,
-        tabs: TideTab.all,
+      // Anchored so the guided tour can point at the four destinations.
+      // This is the reason the tour overlay is mounted above the router
+      // rather than inside the shell: the bar is in the Scaffold's own
+      // bottom slot, outside every tab body.
+      bottomNavigationBar: TourAnchor(
+        stop: TourStop.tabs,
+        child: TideTabBar(
+          currentIndex: navigationShell.currentIndex,
+          onTap: _onTap,
+          tabs: TideTab.all,
+        ),
       ),
     );
   }

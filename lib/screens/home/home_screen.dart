@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/app_routes.dart';
+import '../../config/tour_catalog.dart';
 import '../../services/models/habit.dart';
 import '../../services/streak_calculator.dart';
 import '../../services/tide_scope.dart';
@@ -9,6 +10,7 @@ import '../../theme/tide_typography.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/tide_button.dart';
 import '../../widgets/tide_tab_bar.dart';
+import '../../widgets/tour/tour_anchor.dart';
 import 'widgets/habit_card.dart';
 import 'widgets/habit_context_menu.dart';
 import 'widgets/habit_log_sheet.dart';
@@ -136,38 +138,52 @@ class _HomeScreenState extends State<HomeScreen> {
                   20,
                   0,
                 ),
+                // Anchored for the guided tour. The header carries two of
+                // its five stops — the title block and the add control —
+                // and the inner one is marked inside HomeHeader itself, so
+                // the light lands on the button rather than on the row it
+                // happens to sit in.
                 sliver: SliverToBoxAdapter(
-                  child: HomeHeader(
-                    date: DateTime.now(),
-                    onMilestones: () => context.push(Routes.milestones),
-                    onAddHabit: () => context.push(
-                      store.canAddHabit ? Routes.newHabit : Routes.upgrade,
+                  child: TourAnchor(
+                    stop: TourStop.header,
+                    child: HomeHeader(
+                      date: DateTime.now(),
+                      onMilestones: () => context.push(Routes.milestones),
+                      onAddHabit: () => context.push(
+                        store.canAddHabit ? Routes.newHabit : Routes.upgrade,
+                      ),
                     ),
                   ),
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 12)),
               SliverToBoxAdapter(
-                child: HeroStatCard(
+                child: TourAnchor(
+                  stop: TourStop.hero,
+                  child: HeroStatCard(
                     completed: summary.completed,
                     scheduled: summary.scheduled,
                     weeklyRate: store.weeklyRate,
                     bestStreak: store.bestActiveStreak,
-                  dayComplete: summary.isFullyLogged,
+                    dayComplete: summary.isFullyLogged,
+                  ),
                 ),
               ),
               if (habits.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
-                  child: TideEmptyState(
-                    title: 'No habits yet',
-                    body:
-                        'Pick something small and daily. The rhythm matters '
-                        'more than the size.',
-                    action: TideButton(
-                      label: 'Add your first habit',
-                      expand: false,
-                      onPressed: () => context.push(Routes.newHabit),
+                  child: TourAnchor(
+                    stop: TourStop.list,
+                    child: TideEmptyState(
+                      title: 'No habits yet',
+                      body:
+                          'Pick something small and daily. The rhythm '
+                          'matters more than the size.',
+                      action: TideButton(
+                        label: 'Add your first habit',
+                        expand: false,
+                        onPressed: () => context.push(Routes.newHabit),
+                      ),
                     ),
                   ),
                 )
@@ -180,25 +196,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverToBoxAdapter(
-                    child: ReorderingHabitList(
-                      itemHeight: HabitCard.height,
-                      spacing: HabitCard.gap,
-                      itemKeys: [for (final habit in habits) habit.id],
-                      itemBuilder: (context, id) {
-                        final habit = store.habitById(id);
-                        if (habit == null) return const SizedBox.shrink();
-                        return HabitCard(
-                          habit: habit,
-                          streak: StreakCalculator.currentStreak(habit),
-                          weekLevels: _weekLevels(habit),
-                          frozenDays: _weekFrozen(habit),
-                          onMenu: () => _openMenu(habit),
-                          onCount: () => _openLogSheet(habit),
-                          onComplete: () => _log(habit, habit.target),
-                          onFreeze: () => _freeze(habit),
-                          onUnfreeze: () => _unfreeze(habit),
-                        );
-                      },
+                    child: TourAnchor(
+                      stop: TourStop.list,
+                      child: ReorderingHabitList(
+                        itemHeight: HabitCard.height,
+                        spacing: HabitCard.gap,
+                        itemKeys: [for (final habit in habits) habit.id],
+                        itemBuilder: (context, id) {
+                          final habit = store.habitById(id);
+                          if (habit == null) return const SizedBox.shrink();
+                          return HabitCard(
+                            habit: habit,
+                            streak: StreakCalculator.currentStreak(habit),
+                            weekLevels: _weekLevels(habit),
+                            frozenDays: _weekFrozen(habit),
+                            onMenu: () => _openMenu(habit),
+                            onCount: () => _openLogSheet(habit),
+                            onComplete: () => _log(habit, habit.target),
+                            onFreeze: () => _freeze(habit),
+                            onUnfreeze: () => _unfreeze(habit),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),

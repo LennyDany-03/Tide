@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../theme/tide_colors.dart';
-import '../../../theme/tide_motion.dart';
+import '../theme/tide_colors.dart';
+import '../theme/tide_motion.dart';
 
 /// Onboarding progress, as a water level rather than dots.
 ///

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../theme/tide_colors.dart';
-import '../../../theme/tide_motion.dart';
-import '../../../widgets/tide_wave.dart';
+import '../theme/tide_colors.dart';
+import '../theme/tide_motion.dart';
+import 'tide_wave.dart';
 
 /// What sits behind a card as it is swiped.
 ///

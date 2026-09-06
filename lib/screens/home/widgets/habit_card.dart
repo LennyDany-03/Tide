@@ -11,7 +11,7 @@ import '../../../widgets/press_scale.dart';
 import '../../../widgets/ripple_strip.dart';
 import '../../../widgets/tide_ring.dart';
 import '../../../widgets/tide_surface.dart';
-import 'swipe_log_background.dart';
+import '../../../widgets/swipe_log_background.dart';
 
 /// One habit on Home, and the gesture surface for logging it.
 ///

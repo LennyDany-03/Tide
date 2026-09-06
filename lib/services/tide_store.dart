@@ -30,6 +30,23 @@ class TideStore extends ChangeNotifier {
   // --- Profile / preferences -------------------------------------------
 
   String accountName = 'Jules Ramirez';
+  String accountEmail = 'jules@tide.app';
+
+  /// Whether an account has been created or signed into this session.
+  ///
+  /// Front-end only — there is no service behind it, the same way there is
+  /// no persistence behind the habits. What it genuinely decides is which
+  /// history the app opens on: a new account throws the demo data away so
+  /// Today starts empty, a returning one keeps it.
+  bool signedIn = false;
+
+  /// Today should run the guided tour the next time it is built.
+  ///
+  /// Armed by [signUp] rather than by finishing onboarding, because the
+  /// tour points at a real screen and only makes sense once there is one to
+  /// point at.
+  bool tourPending = false;
+
   bool isPro = false;
   bool dailyReminders = true;
   bool quietHours = false;
@@ -339,14 +356,48 @@ class TideStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void completeOnboarding(List<Habit> chosen) {
-    if (chosen.isNotEmpty) _habits = chosen;
+  /// The intro has been read, or skipped. Distinct from [signedIn]: this
+  /// only decides whether first run replays the explanation.
+  void completeOnboarding() {
+    if (onboardingComplete) return;
     onboardingComplete = true;
     notifyListeners();
   }
 
-  void skipOnboarding() {
+  /// A brand-new account.
+  ///
+  /// The seeded demo history is thrown away here rather than at launch, so
+  /// the store still opens on real data for anyone dropped straight into
+  /// the shell — tests, deep links, and the returning-user path through
+  /// [signIn]. Signing up is the one moment where an empty app is the
+  /// honest thing to show, and [tourPending] is what keeps that emptiness
+  /// from reading as a broken screen.
+  void signUp({required String name, required String email}) {
+    final trimmed = name.trim();
+    accountName = trimmed.isEmpty ? 'You' : trimmed;
+    accountEmail = email.trim();
+    signedIn = true;
     onboardingComplete = true;
+    tourPending = true;
+
+    _habits = [];
+    _acknowledgedMilestones = {};
+    _simulatedBonus = 0;
+    _pendingHabitCue = null;
+    notifyListeners();
+  }
+
+  /// A returning account, which arrives with the history it already had.
+  void signIn({required String email}) {
+    accountEmail = email.trim();
+    signedIn = true;
+    onboardingComplete = true;
+    notifyListeners();
+  }
+
+  void finishTour() {
+    if (!tourPending) return;
+    tourPending = false;
     notifyListeners();
   }
 

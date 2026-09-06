@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../config/app_constants.dart';
+import '../../../config/tour_catalog.dart';
 import '../../../services/models/tide_glyph.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/habit_glyph.dart';
 import '../../../widgets/press_scale.dart';
+import '../../../widgets/tour/tour_anchor.dart';
 
 /// Date line, screen title, and the way through to milestones.
 ///
@@ -63,23 +65,27 @@ class HomeHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 4),
-        PressScale(
-          onTap: onAddHabit,
-          child: Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: TideColors.lantern.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: TideColors.lantern.withValues(alpha: 0.24),
+        // The tour's last stop, and the only action on an empty Today.
+        TourAnchor(
+          stop: TourStop.add,
+          child: PressScale(
+            onTap: onAddHabit,
+            child: Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: TideColors.lantern.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: TideColors.lantern.withValues(alpha: 0.24),
+                ),
               ),
-            ),
-            child: const Icon(
-              Icons.add_rounded,
-              size: 20,
-              color: TideColors.lantern,
+              child: const Icon(
+                Icons.add_rounded,
+                size: 20,
+                color: TideColors.lantern,
+              ),
             ),
           ),
         ),

@@ -10,9 +10,6 @@ abstract final class AppConstants {
   /// the upgrade sheet is never a buried settings row.
   static const int freeHabitLimit = 5;
 
-  /// How many habits onboarding nudges toward picking.
-  static const int onboardingTarget = 3;
-
   /// Free-plan history window, quoted on the paywall.
   static const int freeHistoryDays = 30;
 
