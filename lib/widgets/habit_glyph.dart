@@ -32,7 +32,7 @@ class HabitGlyph extends StatelessWidget {
       child: CustomPaint(
         painter: _GlyphPainter(
           glyph: glyph,
-          color: color ?? TideColors.tideBlue,
+          color: color ?? TideColors.lantern,
           strokeWidth: strokeWidth,
         ),
       ),

@@ -64,7 +64,7 @@ class UnsavedChangesNudge extends StatelessWidget {
                           child: Text(
                             'Keep editing',
                             style: TideType.label.copyWith(
-                              color: TideColors.textPrimary,
+                              color: TideColors.bone,
                             ),
                           ),
                         ),

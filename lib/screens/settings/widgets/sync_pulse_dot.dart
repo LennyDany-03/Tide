@@ -53,10 +53,10 @@ class _SyncPulseDotState extends State<SyncPulseDot>
               height: 7,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: TideColors.kelpGreen.withValues(alpha: 0.45 + 0.55 * t),
+                color: TideColors.lantern.withValues(alpha: 0.45 + 0.55 * t),
                 boxShadow: [
                   BoxShadow(
-                    color: TideColors.kelpGreen.withValues(alpha: 0.35 * t),
+                    color: TideColors.lantern.withValues(alpha: 0.35 * t),
                     blurRadius: 6 * t,
                     spreadRadius: 1.5 * t,
                   ),
@@ -66,7 +66,7 @@ class _SyncPulseDotState extends State<SyncPulseDot>
           },
         ),
         const SizedBox(width: 9),
-        Text(_label, style: TideType.gauge(12, color: TideColors.textMuted)),
+        Text(_label, style: TideType.gauge(12, color: TideColors.silt)),
       ],
     );
   }

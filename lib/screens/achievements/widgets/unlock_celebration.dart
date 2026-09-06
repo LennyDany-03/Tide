@@ -88,8 +88,8 @@ class _UnlockCelebrationState extends State<UnlockCelebration>
                     // bounds: this sits on a full-screen scrim, and the
                     // burst reaching past the badge is the celebration.
                     clip: false,
-                    color: TideColors.kelpGreen,
-                    accent: TideColors.foamCyan,
+                    color: TideColors.lantern,
+                    accent: TideColors.lantern,
                     child: Transform.scale(
                       scale:
                           0.86 +
@@ -103,19 +103,19 @@ class _UnlockCelebrationState extends State<UnlockCelebration>
                           HabitGlyph(
                             glyph: widget.milestone.glyph,
                             size: 60,
-                            color: TideColors.foamCyan,
+                            color: TideColors.lantern,
                             strokeWidth: 2.4,
                           ),
                           const SizedBox(height: 24),
                           Text(
                             widget.milestone.name,
                             style: TideType.hero.copyWith(
-                              color: TideColors.foamCyan,
+                              color: TideColors.lantern,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '${widget.milestone.caption} · surfaced',
+                            '${widget.milestone.caption}, surfaced',
                             style: TideType.labelMuted,
                           ),
                         ],

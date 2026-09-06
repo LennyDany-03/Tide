@@ -40,7 +40,7 @@ class SegmentedPill extends StatelessWidget {
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: TideColors.well,
+                    color: TideColors.trench,
                     borderRadius: TideElevation.radius12,
                   ),
                 ),
@@ -58,11 +58,8 @@ class SegmentedPill extends StatelessWidget {
                   padding: const EdgeInsets.all(3),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: TideColors.tideBlue.withValues(alpha: 0.18),
-                      borderRadius: TideElevation.radius8,
-                      border: Border.all(
-                        color: TideColors.tideBlue.withValues(alpha: 0.4),
-                      ),
+                      color: TideColors.bone.withValues(alpha: 0.14),
+                      borderRadius: TideElevation.radius12,
                     ),
                   ),
                 ),
@@ -80,8 +77,11 @@ class SegmentedPill extends StatelessWidget {
                               duration: TideMotion.pillSlide,
                               style: TideType.label.copyWith(
                                 color: i == selectedIndex
-                                    ? TideColors.textPrimary
-                                    : TideColors.textMuted,
+                                    ? TideColors.bone
+                                    : TideColors.silt,
+                                fontWeight: i == selectedIndex
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                               ),
                               child: Text(labels[i]),
                             ),

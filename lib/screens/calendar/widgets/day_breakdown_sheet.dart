@@ -108,10 +108,10 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = entry.frozen
-        ? TideColors.foamCyan
+        ? TideColors.lantern
         : entry.complete
-        ? TideColors.kelpGreen
-        : TideColors.textMuted;
+        ? TideColors.lantern
+        : TideColors.silt;
 
     final status = entry.frozen
         ? 'frozen'
@@ -123,7 +123,7 @@ class _Row extends StatelessWidget {
 
     return TideSurface(
       radius: TideElevation.radius12,
-      color: TideColors.well,
+      color: TideColors.trench,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [

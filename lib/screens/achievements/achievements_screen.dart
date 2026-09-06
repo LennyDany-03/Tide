@@ -77,23 +77,22 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
             children: [
               Row(
                 children: [
+                  // A bare glyph, matching habit detail. Back is the least
+                  // interesting control on any screen and should not be the
+                  // only filled shape in its row.
                   PressScale(
                     onTap: () => context.pop(),
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: TideColors.shallow,
-                        borderRadius: TideElevation.radius12,
-                      ),
-                      child: const Icon(
+                    child: const SizedBox(
+                      width: 38,
+                      height: 38,
+                      child: Icon(
                         Icons.arrow_back_rounded,
-                        size: 18,
-                        color: TideColors.textPrimary,
+                        size: 21,
+                        color: TideColors.bone,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 10),
                   const Expanded(
                     child: Text('Milestones', style: TideType.screenTitle),
                   ),
@@ -101,7 +100,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
               ),
               const SizedBox(height: 6),
               Padding(
-                padding: const EdgeInsets.only(left: 50),
+                padding: const EdgeInsets.only(left: 48),
                 child: Text(
                   '$unlocked of ${statuses.length} surfaced',
                   style: TideType.labelMuted,
@@ -127,19 +126,17 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                 onTap: _simulate,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                  // Outlined and quiet. It is a demo control sitting under a
+                  // wall of badges, and a filled accent block would make the
+                  // least important thing on the screen the loudest.
                   decoration: BoxDecoration(
-                    color: TideColors.tideBlue.withValues(alpha: 0.10),
                     borderRadius: TideElevation.radius12,
-                    border: Border.all(
-                      color: TideColors.tideBlue.withValues(alpha: 0.25),
-                    ),
+                    border: Border.all(color: TideColors.hairline),
                   ),
                   child: Center(
                     child: Text(
                       'Simulate next unlock',
-                      style: TideType.button.copyWith(
-                        color: TideColors.tideBlue,
-                      ),
+                      style: TideType.button.copyWith(color: TideColors.silt),
                     ),
                   ),
                 ),

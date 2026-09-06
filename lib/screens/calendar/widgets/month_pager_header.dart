@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../config/app_constants.dart';
 import '../../../theme/tide_colors.dart';
-import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/press_scale.dart';
@@ -58,7 +57,7 @@ class MonthPagerHeader extends StatelessWidget {
               label,
               key: ValueKey(label),
               textAlign: TextAlign.center,
-              style: TideType.heading,
+              style: TideType.hero.copyWith(fontSize: 19),
             ),
           ),
         ),
@@ -85,15 +84,14 @@ class _Arrow extends StatelessWidget {
       onTap: enabled ? onTap : null,
       enabled: enabled,
       child: Opacity(
-        opacity: enabled ? 1 : 0.3,
-        child: Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: TideColors.shallow,
-            borderRadius: TideElevation.radius8,
-          ),
-          child: Icon(icon, size: 20, color: TideColors.textPrimary),
+        opacity: enabled ? 1 : 0.25,
+        // A bare glyph. The arrows were tiles in a surface colour, which
+        // made two small panels flank the month name and read as heavier
+        // than the title between them.
+        child: SizedBox(
+          width: 38,
+          height: 38,
+          child: Icon(icon, size: 22, color: TideColors.bone),
         ),
       ),
     );

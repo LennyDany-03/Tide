@@ -63,7 +63,7 @@ class _TemplateGridState extends State<TemplateGrid> {
               value: count,
               style: TideType.gauge(
                 14,
-                color: count == 0 ? TideColors.textMuted : TideColors.tideBlue,
+                color: count == 0 ? TideColors.silt : TideColors.lantern,
               ),
             ),
             Text(
@@ -125,22 +125,22 @@ class _TemplateCard extends StatelessWidget {
     return PressScale(
       onTap: onTap,
       child: ClipRRect(
-        borderRadius: TideElevation.radius16,
+        borderRadius: TideElevation.radius20,
         child: RippleBurst(
           trigger: rippleTick,
-          color: TideColors.kelpGreen,
+          color: TideColors.lantern,
           child: AnimatedContainer(
             duration: TideMotion.tabSwitch,
             curve: TideMotion.tabCurve,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: selected
-                  ? Color.lerp(TideColors.shallow, TideColors.tideBlue, 0.14)
-                  : TideColors.shallow,
-              borderRadius: TideElevation.radius16,
+                  ? Color.lerp(TideColors.shelf, TideColors.lantern, 0.14)
+                  : TideColors.shelf,
+              borderRadius: TideElevation.radius20,
               border: Border.all(
                 color: selected
-                    ? TideColors.tideBlue.withValues(alpha: 0.55)
+                    ? TideColors.lantern.withValues(alpha: 0.55)
                     : Colors.transparent,
               ),
               boxShadow: TideElevation.resting,
@@ -152,14 +152,14 @@ class _TemplateCard extends StatelessWidget {
                 HabitGlyph(
                   glyph: template.glyph,
                   size: 17,
-                  color: selected ? TideColors.tideBlue : TideColors.textMuted,
+                  color: selected ? TideColors.lantern : TideColors.silt,
                 ),
                 Text(
                   template.name,
                   style: TideType.label.copyWith(
                     color: selected
-                        ? TideColors.textPrimary
-                        : TideColors.textMuted,
+                        ? TideColors.bone
+                        : TideColors.silt,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -185,9 +185,9 @@ class _CustomCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          borderRadius: TideElevation.radius16,
+          borderRadius: TideElevation.radius20,
           border: Border.all(
-            color: TideColors.textMuted.withValues(alpha: 0.3),
+            color: TideColors.silt.withValues(alpha: 0.3),
           ),
         ),
         child: Column(
@@ -197,7 +197,7 @@ class _CustomCard extends StatelessWidget {
             const Icon(
               Icons.add_rounded,
               size: 18,
-              color: TideColors.textMuted,
+              color: TideColors.silt,
             ),
             Text('Create custom', style: TideType.labelMuted),
           ],

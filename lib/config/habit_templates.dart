@@ -36,7 +36,7 @@ class HabitTemplate {
         : '${days.length}x a week';
     final hour = reminderTime.hour.toString().padLeft(2, '0');
     final minute = reminderTime.minute.toString().padLeft(2, '0');
-    return '$schedule · $hour:$minute';
+    return '$schedule at $hour:$minute';
   }
 
   static const List<HabitTemplate> all = [

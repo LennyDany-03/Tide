@@ -25,7 +25,7 @@ class FreezeStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TideSurface(
-      color: TideColors.well,
+      color: TideColors.trench,
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
       child: Row(
         children: [
@@ -53,7 +53,7 @@ class FreezeStepper extends StatelessWidget {
             child: Center(
               child: GaugeNumber(
                 value: value,
-                style: TideType.gauge(17, color: TideColors.textPrimary),
+                style: TideType.gauge(17, color: TideColors.bone),
               ),
             ),
           ),
@@ -90,10 +90,10 @@ class _Button extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: TideColors.shallow,
-            borderRadius: TideElevation.radius8,
+            color: TideColors.shelf,
+            borderRadius: TideElevation.radius12,
           ),
-          child: Icon(icon, size: 17, color: TideColors.textPrimary),
+          child: Icon(icon, size: 17, color: TideColors.bone),
         ),
       ),
     );

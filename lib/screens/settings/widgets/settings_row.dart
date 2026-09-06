@@ -39,7 +39,7 @@ class _SettingsRowState extends State<SettingsRow> {
   Widget build(BuildContext context) {
     final color = widget.destructive
         ? TideColors.coral
-        : TideColors.textPrimary;
+        : TideColors.bone;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -52,9 +52,9 @@ class _SettingsRowState extends State<SettingsRow> {
       child: AnimatedContainer(
         duration: TideMotion.tabSwitch,
         color: _pressed
-            ? TideColors.textPrimary.withValues(alpha: 0.04)
+            ? TideColors.bone.withValues(alpha: 0.04)
             : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        padding: const EdgeInsets.symmetric(vertical: 17),
         child: Row(
           children: [
             Expanded(
@@ -64,7 +64,7 @@ class _SettingsRowState extends State<SettingsRow> {
                 children: [
                   Text(
                     widget.label,
-                    style: TideType.body.copyWith(color: color),
+                    style: TideType.heading.copyWith(color: color),
                   ),
                   if (widget.subtitle != null) ...[
                     const SizedBox(height: 3),
@@ -79,7 +79,7 @@ class _SettingsRowState extends State<SettingsRow> {
               const Icon(
                 Icons.chevron_right_rounded,
                 size: 20,
-                color: TideColors.textMuted,
+                color: TideColors.silt,
               ),
             ],
           ],

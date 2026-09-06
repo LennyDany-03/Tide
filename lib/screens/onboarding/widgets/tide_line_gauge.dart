@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/tide_colors.dart';
-import '../../../theme/tide_gradients.dart';
 import '../../../theme/tide_motion.dart';
 
 /// Onboarding progress, as a water level rather than dots.
@@ -26,7 +25,7 @@ class TideLineGauge extends StatelessWidget {
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: TideColors.textMuted.withValues(alpha: 0.16),
+                color: TideColors.silt.withValues(alpha: 0.16),
                 borderRadius: BorderRadius.circular(height),
               ),
             ),
@@ -40,15 +39,8 @@ class TideLineGauge extends StatelessWidget {
                 widthFactor: t,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: TideGradients.accent,
+                    color: TideColors.lantern,
                     borderRadius: BorderRadius.circular(height),
-                    boxShadow: [
-                      BoxShadow(
-                        color: TideColors.tideBlue.withValues(alpha: 0.45),
-                        blurRadius: 8,
-                        spreadRadius: -1,
-                      ),
-                    ],
                   ),
                   // As in the calendar day cell: a childless DecoratedBox
                   // collapses on the unconstrained axis, which would leave

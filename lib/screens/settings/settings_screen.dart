@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/app_routes.dart';
 import '../../services/tide_scope.dart';
-import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/hold_to_fill.dart';
@@ -55,7 +54,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       children: [
         const Text('Settings', style: TideType.screenTitle),
-        const SizedBox(height: 20),
+        const SizedBox(height: 30),
 
         AccountCard(
           name: store.accountName,
@@ -63,10 +62,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           habitCount: store.activeHabitCount,
           onUpgrade: () => context.push(Routes.upgrade),
         ),
-        const SizedBox(height: 26),
+        const SizedBox(height: 40),
 
         SettingsGroup(
-          title: 'NOTIFICATIONS',
+          title: 'Notifications',
           rows: [
             SettingsRow(
               label: 'Daily reminders',
@@ -93,10 +92,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 34),
 
         SettingsGroup(
-          title: 'SYNC & DATA',
+          title: 'Sync and data',
           rows: [
             SettingsRow(
               label: 'iCloud sync',
@@ -122,7 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               alignment: Alignment.topCenter,
               child: _confirmingDelete
                   ? Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -153,10 +152,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 34),
 
         SettingsGroup(
-          title: 'APP',
+          title: 'App',
           rows: [
             SettingsRow(
               label: 'Haptics',
@@ -184,14 +183,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 26),
+        const SizedBox(height: 34),
 
-        Center(
-          child: Text(
-            'Tide 1.0.0',
-            style: TideType.gauge(11.5, color: TideColors.textMuted),
-          ),
-        ),
+        Center(child: Text('Tide 1.0.0', style: TideType.labelMuted)),
       ],
     );
   }

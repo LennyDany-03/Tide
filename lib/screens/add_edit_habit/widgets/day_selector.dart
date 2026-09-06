@@ -55,7 +55,7 @@ class _DaySelectorState extends State<DaySelector> {
                   borderRadius: TideElevation.radius12,
                   child: RippleBurst(
                     trigger: _ticks[weekday] ?? 0,
-                    color: TideColors.tideBlue,
+                    color: TideColors.lantern,
                     child: _DayTile(
                       label: AppConstants.weekdayInitials[weekday - 1],
                       active: widget.days.contains(weekday),
@@ -71,6 +71,18 @@ class _DaySelectorState extends State<DaySelector> {
   }
 }
 
+/// Selection is neutral contrast, not accent.
+///
+/// Two wrong versions came before this one. Accent at 16% alpha behind an
+/// accent border turned olive on deep water, and with all seven days on, the
+/// row was mud. Solid accent fixed the mud and created a worse problem: an
+/// editor where the icon tile, the type pill, seven day chips, a toggle and
+/// the save button were all the same warm block, so the one action that
+/// matters stopped being the loudest thing on the sheet.
+///
+/// Lantern means progress in this app — a streak, a logged day, water coming
+/// in. It does not mean "you tapped this". A raised neutral chip says chosen
+/// perfectly well, and leaves the accent free to mean what it means.
 class _DayTile extends StatelessWidget {
   const _DayTile({required this.label, required this.active});
 
@@ -83,21 +95,15 @@ class _DayTile extends StatelessWidget {
       duration: TideMotion.tabSwitch,
       curve: TideMotion.tabCurve,
       decoration: BoxDecoration(
-        color: active
-            ? TideColors.tideBlue.withValues(alpha: 0.16)
-            : TideColors.well,
+        color: TideColors.bone.withValues(alpha: active ? 0.14 : 0.04),
         borderRadius: TideElevation.radius12,
-        border: Border.all(
-          color: active
-              ? TideColors.tideBlue.withValues(alpha: 0.55)
-              : Colors.transparent,
-        ),
       ),
       child: Center(
         child: Text(
           label,
           style: TideType.label.copyWith(
-            color: active ? TideColors.textPrimary : TideColors.textMuted,
+            color: active ? TideColors.bone : TideColors.silt,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
       ),

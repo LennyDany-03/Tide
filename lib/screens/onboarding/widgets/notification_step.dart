@@ -104,8 +104,8 @@ class _MockNotificationState extends State<_MockNotification>
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: TideColors.raised,
-          borderRadius: TideElevation.radius16,
+          color: TideColors.shoal,
+          borderRadius: TideElevation.radius20,
           boxShadow: TideElevation.floating,
         ),
         child: Row(
@@ -115,8 +115,8 @@ class _MockNotificationState extends State<_MockNotification>
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: TideColors.tideBlue.withValues(alpha: 0.18),
-                borderRadius: TideElevation.radius8,
+                color: TideColors.lantern.withValues(alpha: 0.18),
+                borderRadius: TideElevation.radius12,
               ),
               child: Center(child: HabitGlyph(glyph: widget.glyph, size: 15)),
             ),
@@ -132,7 +132,7 @@ class _MockNotificationState extends State<_MockNotification>
                       Text(
                         '${widget.time.hour.toString().padLeft(2, '0')}:'
                         '${widget.time.minute.toString().padLeft(2, '0')}',
-                        style: TideType.gauge(11, color: TideColors.textMuted),
+                        style: TideType.gauge(11, color: TideColors.silt),
                       ),
                     ],
                   ),

@@ -25,7 +25,7 @@ class WelcomeStep extends StatelessWidget {
             width: 14,
             height: 14,
             decoration: const BoxDecoration(
-              color: TideColors.foamCyan,
+              color: TideColors.lantern,
               shape: BoxShape.circle,
             ),
           ),

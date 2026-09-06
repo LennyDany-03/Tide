@@ -19,8 +19,9 @@ class ReorderingHabitList extends StatelessWidget {
     required this.itemKeys,
     required this.itemBuilder,
     required this.itemHeight,
-    this.spacing = 10,
+    this.spacing = 0,
     this.stagger = true,
+    this.separator,
   });
 
   /// Stable identity per row, in display order. Reordering this list is what
@@ -33,6 +34,14 @@ class ReorderingHabitList extends StatelessWidget {
 
   /// The first appearance staggers in; later reorders just move.
   final bool stagger;
+
+  /// Drawn once at each boundary *between* slots, behind the rows.
+  ///
+  /// Painted at fixed offsets rather than attached to a row, because the
+  /// rows are the things that move. A hairline carried by a row would slide
+  /// away with it when a logged habit sinks down the list; the separators
+  /// belong to the list, and should stay put while its contents rearrange.
+  final Widget? separator;
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +69,12 @@ class ReorderingHabitList extends StatelessWidget {
                     )
                   : itemBuilder(context, itemKeys[i]),
             ),
+          // Above the rows, not behind them. Rows paint an opaque page
+          // colour so they can travel over the swipe backdrop, which means
+          // a hairline drawn underneath is simply covered up.
+          if (separator != null)
+            for (var i = 1; i < itemKeys.length; i++)
+              Positioned(top: i * step, left: 0, right: 0, child: separator!),
         ],
       ),
     );

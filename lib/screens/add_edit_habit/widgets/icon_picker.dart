@@ -52,8 +52,8 @@ class _IconPickerState extends State<IconPicker> {
                   borderRadius: TideElevation.radius12,
                   child: RippleBurst(
                     trigger: _ticks[glyph] ?? 0,
-                    color: TideColors.tideBlue,
-                    accent: TideColors.foamCyan,
+                    color: TideColors.lantern,
+                    accent: TideColors.lantern,
                     child: _Tile(
                       glyph: glyph,
                       selected: glyph == widget.selected,
@@ -69,6 +69,18 @@ class _IconPickerState extends State<IconPicker> {
   }
 }
 
+/// Selection is neutral contrast, not accent.
+///
+/// Two wrong versions came before this one. Accent at 16% alpha behind an
+/// accent border turned olive on deep water, and with all seven days on, the
+/// row was mud. Solid accent fixed the mud and created a worse problem: an
+/// editor where the icon tile, the type pill, seven day chips, a toggle and
+/// the save button were all the same warm block, so the one action that
+/// matters stopped being the loudest thing on the sheet.
+///
+/// Lantern means progress in this app — a streak, a logged day, water coming
+/// in. It does not mean "you tapped this". A raised neutral chip says chosen
+/// perfectly well, and leaves the accent free to mean what it means.
 class _Tile extends StatelessWidget {
   const _Tile({required this.glyph, required this.selected});
 
@@ -81,21 +93,14 @@ class _Tile extends StatelessWidget {
       duration: TideMotion.tabSwitch,
       curve: TideMotion.tabCurve,
       decoration: BoxDecoration(
-        color: selected
-            ? TideColors.tideBlue.withValues(alpha: 0.18)
-            : TideColors.well,
+        color: TideColors.bone.withValues(alpha: selected ? 0.14 : 0.04),
         borderRadius: TideElevation.radius12,
-        border: Border.all(
-          color: selected
-              ? TideColors.tideBlue.withValues(alpha: 0.6)
-              : Colors.transparent,
-        ),
       ),
       child: Center(
         child: HabitGlyph(
           glyph: glyph,
           size: 17,
-          color: selected ? TideColors.tideBlue : TideColors.textMuted,
+          color: selected ? TideColors.bone : TideColors.silt,
         ),
       ),
     );

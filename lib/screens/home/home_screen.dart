@@ -5,7 +5,6 @@ import '../../config/app_routes.dart';
 import '../../services/models/habit.dart';
 import '../../services/streak_calculator.dart';
 import '../../services/tide_scope.dart';
-import '../../theme/tide_colors.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/tide_button.dart';
@@ -109,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
                   20,
-                  MediaQuery.paddingOf(context).top + 16,
+                  MediaQuery.paddingOf(context).top + 28,
                   20,
                   0,
                 ),
@@ -120,17 +119,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 18)),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                sliver: SliverToBoxAdapter(
-                  child: HeroStatCard(
+              const SliverToBoxAdapter(child: SizedBox(height: 12)),
+              SliverToBoxAdapter(
+                child: HeroStatCard(
                     completed: summary.completed,
                     scheduled: summary.scheduled,
                     weeklyRate: store.weeklyRate,
                     bestStreak: store.bestActiveStreak,
-                    dayComplete: summary.isFullyLogged,
-                  ),
+                  dayComplete: summary.isFullyLogged,
                 ),
               ),
               if (habits.isEmpty)
@@ -149,44 +145,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 )
               else ...[
-                const SliverToBoxAdapter(child: SizedBox(height: 26)),
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  sliver: SliverToBoxAdapter(
-                    child: Row(
-                      children: [
-                        Text('HABITS', style: TideType.sectionHeader),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Container(
-                            height: 1,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  TideColors.divider,
-                                  TideColors.divider.withValues(alpha: 0),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          '${habits.length}',
-                          style: TideType.gaugeSmall(
-                            color: TideColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                // No section header above the list. "HABITS ———— 4" was
+                // labelling the only list on the screen, ruling it off and
+                // then counting it — three pieces of chrome to introduce
+                // four rows that introduce themselves.
+                const SliverToBoxAdapter(child: SizedBox(height: 36)),
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverToBoxAdapter(
                     child: ReorderingHabitList(
                       itemHeight: HabitCard.height,
+                      separator: const HabitRowDivider(),
                       itemKeys: [for (final habit in habits) habit.id],
                       itemBuilder: (context, id) {
                         final habit = store.habitById(id);
@@ -208,7 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
               // Clears the FAB and the floating tab bar it sits above.
               SliverToBoxAdapter(
                 child: SizedBox(
-                  height: TideTabBar.reservedHeight(context) + 96,
+                  height: TideTabBar.reservedHeight(context) + 40,
                 ),
               ),
             ],

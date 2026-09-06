@@ -24,33 +24,31 @@ class DetailHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = TideColors.drained(TideColors.tideBlue, drain);
+    final accent = TideColors.drained(TideColors.lantern, drain);
 
     return Row(
       children: [
+        // A bare glyph, not a tile. Back is the least interesting control
+        // on the screen and should not be the only filled shape in the row.
         PressScale(
           onTap: onBack,
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: TideColors.shallow,
-              borderRadius: TideElevation.radius12,
-            ),
-            child: const Icon(
+          child: const SizedBox(
+            width: 38,
+            height: 38,
+            child: Icon(
               Icons.arrow_back_rounded,
-              size: 18,
-              color: TideColors.textPrimary,
+              size: 21,
+              color: TideColors.bone,
             ),
           ),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 8),
         HabitGlyph(glyph: habit.glyph, size: 17, color: accent),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
             habit.name,
-            style: TideType.hero.copyWith(fontSize: 21),
+            style: TideType.hero,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -59,13 +57,10 @@ class DetailHeader extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: TideColors.textMuted.withValues(alpha: 0.14),
-              borderRadius: TideElevation.radius8,
+              color: TideColors.silt.withValues(alpha: 0.14),
+              borderRadius: TideElevation.radius12,
             ),
-            child: Text(
-              'PAUSED',
-              style: TideType.sectionHeader.copyWith(fontSize: 9.5),
-            ),
+            child: Text('Paused', style: TideType.labelMuted),
           ),
       ],
     );

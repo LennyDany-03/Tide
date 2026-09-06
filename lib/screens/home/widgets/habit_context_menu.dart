@@ -84,8 +84,8 @@ class _Menu extends StatelessWidget {
         color: Colors.transparent,
         child: Container(
           decoration: BoxDecoration(
-            color: TideColors.raised,
-            borderRadius: TideElevation.radius24,
+            color: TideColors.shoal,
+            borderRadius: TideElevation.radius20,
             boxShadow: TideElevation.floating,
           ),
           padding: const EdgeInsets.all(18),
@@ -162,12 +162,12 @@ class _MenuRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          color: TideColors.well,
+          color: TideColors.trench,
           borderRadius: TideElevation.radius12,
         ),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: TideColors.textMuted),
+            Icon(icon, size: 18, color: TideColors.silt),
             const SizedBox(width: 12),
             Text(label, style: TideType.label),
           ],

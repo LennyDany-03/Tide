@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../theme/tide_colors.dart';
 import '../theme/tide_elevation.dart';
-import '../theme/tide_gradients.dart';
 import '../theme/tide_motion.dart';
 import 'press_scale.dart';
 
 /// The one object in the app that reads as genuinely floating.
 ///
-/// It carries a soft blurred tide-blue glow no other surface has, and it is
-/// the visual origin of the add-habit sheet.
+/// A solid lantern disc — the only saturated block on Home — and the visual
+/// origin of the add-habit sheet. It used to carry a wide blurred glow; on
+/// a near-black ground a warm disc is already unmissable, and the glow only
+/// softened its edge and cost it the crispness that made it look solid.
 ///
 /// The morph is *not* a Flutter `Hero`. Sheets here are non-opaque routes,
 /// so the FAB stays mounted underneath them — two heroes sharing a tag on
@@ -36,10 +37,10 @@ class TideFab extends StatelessWidget {
       child: Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(
-          gradient: TideGradients.accent,
+        decoration: const BoxDecoration(
+          color: TideColors.lantern,
           shape: BoxShape.circle,
-          boxShadow: TideElevation.fabGlow(),
+          boxShadow: TideElevation.floating,
         ),
         child: Icon(icon, color: TideColors.deepWater, size: size * 0.42),
       ),
@@ -48,7 +49,7 @@ class TideFab extends StatelessWidget {
 }
 
 /// The disc in a sheet header that the FAB appears to have become — same
-/// tide blue, same circle, at the far end of the morph.
+/// lantern, same circle, at the far end of the morph.
 class TideFabMorphTarget extends StatelessWidget {
   const TideFabMorphTarget({super.key, required this.child, this.size = 40});
 
@@ -60,10 +61,12 @@ class TideFabMorphTarget extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        gradient: TideGradients.accentWash(alpha: 0.18),
+      // Solid, because the FAB it grew out of is solid. A translucent
+      // wash here meant the disc visibly changed material half way through
+      // the morph, which is the one thing the morph exists to avoid.
+      decoration: const BoxDecoration(
+        color: TideColors.lantern,
         shape: BoxShape.circle,
-        border: Border.all(color: TideColors.tideBlue.withValues(alpha: 0.5)),
       ),
       child: Center(child: child),
     );

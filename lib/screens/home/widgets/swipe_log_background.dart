@@ -44,8 +44,8 @@ class SwipeLogBackground extends StatelessWidget {
       (_fraction / TideMotion.swipeThreshold).clamp(0.0, 1.0);
 
   Color get _color {
-    if (_completing) return TideColors.kelpGreen;
-    return freezeAvailable ? TideColors.foamCyan : TideColors.coral;
+    if (_completing) return TideColors.lantern;
+    return freezeAvailable ? TideColors.lantern : TideColors.coral;
   }
 
   IconData get _icon {
@@ -58,7 +58,7 @@ class SwipeLogBackground extends StatelessWidget {
     if (offset.abs() < 1) return const SizedBox.shrink();
 
     return ClipRRect(
-      borderRadius: TideElevation.radius16,
+      borderRadius: TideElevation.radius20,
       child: Stack(
         children: [
           Positioned.fill(

@@ -87,7 +87,7 @@ class _Stepper extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       decoration: BoxDecoration(
-        color: TideColors.well,
+        color: TideColors.trench,
         borderRadius: TideElevation.radius12,
       ),
       child: Row(
@@ -102,7 +102,7 @@ class _Stepper extends StatelessWidget {
             child: Center(
               child: Text(
                 '$value',
-                style: TideType.gauge(16, color: TideColors.textPrimary),
+                style: TideType.gauge(16, color: TideColors.bone),
               ),
             ),
           ),
@@ -130,10 +130,10 @@ class _StepButton extends StatelessWidget {
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-          color: TideColors.shallow,
-          borderRadius: TideElevation.radius8,
+          color: TideColors.shelf,
+          borderRadius: TideElevation.radius12,
         ),
-        child: Icon(icon, size: 17, color: TideColors.textPrimary),
+        child: Icon(icon, size: 17, color: TideColors.bone),
       ),
     );
   }
@@ -164,12 +164,12 @@ class _UnitRow extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   color: unit == selected
-                      ? TideColors.tideBlue.withValues(alpha: 0.16)
-                      : TideColors.well,
+                      ? TideColors.lantern.withValues(alpha: 0.16)
+                      : TideColors.trench,
                   borderRadius: TideElevation.radius12,
                   border: Border.all(
                     color: unit == selected
-                        ? TideColors.tideBlue.withValues(alpha: 0.55)
+                        ? TideColors.lantern.withValues(alpha: 0.55)
                         : Colors.transparent,
                   ),
                 ),
@@ -178,8 +178,8 @@ class _UnitRow extends StatelessWidget {
                     unit,
                     style: TideType.labelMuted.copyWith(
                       color: unit == selected
-                          ? TideColors.textPrimary
-                          : TideColors.textMuted,
+                          ? TideColors.bone
+                          : TideColors.silt,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

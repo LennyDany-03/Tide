@@ -5,7 +5,6 @@ import '../../../services/models/habit.dart';
 import '../../../services/streak_calculator.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
-import '../../../widgets/tide_surface.dart';
 import 'day_cell.dart';
 
 /// A whole month of aggregate completion.
@@ -32,40 +31,40 @@ class MonthGrid extends StatelessWidget {
     final leading = first.weekday - 1;
     final gridStart = first.subtract(Duration(days: leading));
 
-    return TideSurface(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
-      child: Column(
-        children: [
+    // No panel around the grid. A month of cells is already a strongly
+    // bounded shape; drawing a rounded rectangle around it adds an outline
+    // nobody needed and pushes the cells inward for no reason.
+    return Column(
+      children: [
+        Row(
+          children: [
+            for (final initial in AppConstants.weekdayInitials)
+              Expanded(
+                child: Center(
+                  child: Text(initial, style: TideType.labelMuted),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        for (var week = 0; week < 6; week++) ...[
+          if (week > 0) const SizedBox(height: 6),
           Row(
             children: [
-              for (final initial in AppConstants.weekdayInitials)
+              for (var weekday = 0; weekday < 7; weekday++) ...[
+                if (weekday > 0) const SizedBox(width: 6),
                 Expanded(
-                  child: Center(
-                    child: Text(initial, style: TideType.sectionHeader),
+                  child: _cell(
+                    date: gridStart.add(Duration(days: week * 7 + weekday)),
+                    index: week * 7 + weekday,
+                    today: today,
                   ),
                 ),
+              ],
             ],
           ),
-          const SizedBox(height: 12),
-          for (var week = 0; week < 6; week++) ...[
-            if (week > 0) const SizedBox(height: 7),
-            Row(
-              children: [
-                for (var weekday = 0; weekday < 7; weekday++) ...[
-                  if (weekday > 0) const SizedBox(width: 7),
-                  Expanded(
-                    child: _cell(
-                      date: gridStart.add(Duration(days: week * 7 + weekday)),
-                      index: week * 7 + weekday,
-                      today: today,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
         ],
-      ),
+      ],
     );
   }
 

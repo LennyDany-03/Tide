@@ -8,16 +8,23 @@ import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/tide_surface.dart';
+import '../../widgets/gauge_number.dart';
+import '../../widgets/tide_section.dart';
 import '../../widgets/tide_tab_bar.dart';
 import '../../widgets/trend_chart.dart';
 import 'widgets/detail_actions.dart';
 import 'widgets/detail_header.dart';
 import 'widgets/month_heatmap.dart';
-import 'widgets/streak_stat_row.dart';
 
 /// Everything about one habit: its history, its numbers, and the controls
 /// for changing or ending it.
+///
+/// Built from the same sections as Insights rather than from its own stack of
+/// panels. It used to open with three equal stat chips side by side — current
+/// streak, best streak, 30-day rate — which gave the screen no answer to
+/// "how is this going", only three numbers of identical weight. The current
+/// streak is the answer, so it is the headline, and the other two are the
+/// footnotes they always were.
 class HabitDetailScreen extends StatefulWidget {
   const HabitDetailScreen({super.key, required this.habitId});
 
@@ -75,6 +82,10 @@ class _HabitDetailScreenState extends State<HabitDetailScreen>
       );
     }
 
+    final current = StreakCalculator.currentStreak(habit);
+    final best = StreakCalculator.bestStreak(habit);
+    final rate = StreakCalculator.completionRate(habit);
+
     return AnimatedBuilder(
       animation: _drain,
       builder: (context, child) {
@@ -84,7 +95,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen>
           opacity: 1 - 0.25 * _drain.value,
           child: ColorFiltered(
             colorFilter: ColorFilter.mode(
-              TideColors.textMuted.withValues(alpha: 0.3 * _drain.value),
+              TideColors.silt.withValues(alpha: 0.3 * _drain.value),
               BlendMode.saturation,
             ),
             child: child,
@@ -94,7 +105,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen>
       child: ListView(
         padding: EdgeInsets.fromLTRB(
           20,
-          MediaQuery.paddingOf(context).top + 16,
+          MediaQuery.paddingOf(context).top + 20,
           20,
           TideTabBar.reservedHeight(context) + 28,
         ),
@@ -104,35 +115,67 @@ class _HabitDetailScreenState extends State<HabitDetailScreen>
             onBack: () => context.pop(),
             drain: _drain.value,
           ),
-          const SizedBox(height: 20),
-          StreakStatRow(
-            currentStreak: StreakCalculator.currentStreak(habit),
-            bestStreak: StreakCalculator.bestStreak(habit),
-            rate: StreakCalculator.completionRate(habit),
+          const SizedBox(height: 34),
+
+          // The headline: how long this has been running.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              GaugeNumber(value: current, style: TideType.gaugeHero()),
+              const SizedBox(width: 10),
+              Text(
+                current == 1 ? 'day' : 'days',
+                style: TideType.gauge(18, color: TideColors.silt),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          Text(
+            current == 0 ? 'no streak running' : 'running streak',
+            style: TideType.labelMuted,
+          ),
+          const SizedBox(height: 30),
+
+          const TideRule(),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: TideFigure(value: '$best', caption: 'best streak'),
+              ),
+              Expanded(
+                child: TideFigure(
+                  value: '${(rate * 100).round()}%',
+                  caption: 'last 30 days',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 30),
+
+          const TideRule(),
+          const SizedBox(height: 26),
           MonthHeatmap(habit: habit, month: DateTime.now()),
-          const SizedBox(height: 12),
-          TideSurface(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Completion trend', style: TideType.heading),
-                const SizedBox(height: 20),
-                TrendChart(
-                  values: StreakCalculator.habitTrend(habit),
-                  delay: const Duration(milliseconds: 260),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Rolling two-week rate, eight weeks',
-                  style: TideType.labelMuted.copyWith(fontSize: 11.5),
-                ),
-              ],
-            ),
+          const SizedBox(height: 30),
+
+          const TideRule(),
+          const SizedBox(height: 26),
+          const TideSectionTitle('Completion trend'),
+          const SizedBox(height: 22),
+          TrendChart(
+            values: StreakCalculator.habitTrend(habit),
+            delay: const Duration(milliseconds: 260),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Text(
+            'Rolling two-week rate, eight weeks',
+            style: TideType.labelMuted,
+          ),
+          const SizedBox(height: 30),
+
+          const TideRule(),
+          const SizedBox(height: 12),
           DetailActions(
             paused: habit.paused,
             onEdit: () => context.push(Routes.editHabit(habit.id)),

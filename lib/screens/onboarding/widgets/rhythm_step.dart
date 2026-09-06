@@ -106,7 +106,7 @@ class _RhythmRow extends StatelessWidget {
         : '${days.length}x a week';
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
-    return '$schedule · $hour:$minute';
+    return '$schedule at $hour:$minute';
   }
 
   Future<void> _pickTime(BuildContext context) async {
@@ -150,7 +150,7 @@ class _RhythmRow extends StatelessWidget {
                     child: const Icon(
                       Icons.expand_more_rounded,
                       size: 20,
-                      color: TideColors.textMuted,
+                      color: TideColors.silt,
                     ),
                   ),
                 ],
@@ -197,7 +197,7 @@ class _RhythmRow extends StatelessWidget {
                               vertical: 12,
                             ),
                             decoration: BoxDecoration(
-                              color: TideColors.well,
+                              color: TideColors.trench,
                               borderRadius: TideElevation.radius12,
                             ),
                             child: Row(
@@ -213,7 +213,7 @@ class _RhythmRow extends StatelessWidget {
                                   '${time.minute.toString().padLeft(2, '0')}',
                                   style: TideType.gauge(
                                     14,
-                                    color: TideColors.tideBlue,
+                                    color: TideColors.lantern,
                                   ),
                                 ),
                               ],
@@ -252,12 +252,12 @@ class _DayChip extends StatelessWidget {
           duration: TideMotion.tabSwitch,
           decoration: BoxDecoration(
             color: active
-                ? TideColors.tideBlue.withValues(alpha: 0.16)
-                : TideColors.well,
-            borderRadius: TideElevation.radius8,
+                ? TideColors.lantern.withValues(alpha: 0.16)
+                : TideColors.trench,
+            borderRadius: TideElevation.radius12,
             border: Border.all(
               color: active
-                  ? TideColors.tideBlue.withValues(alpha: 0.5)
+                  ? TideColors.lantern.withValues(alpha: 0.5)
                   : Colors.transparent,
             ),
           ),
@@ -266,7 +266,7 @@ class _DayChip extends StatelessWidget {
               label,
               style: TideType.labelMuted.copyWith(
                 fontSize: 11.5,
-                color: active ? TideColors.textPrimary : TideColors.textMuted,
+                color: active ? TideColors.bone : TideColors.silt,
               ),
             ),
           ),

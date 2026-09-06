@@ -70,7 +70,7 @@ class _NameFieldState extends State<NameField>
           offset: Offset(offset, 0),
           child: Container(
             decoration: BoxDecoration(
-              color: TideColors.well,
+              color: TideColors.trench,
               borderRadius: TideElevation.radius12,
               border: Border.all(
                 color: Color.lerp(
@@ -87,7 +87,7 @@ class _NameFieldState extends State<NameField>
       child: TextField(
         controller: widget.controller,
         style: TideType.body,
-        cursorColor: TideColors.tideBlue,
+        cursorColor: TideColors.lantern,
         textCapitalization: TextCapitalization.sentences,
         textInputAction: TextInputAction.done,
         onSubmitted: widget.onSubmitted,

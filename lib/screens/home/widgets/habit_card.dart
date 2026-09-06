@@ -3,8 +3,6 @@ import 'package:flutter/services.dart';
 
 import '../../../services/models/habit.dart';
 import '../../../theme/tide_colors.dart';
-import '../../../theme/tide_elevation.dart';
-import '../../../theme/tide_gradients.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/habit_glyph.dart';
@@ -13,15 +11,24 @@ import '../../../widgets/press_scale.dart';
 import '../../../widgets/ripple_burst.dart';
 import '../../../widgets/ripple_strip.dart';
 import '../../../widgets/tide_ring.dart';
-import '../../../widgets/tide_surface.dart';
 import 'swipe_log_background.dart';
 
 /// One habit on Home, and the gesture surface for logging it.
 ///
-/// The card divides into two handles, and the division is the same on every
-/// card in the app:
+/// A row, not a card. Four rounded panels stacked down the main screen, each
+/// with its own fill, border, shadow and inner pills, made the list read as
+/// four separate widgets rather than one list of four habits — and the
+/// panels carried no information the content inside them did not already
+/// carry. What separates one habit from the next is a hairline.
 ///
-/// * **The glyph** manages the habit — tap opens detail, long-press raises
+/// The fill is the *page* colour rather than a surface colour: invisible at
+/// rest, and opaque enough to slide cleanly over the swipe backdrop when the
+/// row is dragged.
+///
+/// The row divides into two handles, and the division is the same on every
+/// row in the app:
+///
+/// * **The ring** manages the habit — tap opens detail, long-press raises
 ///   the context menu.
 /// * **The body** logs it — binary habits are swiped, quantity and duration
 ///   habits are held.
@@ -55,7 +62,7 @@ class HabitCard extends StatefulWidget {
 
   final VoidCallback onFreeze;
 
-  static const double height = 78;
+  static const double height = 72;
 
   @override
   State<HabitCard> createState() => _HabitCardState();
@@ -63,9 +70,9 @@ class HabitCard extends StatefulWidget {
 
 class _HabitCardState extends State<HabitCard>
     with SingleTickerProviderStateMixin {
-  // Built eagerly in initState rather than lazily: a card that is disposed
-  // without ever being dragged would otherwise construct its controller
-  // inside dispose(), which is too late to look up a TickerMode.
+  // Built eagerly in initState rather than lazily: a row disposed without
+  // ever being dragged would otherwise construct its controller inside
+  // dispose(), which is too late to look up a TickerMode.
   late final AnimationController _settle;
 
   double _drag = 0;
@@ -101,8 +108,8 @@ class _HabitCardState extends State<HabitCard>
   void _onDragUpdate(DragUpdateDetails details) {
     setState(() {
       _drag += details.delta.dx;
-      // Resistance past the commit point, so the card never slides right
-      // off the screen and the threshold stays findable by feel.
+      // Resistance past the commit point, so the row never slides right off
+      // the screen and the threshold stays findable by feel.
       final limit = _cardWidth * 0.62;
       _drag = _drag.clamp(-limit, limit);
       _phase += details.delta.dx * 0.03;
@@ -120,28 +127,7 @@ class _HabitCardState extends State<HabitCard>
       }
       return;
     }
-    _springBack();
-  }
-
-  void _springBack() {
-    final from = _drag;
-    _settle
-      ..reset()
-      ..duration = TideMotion.swipeCancel;
-
-    final animation = _settle.drive(
-      Tween<double>(
-        begin: from,
-        end: 0,
-      ).chain(CurveTween(curve: TideMotion.swipeCancelCurve)),
-    );
-
-    void tick() => setState(() => _drag = animation.value);
-    animation.addListener(tick);
-    _settle.forward().whenComplete(() {
-      animation.removeListener(tick);
-      if (mounted) setState(() => _drag = 0);
-    });
+    _animateDragHome(TideMotion.swipeCancel, TideMotion.swipeCancelCurve);
   }
 
   /// Snap into place, then hand off to the store. The ripple fires here so
@@ -149,27 +135,24 @@ class _HabitCardState extends State<HabitCard>
   void _commitLog() {
     HapticFeedback.mediumImpact();
     setState(() => _rippleTick++);
-    _snapHome();
+    _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
     widget.onLog(widget.habit.target);
   }
 
   void _commitFreeze() {
     HapticFeedback.mediumImpact();
-    _snapHome();
+    _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
     widget.onFreeze();
   }
 
-  void _snapHome() {
+  void _animateDragHome(Duration duration, Curve curve) {
     final from = _drag;
     _settle
       ..reset()
-      ..duration = TideMotion.swipeSettle;
+      ..duration = duration;
 
     final animation = _settle.drive(
-      Tween<double>(
-        begin: from,
-        end: 0,
-      ).chain(CurveTween(curve: Curves.easeOutCubic)),
+      Tween<double>(begin: from, end: 0).chain(CurveTween(curve: curve)),
     );
 
     void tick() => setState(() => _drag = animation.value);
@@ -190,28 +173,22 @@ class _HabitCardState extends State<HabitCard>
 
   // --- Copy -------------------------------------------------------------
 
-  String get _hint {
-    if (_frozen) return 'frozen · streak held';
-    if (_done) return 'logged';
-
-    return switch (widget.habit.type) {
-      HabitType.binary => 'swipe right to log',
-      HabitType.quantity ||
-      HabitType.duration => 'hold to log · ${_amountLabel()}',
-    };
+  /// The second line, and only when there is something to say.
+  ///
+  /// This used to spell out the gesture on every row forever — "swipe right
+  /// to log" under all four habits, every day. An affordance label that
+  /// never retires stops being help and becomes noise, and the ring already
+  /// shows where the habit stands.
+  String? get _detail {
+    if (_frozen) return 'frozen, streak held';
+    if (_done) return null;
+    if (widget.habit.type == HabitType.binary) return null;
+    return '${_amount()} of ${widget.habit.target}';
   }
 
-  String _amountLabel() {
+  String _amount() {
     final amount = widget.habit.amountOn(DateTime.now());
-    final shown = amount == amount.roundToDouble() ? amount.round() : amount;
-    return '$shown/${widget.habit.target}';
-  }
-
-  /// The trailing pill: the streak, unless a quantity habit is part-way
-  /// through today, in which case the amount is the more useful number.
-  String get _pillLabel {
-    final partial = widget.habit.type != HabitType.binary && !_done;
-    return partial ? _amountLabel() : '${widget.streak}';
+    return '${amount == amount.roundToDouble() ? amount.round() : amount}';
   }
 
   @override
@@ -236,8 +213,8 @@ class _HabitCardState extends State<HabitCard>
                 offset: Offset(_drag, 0),
                 child: RippleBurst(
                   trigger: _rippleTick,
-                  color: TideColors.kelpGreen,
-                  borderRadius: TideElevation.radius16,
+                  color: TideColors.lantern,
+                  borderRadius: BorderRadius.zero,
                   child: _body(),
                 ),
               ),
@@ -249,51 +226,68 @@ class _HabitCardState extends State<HabitCard>
   }
 
   Widget _body() {
-    final surface = TideSurface(
-      radius: TideElevation.radius16,
+    final detail = _detail;
+
+    final row = Container(
       height: HabitCard.height,
-      // Completed cards wash kelp green — the state is carried by the
-      // surface itself, not by a badge bolted onto it. Frozen rows wash
-      // foam instead, so the two held states never read as the same thing.
-      gradient: TideGradients.habitRow(
-        tint: _frozen
-            ? TideColors.foamCyan
-            : _done
-            ? TideColors.kelpGreen
-            : null,
-        amount: _frozen ? 0.08 : 0.11,
-      ),
-      shadows: _done
-          ? [
-              ...TideElevation.resting,
-              BoxShadow(
-                color: TideColors.kelpGreen.withValues(alpha: 0.12),
-                blurRadius: 18,
-                spreadRadius: -8,
-                offset: const Offset(0, 4),
-              ),
-            ]
-          : null,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      // Page-coloured and opaque: nothing to see at rest, but solid enough
+      // to slide over the swipe backdrop without it bleeding through.
+      color: TideColors.deepWater,
       child: Row(
         children: [
-          _glyphHandle(),
+          _ringHandle(),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  widget.habit.name,
+                  style: TideType.heading.copyWith(
+                    color: _done ? TideColors.silt : TideColors.bone,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (detail != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    detail,
+                    style: TideType.labelMuted,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
           const SizedBox(width: 14),
-          Expanded(child: _details()),
-          const SizedBox(width: 12),
-          _streakPill(),
+          RippleStrip(levels: widget.weekLevels),
+          const SizedBox(width: 16),
+          SizedBox(
+            width: 26,
+            child: Text(
+              '${widget.streak}',
+              textAlign: TextAlign.right,
+              style: TideType.gauge(
+                17,
+                color: _done ? TideColors.lantern : TideColors.silt,
+              ),
+            ),
+          ),
         ],
       ),
     );
 
-    // Binary habits swipe; held habits hold. One gesture per card body.
+    // Binary habits swipe; held habits hold. One gesture per row body.
     if (widget.habit.type == HabitType.binary) {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onHorizontalDragUpdate: _onDragUpdate,
         onHorizontalDragEnd: _onDragEnd,
         onTap: widget.onOpen,
-        child: surface,
+        child: row,
       );
     }
 
@@ -306,22 +300,17 @@ class _HabitCardState extends State<HabitCard>
       builder: (context, progress, holding) {
         return Stack(
           children: [
-            surface,
+            row,
             if (holding)
               Positioned.fill(
                 child: IgnorePointer(
-                  child: ClipRRect(
-                    borderRadius: TideElevation.radius16,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: progress,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: TideGradients.accentWash(alpha: 0.16),
-                          ),
-                          child: const SizedBox.expand(),
-                        ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: progress,
+                      child: ColoredBox(
+                        color: TideColors.lantern.withValues(alpha: 0.10),
+                        child: const SizedBox.expand(),
                       ),
                     ),
                   ),
@@ -335,98 +324,42 @@ class _HabitCardState extends State<HabitCard>
 
   /// The management handle. Deliberately its own hit target so a long-press
   /// here never competes with the hold-to-log gesture on the body.
-  Widget _glyphHandle() {
-    final ringColor = _frozen
-        ? TideColors.foamCyan
-        : _done
-        ? TideColors.kelpGreen
-        : TideColors.tideBlue;
-
+  Widget _ringHandle() {
     return PressScale(
       onTap: widget.onOpen,
       onLongPress: widget.onMenu,
-      child: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          // A ring with nothing in it yet gets no glow, so the row's one
-          // point of light always means "there is progress here".
-          boxShadow: [
-            BoxShadow(
-              color: ringColor.withValues(
-                alpha: 0.30 * (_done ? 1 : _progress),
-              ),
-              blurRadius: 14,
-              spreadRadius: -4,
-            ),
-          ],
-        ),
-        child: TideRing(
-          progress: _done ? 1 : _progress,
-          size: 36,
-          strokeWidth: 2.5,
-          color: ringColor,
-          child: HabitGlyph(
-            glyph: widget.habit.glyph,
-            size: 14,
-            color: ringColor,
-          ),
+      child: TideRing(
+        progress: _done ? 1 : _progress,
+        size: 34,
+        strokeWidth: 2,
+        color: _frozen
+            ? TideColors.lantern.withValues(alpha: 0.55)
+            : TideColors.lantern,
+        child: HabitGlyph(
+          glyph: widget.habit.glyph,
+          size: 14,
+          color: _done
+              ? TideColors.lantern
+              : TideColors.bone.withValues(alpha: 0.75),
         ),
       ),
     );
   }
+}
 
-  Widget _details() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          widget.habit.name,
-          style: TideType.heading,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 9),
-        Row(
-          children: [
-            SizedBox(
-              width: 66,
-              child: RippleStrip(
-                levels: widget.weekLevels,
-                color: _done ? TideColors.kelpGreen : null,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _hint,
-                style: TideType.labelMuted.copyWith(
-                  color: _done ? TideColors.kelpGreen : TideColors.textMuted,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+/// The hairline between two habit rows.
+///
+/// Inset past the ring so the rule starts at the text column — a divider
+/// that runs the full width cuts the list into equal slabs, where one that
+/// starts under the content reads as a list that continues.
+class HabitRowDivider extends StatelessWidget {
+  const HabitRowDivider({super.key});
 
-  Widget _streakPill() {
-    final done = _done;
-    final color = done ? TideColors.kelpGreen : TideColors.tideBlue;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-      decoration: BoxDecoration(
-        gradient: done
-            ? TideGradients.completedWash(alpha: 0.20)
-            : TideGradients.accentWash(alpha: 0.16),
-        borderRadius: TideElevation.radius8,
-        border: Border.all(color: color.withValues(alpha: 0.22)),
-      ),
-      child: Text(_pillLabel, style: TideType.gaugeSmall(color: color)),
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 50),
+      child: Container(height: 1, color: TideColors.hairline),
     );
   }
 }

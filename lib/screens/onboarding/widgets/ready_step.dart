@@ -42,7 +42,7 @@ class ReadyStep extends StatelessWidget {
                 width: 13,
                 height: 13,
                 decoration: const BoxDecoration(
-                  color: TideColors.foamCyan,
+                  color: TideColors.lantern,
                   shape: BoxShape.circle,
                 ),
               ),

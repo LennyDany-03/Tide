@@ -1,33 +1,28 @@
 import 'package:flutter/material.dart';
 
+import '../theme/tide_colors.dart';
 import '../theme/tide_gradients.dart';
 import '../theme/tide_motion.dart';
 import 'grain_overlay.dart';
 
-/// The page ground for every screen.
+/// The page ground for every screen: flat deep water, plus grain.
 ///
-/// Four layers, painted bottom up:
+/// Flat is deliberate and it is load-bearing. Habit rows paint themselves in
+/// the page colour so they vanish at rest and still travel opaquely over the
+/// swipe backdrop when dragged — the moment the ground has a ramp or a bloom
+/// in it, those rows stop matching and read as a lighter slab down the
+/// middle of the screen.
 ///
-/// 1. the vertical page gradient,
-/// 2. three edgeless blooms of light in the water,
-/// 3. a top vignette that keeps the status bar legible over the crown,
-/// 4. the grain wash.
-///
-/// The blooms are the reason this exists. The old background put a single
-/// two-stop radial gradient over a flat fill, and a two-stop radial fades
-/// linearly — which draws a findable circle exactly where the ramp hits
-/// zero. That circle is what made the screen look printed rather than lit.
-/// [TideGradients.bloom] front-loads the falloff so there is no rim left to
-/// find, and three overlapping blooms at different sizes give the ground a
-/// direction instead of a centre.
+/// [drift] turns on the one bloom of warm light, for onboarding only: the
+/// screen with no rows to mismatch and no history to show, where a still
+/// ground reads as a page that has not finished loading.
 class TideBackdrop extends StatefulWidget {
   const TideBackdrop({super.key, this.drift = false, this.grain = true});
 
-  /// Whether the blooms drift.
+  /// Whether the ground carries drifting light. Onboarding only.
   ///
-  /// Off almost everywhere: the app's rule is that motion has to be caused
-  /// by something the user did. Onboarding is the exception — it has no
-  /// history to show yet, so stillness there reads as an unloaded page.
+  /// Off everywhere else: the app's rule is that motion has to be caused by
+  /// something the user did.
   final bool drift;
 
   final bool grain;
@@ -75,10 +70,10 @@ class _TideBackdropState extends State<TideBackdrop>
   Widget build(BuildContext context) {
     final controller = _controller;
 
-    // A still backdrop paints once and is cached; only the drifting one
-    // rebuilds per frame, and even then it is a handful of gradient rects.
+    // A still backdrop is one flat rect and is cached; only the drifting
+    // one rebuilds per frame, and even then it is a single gradient.
     final ground = controller == null
-        ? const _Ground(phase: 0.42)
+        ? const ColoredBox(color: TideColors.deepWater, child: SizedBox.expand())
         : AnimatedBuilder(
             animation: controller,
             builder: (context, _) => _Ground(phase: controller.value),
@@ -120,9 +115,9 @@ class _GroundPainter extends CustomPainter {
       canvas.drawRect(rect, Paint()..shader = gradient.createShader(rect));
     }
 
-    wash(TideGradients.page);
-    // The blooms are laid in the same rect rather than their own bounds, so
-    // an alignment past ±1 genuinely parks the core off-screen.
+    canvas.drawRect(rect, Paint()..color = TideColors.deepWater);
+    // The bloom is laid in the same rect rather than its own bounds, so an
+    // alignment past ±1 genuinely parks the core off-screen.
     TideGradients.pageBlooms(phase).forEach(wash);
   }
 
@@ -144,9 +139,7 @@ class TideTopScrim extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final inset = MediaQuery.viewPaddingOf(context).top;
-    // Matches the first stop of the page gradient, which is what the top
-    // few pixels of the backdrop actually are.
-    final ground = TideGradients.page.colors.first;
+    const ground = TideColors.deepWater;
 
     return IgnorePointer(
       child: SizedBox(

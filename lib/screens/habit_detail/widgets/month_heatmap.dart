@@ -3,21 +3,28 @@ import 'package:flutter/material.dart';
 import '../../../config/app_constants.dart';
 import '../../../services/models/habit.dart';
 import '../../../theme/tide_colors.dart';
-import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
-import '../../../widgets/tide_surface.dart';
 
-/// One month of a single habit, as intensity of tide blue.
+/// One month of a single habit, as intensity of lantern.
 ///
-/// Cells fill in staggered by day rather than all at once, so the month
-/// reads as filling the way it was actually lived — a ripple spreading
-/// across the grid rather than a table being painted.
+/// Fixed-size cells, left-aligned, rather than seven columns stretched
+/// across the page. Stretching made each square about 46 logical pixels, and
+/// a month of empty 46px squares with no dates in them is a large dark grid
+/// that dominates a screen it is only a supporting figure on. At this size
+/// it reads as what it is — a small multiple you take in at a glance.
+///
+/// Cells fill in staggered by day rather than all at once, so the month reads
+/// as filling the way it was actually lived: a ripple spreading across the
+/// grid rather than a table being painted.
 class MonthHeatmap extends StatelessWidget {
   const MonthHeatmap({super.key, required this.habit, required this.month});
 
   final Habit habit;
   final DateTime month;
+
+  static const double _cellSize = 30;
+  static const double _gap = 6;
 
   int get _daysInMonth => DateUtils.getDaysInMonth(month.year, month.month);
 
@@ -49,44 +56,36 @@ class MonthHeatmap extends StatelessWidget {
     final cellCount = leading + _daysInMonth;
     final rows = (cellCount / 7).ceil();
 
-    return TideSurface(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                AppConstants.monthNames[month.month - 1],
-                style: TideType.heading,
-              ),
-              const Spacer(),
-              Text(
-                '${(_rate * 100).round()}% of days logged',
-                style: TideType.labelMuted,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          for (var row = 0; row < rows; row++) ...[
-            if (row > 0) const SizedBox(height: 6),
-            Row(
-              children: [
-                for (var col = 0; col < 7; col++) ...[
-                  if (col > 0) const SizedBox(width: 6),
-                  Expanded(
-                    child: _cell(
-                      index: row * 7 + col,
-                      leading: leading,
-                      today: today,
-                    ),
-                  ),
-                ],
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              AppConstants.monthNames[month.month - 1],
+              style: TideType.heading,
+            ),
+            const Spacer(),
+            Text(
+              '${(_rate * 100).round()}% of days logged',
+              style: TideType.labelMuted,
             ),
           ],
+        ),
+        const SizedBox(height: 18),
+        for (var row = 0; row < rows; row++) ...[
+          if (row > 0) const SizedBox(height: _gap),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var col = 0; col < 7; col++) ...[
+                if (col > 0) const SizedBox(width: _gap),
+                _cell(index: row * 7 + col, leading: leading, today: today),
+              ],
+            ],
+          ),
         ],
-      ),
+      ],
     );
   }
 
@@ -98,7 +97,7 @@ class MonthHeatmap extends StatelessWidget {
     final dayNumber = index - leading + 1;
 
     if (dayNumber < 1 || dayNumber > _daysInMonth) {
-      return const AspectRatio(aspectRatio: 1, child: SizedBox.shrink());
+      return const SizedBox(width: _cellSize, height: _cellSize);
     }
 
     final date = DateTime(month.year, month.month, dayNumber);
@@ -112,6 +111,7 @@ class MonthHeatmap extends StatelessWidget {
         : habit.progressOn(date);
 
     return _HeatCell(
+      size: _cellSize,
       level: level,
       // Staggering by day index is what makes the fill sweep across the
       // month instead of appearing all at once.
@@ -124,12 +124,14 @@ class MonthHeatmap extends StatelessWidget {
 
 class _HeatCell extends StatelessWidget {
   const _HeatCell({
+    required this.size,
     required this.level,
     required this.delay,
     required this.dimmed,
     required this.isToday,
   });
 
+  final double size;
   final double level;
   final Duration delay;
   final bool dimmed;
@@ -137,8 +139,9 @@ class _HeatCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1,
+    return SizedBox(
+      width: size,
+      height: size,
       child: TweenAnimationBuilder<double>(
         tween: Tween<double>(end: 1),
         duration: TideMotion.cellFill + delay,
@@ -152,19 +155,21 @@ class _HeatCell extends StatelessWidget {
           curve: Curves.easeOutCubic,
         ),
         builder: (context, t, _) {
-          final target = dimmed
-              ? TideColors.well.withValues(alpha: 0.5)
+          // An unlogged day is a faint ink wash, matching the calendar's
+          // empty cell. Anything darker than the page reads as a hole.
+          final empty = TideColors.bone.withValues(alpha: 0.06);
+          final target = dimmed ? empty.withValues(alpha: 0.03)
               : TideColors.intensity(level);
 
           return Transform.scale(
             scale: 0.82 + 0.18 * t,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Color.lerp(TideColors.well, target, t),
-                borderRadius: TideElevation.radius8,
+                color: Color.lerp(empty, target, t),
+                borderRadius: BorderRadius.circular(8),
                 border: isToday
                     ? Border.all(
-                        color: TideColors.foamCyan.withValues(alpha: 0.7),
+                        color: TideColors.lantern.withValues(alpha: 0.7),
                         width: 1.4,
                       )
                     : null,

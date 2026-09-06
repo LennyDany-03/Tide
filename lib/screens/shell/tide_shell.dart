@@ -41,12 +41,16 @@ class TideShell extends StatelessWidget {
     return TideTab.all.any((tab) => tab.path == location);
   }
 
-  /// Where the add action belongs: the three list tabs, and only at their
-  /// root. Settings has nothing to add, and a pushed screen — habit detail —
-  /// carries its own controls at the bottom of the page, which the FAB would
-  /// otherwise sit directly on top of.
+  /// Where the add action belongs: Today, and only at its root.
+  ///
+  /// It used to ride along on History and Insights too. Those two screens
+  /// are for reading back what already happened — putting the app's one
+  /// primary action on them means the brightest object on a review screen
+  /// is a button that has nothing to do with reviewing. A pushed screen —
+  /// habit detail — carries its own controls at the bottom of the page,
+  /// which the FAB would otherwise sit directly on top of.
   bool _showFab(BuildContext context) =>
-      navigationShell.currentIndex != 3 && _atTabRoot(context);
+      navigationShell.currentIndex == 0 && _atTabRoot(context);
 
   void _onTap(int index) {
     navigationShell.goBranch(
