@@ -137,7 +137,11 @@ class _HabitCardState extends State<HabitCard>
       // Resistance past the commit point, so the row never slides right off
       // the screen and the threshold stays findable by feel.
       final limit = _cardWidth * 0.62;
-      _drag = _drag.clamp(-limit, limit);
+      // A measured habit is completed in its count drawer, not by a
+      // binary check gesture. Do not even reveal the gold check side for
+      // it: showing an action that will spring back is misleading.
+      final max = widget.habit.type == HabitType.binary ? limit : 0.0;
+      _drag = _drag.clamp(-limit, max);
       _phase += details.delta.dx * 0.03;
     });
   }
