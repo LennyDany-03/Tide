@@ -93,6 +93,8 @@ class _HomeScreenState extends State<HomeScreen> {
     showHabitContextMenu(
       context,
       habit: habit,
+      streak: StreakCalculator.currentStreak(habit),
+      onDetails: () => context.push(Routes.habit(habit.id)),
       onEdit: () => context.push(Routes.editHabit(habit.id)),
       onPause: () => store.togglePause(habit.id),
       onDelete: () => store.deleteHabit(habit.id),
@@ -162,14 +164,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 // No section header above the list. "HABITS ———— 4" was
                 // labelling the only list on the screen, ruling it off and
                 // then counting it — three pieces of chrome to introduce
-                // four rows that introduce themselves.
-                const SliverToBoxAdapter(child: SizedBox(height: 36)),
+                // four cards that introduce themselves.
+                const SliverToBoxAdapter(child: SizedBox(height: 28)),
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverToBoxAdapter(
                     child: ReorderingHabitList(
                       itemHeight: HabitCard.height,
-                      separator: const HabitRowDivider(),
+                      spacing: HabitCard.gap,
                       itemKeys: [for (final habit in habits) habit.id],
                       itemBuilder: (context, id) {
                         final habit = store.habitById(id);

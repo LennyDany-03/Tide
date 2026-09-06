@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../services/models/habit.dart';
 import '../../../theme/tide_colors.dart';
+import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/habit_glyph.dart';
@@ -10,35 +11,43 @@ import '../../../widgets/press_scale.dart';
 import '../../../widgets/ripple_burst.dart';
 import '../../../widgets/ripple_strip.dart';
 import '../../../widgets/tide_ring.dart';
+import '../../../widgets/tide_surface.dart';
 import 'swipe_log_background.dart';
 
 /// One habit on Home, and the gesture surface for logging it.
 ///
-/// A row, not a card. Four rounded panels stacked down the main screen, each
-/// with its own fill, border, shadow and inner pills, made the list read as
-/// four separate widgets rather than one list of four habits — and the
-/// panels carried no information the content inside them did not already
-/// carry. What separates one habit from the next is a hairline.
+/// An enclosed card. The list spent a while as full-bleed rows separated by
+/// a hairline, on the argument that a panel carried no information the
+/// content inside it did not already carry. True, and beside the point: on
+/// a near-black ground four hairlines do not read as four objects, they
+/// read as ruling on a page, and the habit you are aiming a thumb at has no
+/// edge to it. Giving each habit a fill one step off the page, a hairline
+/// all the way round and a 20px radius is what makes it a thing you can
+/// pick up rather than a line of text with a gesture attached.
 ///
-/// The fill is the *page* colour rather than a surface colour: invisible at
-/// rest, and opaque enough to slide cleanly over the swipe backdrop when the
-/// row is dragged.
+/// The fill is [TideColors.shelf] rather than the page colour — one step of
+/// luminance, no gradient — and it is opaque, which is what still lets the
+/// card slide cleanly over the swipe backdrop when it is dragged.
 ///
-/// The row divides into two handles, and the division is the same on every
-/// row in the app:
+/// The card divides into two handles, and the division is the same on every
+/// card in the app:
 ///
-/// * **The ring** manages the habit — tap opens detail, long-press raises
-///   the context menu.
+/// * **The ring** opens the habit — a tap goes to detail.
 /// * **The body** logs it — binary habits are swiped, and a habit with a
 ///   count opens the log sheet, where its units are metered out one at a
 ///   time.
 ///
-/// That split is what lets a row keep a long-press menu without the two
-/// gestures fighting each other for the same pixels.
+/// **A long press anywhere on the card** raises the context menu. It used
+/// to be reachable only from the ring, which is a 34px target for the one
+/// gesture people go looking for when they want to edit or delete
+/// something — so in practice the menu was not reachable at all. Long press
+/// and horizontal drag settle in the gesture arena on their own (movement
+/// picks the drag, stillness picks the press), so the whole card can carry
+/// both without the two fighting.
 ///
 /// The body used to hold-to-log a counted habit in place, sweeping the
 /// whole target under one finger. Two problems: the only outcomes were
-/// nothing and all ten, and a slow gesture sat on a row you scroll past.
+/// nothing and all ten, and a slow gesture sat on a card you scroll past.
 /// The counting moved to a surface of its own.
 class HabitCard extends StatefulWidget {
   const HabitCard({
@@ -70,7 +79,15 @@ class HabitCard extends StatefulWidget {
 
   final VoidCallback onFreeze;
 
-  static const double height = 72;
+  /// Taller than the hairline rows it replaced: a card needs its content to
+  /// sit off its own edges, not just off its neighbours.
+  static const double height = 78;
+
+  /// Vertical air between two cards. Enough that the gap reads as ground
+  /// showing through rather than as a thick divider.
+  static const double gap = 10;
+
+  static const BorderRadius radius = TideElevation.radius20;
 
   @override
   State<HabitCard> createState() => _HabitCardState();
@@ -206,6 +223,7 @@ class _HabitCardState extends State<HabitCard>
                   offset: _drag,
                   width: _cardWidth,
                   phase: _phase,
+                  radius: HabitCard.radius,
                   freezeAvailable: widget.habit.freezesRemaining > 0,
                 ),
               ),
@@ -214,7 +232,7 @@ class _HabitCardState extends State<HabitCard>
                 child: RippleBurst(
                   trigger: _rippleTick,
                   color: TideColors.lantern,
-                  borderRadius: BorderRadius.zero,
+                  borderRadius: HabitCard.radius,
                   child: _body(),
                 ),
               ),
@@ -228,15 +246,16 @@ class _HabitCardState extends State<HabitCard>
   Widget _body() {
     final detail = _detail;
 
-    final row = Container(
+    final row = TideSurface(
       height: HabitCard.height,
-      // Page-coloured and opaque: nothing to see at rest, but solid enough
-      // to slide over the swipe backdrop without it bleeding through.
-      color: TideColors.deepWater,
+      radius: HabitCard.radius,
+      color: _fill,
+      border: Border.all(color: _edge),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Row(
         children: [
           _ringHandle(),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,11 +281,11 @@ class _HabitCardState extends State<HabitCard>
               ],
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           RippleStrip(levels: widget.weekLevels),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           SizedBox(
-            width: 26,
+            width: 24,
             child: Text(
               '${widget.streak}',
               textAlign: TextAlign.right,
@@ -280,27 +299,54 @@ class _HabitCardState extends State<HabitCard>
       ),
     );
 
-    // One gesture per row body: binary habits swipe, counted habits open
-    // the sheet that counts them.
-    if (widget.habit.type == HabitType.binary) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragUpdate: _onDragUpdate,
-        onHorizontalDragEnd: _onDragEnd,
-        onTap: widget.onOpen,
-        child: row,
-      );
-    }
+    // Tap and long press ride on the card itself. A shallower press than the
+    // global default — 0.97 on a full-width card is a lurch, where the same
+    // ratio on a chip is a nudge.
+    final pressable = PressScale(
+      scale: 0.985,
+      onTap: widget.habit.type == HabitType.binary
+          ? widget.onOpen
+          : widget.onCount,
+      onLongPress: widget.onMenu,
+      child: row,
+    );
 
+    if (widget.habit.type != HabitType.binary) return pressable;
+
+    // The drag sits outside the press, so a horizontal move takes the
+    // gesture off the tap recogniser instead of racing it.
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: widget.onCount,
-      child: row,
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      child: pressable,
     );
   }
 
-  /// The management handle. Deliberately its own hit target so a long-press
-  /// here never competes with the hold-to-log gesture on the body.
+  /// The card fill. One step of luminance off the page, warmed very
+  /// slightly once the habit is done — the same accent as everything else,
+  /// at the lowest intensity it is used at anywhere.
+  Color get _fill => _done
+      ? Color.lerp(TideColors.shelf, TideColors.lantern, 0.05)!
+      : TideColors.shelf;
+
+  /// The hairline round the card, and the only place its state is spelled
+  /// out on the edge rather than inside it.
+  ///
+  /// Kept low on purpose. A brighter warm edge on a finished habit made the
+  /// two done cards the loudest things in a list whose whole job is to show
+  /// what is still outstanding — done is already carried by a full ring, a
+  /// silt name and a lantern streak figure, and it does not need a fourth
+  /// signal competing for the eye.
+  Color get _edge {
+    if (_frozen) return TideColors.lantern.withValues(alpha: 0.16);
+    if (_done) return TideColors.lantern.withValues(alpha: 0.18);
+    return TideColors.hairline;
+  }
+
+  /// The open handle. Its own hit target because for a counted habit the
+  /// card's tap goes to the log sheet, and there still has to be one place
+  /// on the card that goes to detail instead.
   Widget _ringHandle() {
     return PressScale(
       onTap: widget.onOpen,
@@ -320,23 +366,6 @@ class _HabitCardState extends State<HabitCard>
               : TideColors.bone.withValues(alpha: 0.75),
         ),
       ),
-    );
-  }
-}
-
-/// The hairline between two habit rows.
-///
-/// Inset past the ring so the rule starts at the text column — a divider
-/// that runs the full width cuts the list into equal slabs, where one that
-/// starts under the content reads as a list that continues.
-class HabitRowDivider extends StatelessWidget {
-  const HabitRowDivider({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 50),
-      child: Container(height: 1, color: TideColors.hairline),
     );
   }
 }

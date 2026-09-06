@@ -84,13 +84,23 @@ abstract final class TideMotion {
   /// Hold-to-fill: how long a hold must be sustained to commit.
   static const Duration holdToCommit = Duration(milliseconds: 1200);
 
-  /// One unit of a quantity or duration habit, counted out while the log
-  /// sheet's control is held.
+  /// How long the log sheet's control must be held to bank a single unit.
   ///
-  /// Long enough that every unit is a beat you can hear and stop on, short
-  /// enough that a ten-unit target is a couple of seconds rather than a
-  /// chore. A single sweep across the whole target is faster and logs the
-  /// lot before you can react to any of it.
+  /// One hold, one unit. The control used to fire on touch-down and then
+  /// repeat on a 260ms metronome for as long as it was held, which meant a
+  /// resting thumb ran an eight-glass target from empty to full in under
+  /// two seconds. Nothing about that was addressable: you could not stop on
+  /// six, because six went past before you had finished reacting to five.
+  ///
+  /// Long enough to read as deliberate rather than as a tap, short enough
+  /// that it is not a chore. The nudge buttons beside it are there for the
+  /// targets where holding this out unit by unit would be.
+  static const Duration holdUnit = Duration(milliseconds: 520);
+
+  /// The log sheet's ring catching up to a unit that has just landed.
+  ///
+  /// Shorter than [holdUnit] on purpose — the ring should have finished
+  /// moving by the time a second hold could bank anything.
   static const Duration holdStep = Duration(milliseconds: 260);
 
   // --- Feedback ---------------------------------------------------------

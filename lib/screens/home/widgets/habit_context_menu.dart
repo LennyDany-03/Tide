@@ -10,15 +10,25 @@ import '../../../widgets/hold_to_fill.dart';
 import '../../../widgets/press_scale.dart';
 import '../../../widgets/tide_sheet.dart';
 
-/// The long-press menu.
+/// The long-press menu, raised from anywhere on a habit card.
+///
+/// Everything you can do to a habit that is not logging it, in the order you
+/// reach for it: look at it, change it, park it, destroy it. **Habit
+/// details** is the entry that was missing — long-pressing a habit and
+/// finding no route through to its own screen sent people back to the card
+/// to hunt for a second, different gesture that opened it.
 ///
 /// Floating elevation over a blurred backdrop, so it reads as lifted off the
-/// page rather than as another card. Delete lives here behind the same
-/// coral hold-to-fill used on Habit detail and in Settings — the gesture
-/// that destroys things never changes shape.
+/// page rather than as another card. The shell carries a 20px radius and 8px
+/// of padding; the rows inside carry 12 — 20 minus 8, so the two curves are
+/// concentric rather than merely both rounded. Delete lives here behind the
+/// same coral hold-to-fill used on Habit detail and in Settings — the
+/// gesture that destroys things never changes shape.
 Future<void> showHabitContextMenu(
   BuildContext context, {
   required Habit habit,
+  required int streak,
+  required VoidCallback onDetails,
   required VoidCallback onEdit,
   required VoidCallback onPause,
   required VoidCallback onDelete,
@@ -50,6 +60,8 @@ Future<void> showHabitContextMenu(
                 scale: Tween<double>(begin: 0.9, end: 1).animate(curved),
                 child: _Menu(
                   habit: habit,
+                  streak: streak,
+                  onDetails: onDetails,
                   onEdit: onEdit,
                   onPause: onPause,
                   onDelete: onDelete,
@@ -66,15 +78,27 @@ Future<void> showHabitContextMenu(
 class _Menu extends StatelessWidget {
   const _Menu({
     required this.habit,
+    required this.streak,
+    required this.onDetails,
     required this.onEdit,
     required this.onPause,
     required this.onDelete,
   });
 
   final Habit habit;
+  final int streak;
+  final VoidCallback onDetails;
   final VoidCallback onEdit;
   final VoidCallback onPause;
   final VoidCallback onDelete;
+
+  /// Where the habit stands, said once, so the menu is not four verbs
+  /// floating over a screen you can no longer see behind it.
+  String get _subtitle {
+    if (habit.paused) return 'Paused';
+    if (streak > 0) return '$streak day streak';
+    return 'No streak yet';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,28 +110,63 @@ class _Menu extends StatelessWidget {
           decoration: BoxDecoration(
             color: TideColors.shoal,
             borderRadius: TideElevation.radius20,
+            border: Border.all(color: TideColors.bone.withValues(alpha: 0.08)),
             boxShadow: TideElevation.floating,
           ),
-          padding: const EdgeInsets.all(18),
+          // 8, so the rows' 12 sits concentric inside the shell's 20.
+          padding: const EdgeInsets.all(8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  HabitGlyph(glyph: habit.glyph, size: 16),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      habit.name,
-                      style: TideType.heading,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(
+                        color: TideColors.trench,
+                        borderRadius: TideElevation.radius12,
+                      ),
+                      child: Center(
+                        child: HabitGlyph(
+                          glyph: habit.glyph,
+                          size: 15,
+                          color: TideColors.lantern,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            habit.name,
+                            style: TideType.heading,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(_subtitle, style: TideType.labelMuted),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
+              _MenuRow(
+                icon: Icons.insights_rounded,
+                label: 'Habit details',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  onDetails();
+                },
+              ),
+              const SizedBox(height: 6),
               _MenuRow(
                 icon: Icons.tune_rounded,
                 label: 'Edit habit',
@@ -116,7 +175,7 @@ class _Menu extends StatelessWidget {
                   onEdit();
                 },
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               _MenuRow(
                 icon: habit.paused
                     ? Icons.play_arrow_rounded
@@ -127,7 +186,7 @@ class _Menu extends StatelessWidget {
                   onPause();
                 },
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               HoldToConfirmButton(
                 label: 'Hold to delete',
                 holdingLabel: 'Keep holding…',
@@ -164,12 +223,18 @@ class _MenuRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: TideColors.trench,
           borderRadius: TideElevation.radius12,
+          border: Border.all(color: TideColors.bone.withValues(alpha: 0.06)),
         ),
         child: Row(
           children: [
             Icon(icon, size: 18, color: TideColors.silt),
             const SizedBox(width: 12),
-            Text(label, style: TideType.label),
+            Expanded(child: Text(label, style: TideType.label)),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 17,
+              color: TideColors.silt.withValues(alpha: 0.5),
+            ),
           ],
         ),
       ),

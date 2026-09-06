@@ -17,6 +17,7 @@ class SwipeLogBackground extends StatelessWidget {
     required this.offset,
     required this.width,
     required this.phase,
+    required this.radius,
     this.freezeAvailable = true,
   });
 
@@ -27,6 +28,10 @@ class SwipeLogBackground extends StatelessWidget {
 
   /// Advances the wave crest while the finger is down.
   final double phase;
+
+  /// Matched to the card's own radius. The backdrop is the shape the card
+  /// slides out of, so the two corners have to agree.
+  final BorderRadius radius;
 
   /// With no freeze tokens left, the left swipe shows a coral refusal
   /// instead of promising something it cannot deliver.
@@ -56,13 +61,13 @@ class SwipeLogBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     if (offset.abs() < 1) return const SizedBox.shrink();
 
-    // Square, not rounded. A habit row is a row — full-bleed, separated
-    // from the next one by a hairline — so a rounded panel behind it has
-    // corners that belong to no shape on the screen: they cut into the
-    // hairline above and below, and the square row sliding across them
-    // leaves a curved sliver of tint hanging off each end. The clip is
-    // still needed to keep the wave inside the row it belongs to.
-    return ClipRect(
+    // Rounded, and to the card's exact radius. This was square back when a
+    // habit was a full-bleed row: a rounded panel behind a square row left a
+    // curved sliver of tint hanging off each end. Now the card is the
+    // rounded thing, so a square backdrop would be the one showing corners —
+    // the tint has to be the socket the card lifts out of.
+    return ClipRRect(
+      borderRadius: radius,
       child: Stack(
         children: [
           Positioned.fill(
