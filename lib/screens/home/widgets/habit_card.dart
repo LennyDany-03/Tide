@@ -228,32 +228,62 @@ class _HabitCardState extends State<HabitCard>
       builder: (context, constraints) {
         _cardWidth = constraints.maxWidth;
 
+        // Rounded, not square. The stack used to clip with `Clip.hardEdge`,
+        // which is a rectangle — so a card sliding out of the row was cut
+        // off with a hard right angle at whichever end it was leaving,
+        // while the socket behind it kept the 20px radius. The two corners
+        // disagreed for the whole length of every swipe, which is exactly
+        // the moment the card is the only thing anybody is looking at.
+        //
+        // One rounded clip round the whole row instead: the socket, the
+        // card and the card's exit are all the same shape, and at rest the
+        // clip sits exactly on the card's own border.
         return SizedBox(
           height: HabitCard.height,
-          child: Stack(
-            clipBehavior: Clip.hardEdge,
-            children: [
-              Positioned.fill(
-                child: SwipeLogBackground(
-                  offset: _drag,
-                  width: _cardWidth,
-                  phase: _phase,
-                  radius: HabitCard.radius,
-                  freezeAvailable: widget.habit.freezesRemaining > 0,
-                  freezeOnRight: false,
-                  unfreezing: _frozen,
+          child: ClipRRect(
+            borderRadius: HabitCard.radius,
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: SwipeLogBackground(
+                    offset: _drag,
+                    width: _cardWidth,
+                    phase: _phase,
+                    radius: HabitCard.radius,
+                    freezeAvailable: widget.habit.freezesRemaining > 0,
+                    freezeOnRight: false,
+                    unfreezing: _frozen,
+                  ),
                 ),
-              ),
-              Transform.translate(
-                offset: Offset(_drag, 0),
-                child: _body(),
-              ),
-            ],
+                Transform.translate(
+                  offset: Offset(_drag, 0),
+                  child: _body(),
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
+
+  /// The card keeps all four corners, the whole way through a swipe.
+  ///
+  /// The alternative was tried and looked worse. Straightening whichever
+  /// edge had moved *into* the row is the tidier idea on paper — that side
+  /// has stopped being the edge of anything — and it does remove the seam
+  /// where the card's curve meets the socket's. But what it actually reads
+  /// as is the card being sliced off flat against the backdrop, and the
+  /// thing a swipe is supposed to say is that a card has *lifted away* and
+  /// left a socket behind it. A card is a rounded object; it does not stop
+  /// being one because part of it is over a tint.
+  ///
+  /// The seam is fine. The corner that genuinely was wrong is the row's,
+  /// and that is fixed one level up in [build]: the stack used to clip with
+  /// `Clip.hardEdge`, which is a rectangle, so the card left the row
+  /// through a right angle while the socket kept its radius.
 
   Widget _body() {
     final detail = _detail;

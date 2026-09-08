@@ -70,10 +70,14 @@ class SwipeLogBackground extends StatelessWidget {
   ///
   /// [TideColors.frost] is a near-white, so it carries far more luminance
   /// per unit of alpha than lantern; matched numerically the freeze side
-  /// blows out into a grey slab while the log side is still a tint.
+  /// blows out into a grey slab while the log side is still a tint. Lower
+  /// again now that the tint sits on the trench rather than on the page:
+  /// the recess is darker to begin with, so the same alpha lifted the ice
+  /// further clear of the card than it should ever get. A socket must read
+  /// as *under* the row, whatever colour is being washed into it.
   double get _tintAlpha {
-    final base = _completing ? 0.10 : 0.06;
-    final gain = _completing ? 0.14 : 0.10;
+    final base = _completing ? 0.10 : 0.045;
+    final gain = _completing ? 0.14 : 0.075;
     return base + gain * _approach;
   }
 
@@ -102,6 +106,19 @@ class SwipeLogBackground extends StatelessWidget {
       borderRadius: radius,
       child: Stack(
         children: [
+          // An opaque recess first, and only then the tint.
+          //
+          // The tint used to be painted straight onto whatever was behind
+          // the row, which is the page. Frost is a near-white, so a freeze
+          // swipe laid a pale wash over deep water and the exposed socket
+          // came out *lighter* than the card that had just slid off it —
+          // a card lifting away from a slab of grey rather than out of
+          // anything. The trench is the app's own recess colour, darker
+          // than the page for exactly this reason, and the tint reads as
+          // light falling into the cut instead of a panel behind it.
+          const Positioned.fill(
+            child: ColoredBox(color: TideColors.trench),
+          ),
           Positioned.fill(
             child: ColoredBox(color: _color.withValues(alpha: _tintAlpha)),
           ),

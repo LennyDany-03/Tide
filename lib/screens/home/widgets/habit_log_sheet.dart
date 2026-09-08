@@ -173,11 +173,19 @@ class _LogSheetState extends State<_LogSheet>
       // and its figure want.
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
-        // Centred rather than stretched: the row sits inside a scroll
-        // view, so there is no bounded height for a stretch to resolve
-        // against — the vessel carries the height and the readout centres
-        // against it.
+        // Centred as a group, not stretched across the sheet. Left-aligned
+        // with the readout expanded, the pair sat hard against the left
+        // edge with a hand's width of empty sheet beside it — on the one
+        // surface in the app whose entire content is two objects, which
+        // made it read as a layout that had failed rather than one that had
+        // been decided.
+        //
+        // The row also sits inside a scroll view, so there is no bounded
+        // height for a cross-axis stretch to resolve against: the vessel
+        // carries the height and the readout centres against it.
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
@@ -205,8 +213,11 @@ class _LogSheetState extends State<_LogSheet>
                 ),
               ),
             ),
-            const SizedBox(width: 22),
-            Expanded(
+            const SizedBox(width: 26),
+            // Capped rather than free: a custom unit long enough to wrap
+            // would otherwise push the vessel off its own centre.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 190),
               child: _Readout(
                 logged: logged,
                 habit: habit,
@@ -223,10 +234,12 @@ class _LogSheetState extends State<_LogSheet>
 
 /// The figure, what it is counted in, and how much is left.
 ///
-/// Left-aligned beside the vessel rather than centred inside a ring. A
-/// number that big is the thing the eye lands on, and a left edge shared
-/// with the two lines under it makes the three read as one statement
-/// instead of three centred captions.
+/// Beside the vessel rather than inside a ring, and centred on its own
+/// axis. Left-aligned it was technically centred and looked anything but:
+/// the vessel is a solid block and the readout is three lines of very
+/// different widths, so the pair's visual weight sat well left of the
+/// middle even with its geometry dead centre. Centring the three lines
+/// puts the optical centre where the geometric one already was.
 class _Readout extends StatelessWidget {
   const _Readout({
     required this.logged,
@@ -252,7 +265,7 @@ class _Readout extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           '${logged.round()}',
@@ -261,9 +274,14 @@ class _Readout extends StatelessWidget {
             letterSpacing: -3.4,
             color: complete ? TideColors.lantern : TideColors.bone,
           ),
+          textAlign: TextAlign.center,
         ),
         const SizedBox(height: 4),
-        Text('of ${habit.targetLabel}', style: TideType.labelMuted),
+        Text(
+          'of ${habit.targetLabel}',
+          style: TideType.labelMuted,
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 20),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -278,6 +296,7 @@ class _Readout extends StatelessWidget {
             style: TideType.label.copyWith(
               color: complete ? TideColors.lantern : TideColors.silt,
             ),
+            textAlign: TextAlign.center,
           ),
         ),
       ],
