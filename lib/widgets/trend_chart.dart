@@ -18,6 +18,7 @@ class TrendChart extends StatefulWidget {
     this.strokeWidth = 2,
     this.showEndDot = true,
     this.showPoints = false,
+    this.fill = false,
     this.delay = Duration.zero,
     this.onFinished,
   });
@@ -34,6 +35,15 @@ class TrendChart extends StatefulWidget {
 
   /// Dots on every point, for the shorter series on Insights.
   final bool showPoints;
+
+  /// A graded wash under the line, fading out toward the floor.
+  ///
+  /// Off for the sparkline on a habit card, where the chart is 26px tall
+  /// and a fill would be a smear. On for the one on Insights, which is the
+  /// largest figure on the screen after the headline and reads as a bare
+  /// wire without it — the fill is what turns a plotted series into
+  /// something with a water level under it.
+  final bool fill;
 
   final Duration delay;
 
@@ -88,6 +98,7 @@ class _TrendChartState extends State<TrendChart>
               strokeWidth: widget.strokeWidth,
               showEndDot: widget.showEndDot,
               showPoints: widget.showPoints,
+              fill: widget.fill,
             ),
           );
         },
@@ -104,6 +115,7 @@ class _TrendPainter extends CustomPainter {
     required this.strokeWidth,
     required this.showEndDot,
     required this.showPoints,
+    required this.fill,
   });
 
   final List<double> values;
@@ -112,6 +124,7 @@ class _TrendPainter extends CustomPainter {
   final double strokeWidth;
   final bool showEndDot;
   final bool showPoints;
+  final bool fill;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -162,6 +175,31 @@ class _TrendPainter extends CustomPainter {
       }
     }
 
+    // The wash first, so the line sits on top of its own fill rather than
+    // being half-covered by it.
+    if (fill) {
+      final metrics = path.computeMetrics().toList();
+      final end = metrics.isEmpty
+          ? pointAt(0)
+          : metrics.last.getTangentForOffset(metrics.last.length)!.position;
+
+      canvas.drawPath(
+        Path.from(path)
+          ..lineTo(end.dx, size.height)
+          ..lineTo(0, size.height)
+          ..close(),
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              color.withValues(alpha: 0.22),
+              color.withValues(alpha: 0),
+            ],
+          ).createShader(Offset.zero & size),
+      );
+    }
+
     canvas.drawPath(
       path,
       Paint()
@@ -194,5 +232,8 @@ class _TrendPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_TrendPainter old) =>
-      old.progress != progress || old.values != values || old.color != color;
+      old.progress != progress ||
+      old.values != values ||
+      old.color != color ||
+      old.fill != fill;
 }
