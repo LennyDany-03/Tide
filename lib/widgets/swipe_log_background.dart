@@ -136,6 +136,13 @@ class SwipeLogBackground extends StatelessWidget {
               color: _color,
               fill: true,
               strokeWidth: 1.5,
+              // Taper the outer end only. The end against the card is the
+              // one the water was pulled from, and flattening it there
+              // left a band of bare tint above the fill running the whole
+              // height of the seam — which is the "shadow" the card looked
+              // like it was casting onto its own backdrop.
+              taperStart: offset > 0,
+              taperEnd: offset < 0,
             ),
           ),
 

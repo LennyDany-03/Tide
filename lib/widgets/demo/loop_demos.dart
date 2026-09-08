@@ -144,11 +144,18 @@ class _SwipeLoopDemoState extends _LoopState<SwipeLoopDemo> {
               final finger =
                   _window(t, 0.06, 0.18) * (1 - _window(t, _commitAt, 0.54));
 
-              // Clipped to its own box. The card genuinely travels off the
-              // edge — that is what a real swipe does — but unclipped it
-              // would paint outside the demo, and the tour runs this inside
-              // a caption panel it must not spill out of.
-              return ClipRect(
+              // Clipped to its own box, and to the row radius rather than
+              // to a rectangle. The card genuinely travels off the edge —
+              // that is what a real swipe does — but unclipped it would
+              // paint outside the demo, and the tour runs this inside a
+              // caption panel it must not spill out of.
+              //
+              // Rounded because the real row is: a square clip cut the
+              // travelling card off with a right angle at the end it was
+              // leaving, so the demo showed a corner the product does not
+              // have.
+              return ClipRRect(
+                borderRadius: TideElevation.radius20,
                 child: Stack(
                   children: [
                     Positioned.fill(
