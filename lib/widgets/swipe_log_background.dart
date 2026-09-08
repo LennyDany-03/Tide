@@ -12,6 +12,13 @@ import 'tide_wave.dart';
 /// held almost flat, because a freeze preserves the loop rather than
 /// advancing it.
 ///
+/// Left on a habit that is *already* logged is [undoing] instead, and it is
+/// neither warm nor cold: plain [TideColors.bone]. Taking a log back is not
+/// an advance and not a freeze, and the palette reserves frost for a frozen
+/// day and coral for destruction — neither of which this is, since the log
+/// comes straight back with a swipe the other way. Neutral ink is the
+/// honest third reading: the card is going back to nothing.
+///
 /// The two directions must never share a colour, and for a while they did.
 /// The freeze side was written for a `foamCyan` that the redesign deleted,
 /// so it fell back to lantern and both swipes came out the same warm amber
@@ -29,6 +36,7 @@ class SwipeLogBackground extends StatelessWidget {
     this.freezeAvailable = true,
     this.freezeOnRight = false,
     this.unfreezing = false,
+    this.undoing = false,
   });
 
   /// Signed pixels the card has travelled.
@@ -49,6 +57,11 @@ class SwipeLogBackground extends StatelessWidget {
   final bool freezeOnRight;
   final bool unfreezing;
 
+  /// The habit is already logged, so the freeze side is showing an undo.
+  /// Takes precedence over the freeze reading: a day you have finished is
+  /// not a day you would spend a token to protect.
+  final bool undoing;
+
   bool get _freezing => freezeOnRight ? offset > 0 : offset < 0;
 
   bool get _completing => !_freezing;
@@ -63,6 +76,7 @@ class SwipeLogBackground extends StatelessWidget {
 
   Color get _color {
     if (_completing) return TideColors.lantern;
+    if (undoing) return TideColors.bone;
     return freezeAvailable ? TideColors.frost : TideColors.coral;
   }
 
@@ -89,7 +103,7 @@ class SwipeLogBackground extends StatelessWidget {
 
   IconData get _icon {
     if (_completing) return Icons.check_rounded;
-    if (unfreezing) return Icons.undo_rounded;
+    if (unfreezing || undoing) return Icons.undo_rounded;
     return freezeAvailable ? Icons.ac_unit_rounded : Icons.block_rounded;
   }
 

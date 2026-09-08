@@ -74,6 +74,22 @@ abstract final class TideMotion {
   /// Fraction of card width a swipe must cross to commit.
   static const double swipeThreshold = 0.4;
 
+  /// The speed, in pixels per second, at which a horizontal drag stops being
+  /// an action on a card and becomes a page thrown at the tab bar.
+  ///
+  /// One number with two owners, deliberately. A habit card's swipe sits
+  /// below the shell's tab swipe in the tree and so wins the gesture arena
+  /// by depth — a flick meant as "next tab" that happened to start on a card
+  /// never reached the shell at all. Distance could not tell the two apart
+  /// either: the flick crossed [swipeThreshold] on its way past and logged
+  /// the habit. Speed can. A considered swipe is aimed and slows into the
+  /// threshold; a page fling is already gone by the time it gets there.
+  ///
+  /// The shell commits a fling at this speed and the card refuses one at the
+  /// same speed, so there is no band where a gesture is fast enough to have
+  /// been a page swipe and still counts as a deliberate log.
+  static const double swipeFlingVelocity = 380;
+
   /// Snapping into place after crossing the threshold.
   static const Duration swipeSettle = Duration(milliseconds: 260);
 
