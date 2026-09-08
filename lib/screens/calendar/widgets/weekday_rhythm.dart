@@ -88,7 +88,7 @@ class _WeekdayRhythmState extends State<WeekdayRhythm>
 
   String get _caption {
     final best = _strongest;
-    if (best == null) return 'Not enough logged yet to see a pattern.';
+    if (best == null) return 'Not enough marked yet to see a pattern.';
 
     final bestName = AppConstants.weekdayNames[best];
     final weak = _weakest;

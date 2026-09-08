@@ -78,7 +78,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         const Text('History', style: TideType.screenTitle),
         const SizedBox(height: 6),
         Text(
-          'Everything you have logged, at three distances.',
+          'Everything you have marked, at three distances.',
           style: TideType.labelMuted,
         ),
         const SizedBox(height: 26),

@@ -14,7 +14,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 900));
 
     expect(find.text('Today'), findsWidgets);
-    expect(find.text('logged today'), findsOneWidget);
+    expect(find.text('marked today'), findsOneWidget);
     expect(find.text('Morning water'), findsOneWidget);
     expect(find.text('No screens after 10'), findsOneWidget);
   });
@@ -43,14 +43,39 @@ void main() {
 
     expect(store.habits, hasLength(4));
     expect(store.today.scheduled, 4);
-    expect(store.today.completed, 2, reason: '2 of 4 logged today');
+    expect(store.today.completed, 2, reason: '2 of 4 marked today');
     expect(store.bestActiveStreak, 23);
     expect(
       store.allTimeBestStreak,
       greaterThanOrEqualTo(30),
       reason: 'Full moon must be surfaced',
     );
-    expect(store.unlockedMilestoneCount, 4, reason: '4 of 9 surfaced');
+    expect(
+      store.unlockedMilestoneCount,
+      9,
+      reason:
+          'every streak rung up to and including Full moon, and no '
+          'clean-day badge yet',
+    );
+  });
+
+  /// The route draws the catalogue as one journey and puts its lantern at
+  /// the first badge still locked, which is only the truth if the unlocked
+  /// ones form an unbroken prefix. That holds because thresholds ascend and
+  /// every clean-day badge sits after the whole streak ladder — an ordering
+  /// rule with nothing in the type system to enforce it, so it is enforced
+  /// here.
+  test('the unlocked milestones are always a prefix of the catalogue', () {
+    final statuses = TideStore().milestones;
+    final firstLocked = statuses.indexWhere((status) => !status.unlocked);
+
+    expect(firstLocked, greaterThan(0), reason: 'the seed surfaces some');
+    expect(
+      statuses.skip(firstLocked).every((status) => !status.unlocked),
+      isTrue,
+      reason: 'a badge unlocked past the first locked one would throw the '
+          'route lantern to the end of the line',
+    );
   });
 
   test('logging a habit moves the day summary and the streak', () {

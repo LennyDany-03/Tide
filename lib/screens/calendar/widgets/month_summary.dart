@@ -40,7 +40,7 @@ class _MonthSummaryState extends State<MonthSummary> {
         color: TideColors.shelf,
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
         child: Text(
-          'Nothing logged yet in $monthName.',
+          'Nothing marked yet in $monthName.',
           style: TideType.bodyMuted,
         ),
       );

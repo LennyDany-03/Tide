@@ -67,7 +67,7 @@ class MonthHeatmap extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              '${(_rate * 100).round()}% of days logged',
+              '${(_rate * 100).round()}% of days marked',
               style: TideType.labelMuted,
             ),
           ],

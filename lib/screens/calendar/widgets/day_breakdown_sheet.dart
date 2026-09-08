@@ -85,10 +85,10 @@ class _Breakdown extends StatelessWidget {
   String get _verdict {
     if (entries.isEmpty) return 'Nothing scheduled';
     if (_done == entries.length) {
-      return entries.length == 1 ? 'Logged' : 'Every habit in';
+      return entries.length == 1 ? 'Marked' : 'Every habit in';
     }
-    if (_done == 0) return 'Nothing logged';
-    return '$_done of ${entries.length} logged';
+    if (_done == 0) return 'Nothing marked';
+    return '$_done of ${entries.length} marked';
   }
 
   @override
@@ -152,7 +152,7 @@ class _Row extends StatelessWidget {
     final habit = entry.habit;
     if (entry.frozen) return 'Held with a freeze';
     if (habit.type == HabitType.binary) {
-      return entry.complete ? 'Done' : 'Not logged';
+      return entry.complete ? 'Done' : 'Not marked';
     }
     return '${entry.amount.round()} of ${habit.targetLabel}';
   }

@@ -42,7 +42,7 @@ class ReadyStep extends StatelessWidget {
 
   /// What the three explainer steps said, in the order they said it.
   static const List<(TideGlyph, String)> _recap = [
-    (TideGlyph.diamondOutline, 'Swipe a habit right to log it'),
+    (TideGlyph.diamondOutline, 'Swipe a habit right to mark it'),
     (TideGlyph.halfMoon, 'A freeze holds the run on a missed day'),
     (TideGlyph.striped, 'The grid shows the shape of the month'),
   ];

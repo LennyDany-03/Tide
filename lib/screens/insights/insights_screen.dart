@@ -238,7 +238,7 @@ class _WeekPattern extends StatelessWidget {
             color: TideColors.shelf,
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
             child: Text(
-              'Log a few days and the shape of your week shows up here.',
+              'Mark a few days and the shape of your week shows up here.',
               style: TideType.bodyMuted,
             ),
           )
@@ -337,7 +337,7 @@ class _DayCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '${(rate * 100).round()}% logged',
+            '${(rate * 100).round()}% marked',
             style: TideType.labelMuted.copyWith(fontSize: 12),
           ),
         ],

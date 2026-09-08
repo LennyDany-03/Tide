@@ -1,15 +1,18 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../config/milestone_catalog.dart';
 import '../../../services/models/milestone.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
+import '../../../theme/tide_gradients.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/gauge_number.dart';
 import '../../../widgets/press_scale.dart';
+import '../../../widgets/tide_flame.dart';
 import '../../../widgets/tide_level.dart';
-import '../../../widgets/tide_ring.dart';
 import '../../../widgets/tide_surface.dart';
 
 /// The day's headline: how much of today is done, as water standing at a
@@ -84,7 +87,7 @@ class HeroStatCard extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                dayComplete ? 'all logged' : 'logged today',
+                dayComplete ? 'all marked' : 'marked today',
                 style: TideType.labelMuted.copyWith(
                   color: dayComplete ? TideColors.lantern : TideColors.silt,
                 ),
@@ -128,16 +131,32 @@ class HeroStatCard extends StatelessWidget {
   }
 }
 
-/// The week, as a percentage over the eight weeks behind it.
+/// The week, as a percentage, against the eight weeks behind it.
 ///
-/// The number alone says how this week went. The line says whether that is
-/// the week you have been having, which is a different and more useful
-/// fact — and it costs nothing but the space the icon was using.
+/// Three readings of one fact at three levels of effort, which is what a
+/// summary card is for: the figure says how this week went, the mark beside
+/// it names the comparison outright, and the area underneath says whether
+/// this is the week you have been having.
+///
+/// The chart went from a bare stroke to a filled area on the same argument
+/// the tide curve is built on. A line is a boundary, and a boundary between
+/// two nothings has no weight — at 26px tall the old one was a wire. Filled
+/// with the same lantern ramp the waterline uses, a good run of weeks
+/// becomes *heavy*, which is the only thing anyone reads a sparkline for.
 class _RateChip extends StatelessWidget {
   const _RateChip({required this.rate, required this.series});
 
   final double rate;
   final List<double> series;
+
+  /// This week against last, in percentage points. Null when there is not
+  /// enough history to compare — the one case where saying nothing beats
+  /// saying zero, because a flat "level" on a first week is a lie about
+  /// having measured something.
+  int? get _delta {
+    if (series.length < 2) return null;
+    return ((series.last - series[series.length - 2]) * 100).round();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -149,22 +168,69 @@ class _RateChip extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          GaugeCountUp(
-            value: (rate * 100).round(),
-            style: TideType.gauge(24),
-            suffix: '%',
-            suffixStyle: TideType.gauge(15, color: TideColors.silt),
+          Row(
+            children: [
+              GaugeCountUp(
+                value: (rate * 100).round(),
+                style: TideType.gauge(24),
+                suffix: '%',
+                suffixStyle: TideType.gauge(15, color: TideColors.silt),
+              ),
+              const Spacer(),
+              _TrendMark(delta: _delta),
+            ],
           ),
           const SizedBox(height: 2),
           Text('this week', style: TideType.labelMuted),
           const SizedBox(height: 12),
           SizedBox(
-            height: 26,
+            height: 30,
             width: double.infinity,
             child: _Sparkline(series: series),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Which way the week moved, in one glyph and one figure.
+///
+/// Up is [TideColors.lantern]; everything else is [TideColors.silt]. A
+/// quieter week than the last one is not a failure to be marked in red, and
+/// the red is spoken for regardless — coral means destruction in this
+/// palette and means nothing else.
+class _TrendMark extends StatelessWidget {
+  const _TrendMark({required this.delta});
+
+  final int? delta;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = delta;
+    if (value == null) return const SizedBox.shrink();
+
+    final rising = value > 0;
+    final colour = rising ? TideColors.lantern : TideColors.silt;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          value == 0
+              ? Icons.remove_rounded
+              : rising
+              ? Icons.north_rounded
+              : Icons.south_rounded,
+          size: 11,
+          color: colour,
+        ),
+        const SizedBox(width: 2),
+        Text(
+          value == 0 ? 'level' : '${value.abs()}',
+          style: TideType.gauge(11, color: colour),
+        ),
+      ],
     );
   }
 }
@@ -242,17 +308,40 @@ class _SparkPainter extends CustomPainter {
     // moving smoothly instead of snapping week to week.
     final travelled = progress * (series.length - 1);
     final whole = travelled.floor();
+    var head = points.first;
     final path = Path()..moveTo(points.first.dx, points.first.dy);
     for (var i = 1; i <= whole; i++) {
       path.lineTo(points[i].dx, points[i].dy);
+      head = points[i];
     }
     if (whole < series.length - 1) {
       final t = travelled - whole;
-      path.lineTo(
+      head = Offset(
         points[whole].dx + (points[whole + 1].dx - points[whole].dx) * t,
         points[whole].dy + (points[whole + 1].dy - points[whole].dy) * t,
       );
+      path.lineTo(head.dx, head.dy);
     }
+
+    // The area, closed down to the floor and back. Built from the drawn
+    // path rather than the whole series, so the fill arrives *with* the
+    // stroke — a full-width wash sitting under a line that is still being
+    // drawn gives the ending away.
+    //
+    // The ramp is the waterline's, and it reaches zero rather than
+    // bottoming out at a low alpha, for the reason written where it is
+    // defined: a fill that keeps a floor is a solid mass with a top edge on
+    // it, which reads as sand rather than as water.
+    canvas.drawPath(
+      Path.from(path)
+        ..lineTo(head.dx, size.height)
+        ..lineTo(points.first.dx, size.height)
+        ..close(),
+      Paint()
+        ..shader = TideGradients.tideFill.createShader(
+          Rect.fromLTWH(0, 0, size.width, size.height),
+        ),
+    );
 
     canvas.drawPath(
       path,
@@ -280,12 +369,18 @@ class _SparkPainter extends CustomPainter {
       old.progress != progress || old.series != series;
 }
 
-/// The streak, and how far it is from the next thing it unlocks.
+/// The streak, as a fire, and how far it is from the next thing it unlocks.
 ///
-/// Pressable, and it goes somewhere: Milestones is the screen this number
-/// is measured against, and it was previously reachable only from a single
-/// glyph in the header. A figure that is the reason people open the app
-/// should be the way into the screen about it.
+/// The ring came off this card. A ring is an accurate instrument answering
+/// the wrong question — it reports how far through a leg you are, when a
+/// streak's entire emotional content is that it is *still alight* and that
+/// letting it go out would cost something. So the fire is the card now, and
+/// the leg being walked is a 3px rule underneath, which is about as much
+/// room as "four days into the thirty between full moon and undertow"
+/// deserves.
+///
+/// Still pressable, and it still goes somewhere: Milestones is the screen
+/// this number is measured against.
 class _StreakChip extends StatelessWidget {
   const _StreakChip({required this.streak, required this.onTap});
 
@@ -301,9 +396,9 @@ class _StreakChip extends StatelessWidget {
     return null;
   }
 
-  /// The one behind it, so the ring measures the leg being walked rather
-  /// than the whole distance from zero — at day 34 of 60 a ring drawn from
-  /// zero sits at 57%, which says nothing about the thirty days just done.
+  /// The one behind it, so the track measures the leg being walked rather
+  /// than the whole distance from zero — at day 34 of 40 a bar drawn from
+  /// zero sits at 85%, which says nothing about the four days just done.
   int get _from {
     var last = 0;
     for (final milestone in MilestoneCatalog.all) {
@@ -313,6 +408,15 @@ class _StreakChip extends StatelessWidget {
     }
     return last;
   }
+
+  /// How hard the fire burns, 0..1.
+  ///
+  /// Square-rooted rather than linear on purpose. Most of the range is
+  /// spent on the first three weeks, because that is the stretch where a
+  /// run is fragile and the fire is doing actual work; past a couple of
+  /// months it is a fire either way and a linear ramp would spend its whole
+  /// budget on days nobody is worried about.
+  double get _heat => math.sqrt((streak / 90).clamp(0.0, 1.0));
 
   @override
   Widget build(BuildContext context) {
@@ -331,56 +435,131 @@ class _StreakChip extends StatelessWidget {
       child: TideSurface(
         radius: TideElevation.radius20,
         color: TideColors.shelf,
-        padding: const EdgeInsets.fromLTRB(13, 13, 12, 14),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(15, 13, 12, 14),
+        child: Stack(
+          // The fire burns up out of the bottom corner and is cut off by the
+          // card's own radius — `TideSurface` clips, so the flame is allowed
+          // to overrun the padding and be trimmed by the shape rather than
+          // sitting politely inside it like an illustration.
+          clipBehavior: Clip.none,
           children: [
-            // Fills on arrival, and refills whenever a log moves the
-            // streak — the ring is the only thing on Today that reports
-            // where the run stands rather than where the day does.
-            TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: 0, end: progress),
-              duration: TideMotion.ringFill,
-              curve: TideMotion.overshoot,
-              builder: (context, value, child) => TideRing(
-                progress: value,
-                size: 46,
-                strokeWidth: 3,
-                animate: false,
-                child: child,
-              ),
-              child: GaugeCountUp(
-                value: streak,
-                style: TideType.gauge(16, color: TideColors.bone),
-              ),
+            Positioned(
+              // Standing on the card's bottom edge in its right-hand third,
+              // and — this is the part that took three tries — very nearly
+              // whole. An 86px flame in the middle of a 158px card stopped
+              // being the card's light and became its subject. Burying it in
+              // the corner instead overcorrected: clipped to a sliver it
+              // read as a rendering artefact rather than as a fire, which is
+              // worse than too big. It needs enough room to show the whole
+              // silhouette — foot, bulge, neck, tip — because that shape is
+              // the only thing separating fire from a smudge of warm light.
+              right: -8,
+              bottom: -16,
+              width: 60,
+              height: 84,
+              child: TideFlame(intensity: _heat),
             ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'day streak',
-                    style: TideType.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    GaugeCountUp(value: streak, style: TideType.gauge(24)),
+                    const Spacer(),
+                    // Small, and the only chevron on the screen: it is the
+                    // one readout here that leads anywhere.
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: TideColors.silt.withValues(alpha: 0.8),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'day streak',
+                  style: TideType.labelMuted,
+                  // The card is half the page wide and the fire takes a
+                  // third of what is left; a caption that wraps here pushes
+                  // the whole footer down past the flame's shoulder.
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+                // The whole footer is held to the left two thirds, clear of
+                // the fire standing in the right one. Both halves of it
+                // needed it: a rule that runs the full width has to cross
+                // whatever is in the corner, and a hard bright line laid
+                // over a soft glow is the cheapest thing two good elements
+                // can do to each other — but the caption underneath was the
+                // worse offender, because it ellipsised straight into the
+                // brightest part of the flame and simply became unreadable.
+                FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: 0.66,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _NextTrack(progress: progress),
+                      const SizedBox(height: 7),
+                      Text(
+                        detail,
+                        style: TideType.labelMuted.copyWith(fontSize: 11.5),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    detail,
-                    style: TideType.labelMuted.copyWith(fontSize: 11.5),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            // Small, and the only chevron on the screen: it is the one
-            // readout here that leads anywhere.
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: TideColors.silt.withValues(alpha: 0.8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The distance to the next badge, demoted to a rule.
+///
+/// Two pixels rather than three, and the accent held back to 0.7. At full
+/// strength on a 3px bar this read as a hard cream line ruled across the
+/// card — the loudest object on a surface whose headline is a number and
+/// whose atmosphere is a fire. A progress detail should be legible when
+/// looked for and quiet when not.
+class _NextTrack extends StatelessWidget {
+  const _NextTrack({required this.progress});
+
+  final double progress;
+
+  static const double _height = 2;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_height),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: progress),
+        duration: TideMotion.ringFill,
+        curve: TideMotion.overshoot,
+        builder: (context, value, _) => Stack(
+          children: [
+            const SizedBox(
+              height: _height,
+              width: double.infinity,
+              child: ColoredBox(color: TideColors.trench),
+            ),
+            FractionallySizedBox(
+              // Clamped, and it has to be: the signature Tide curve
+              // overshoots past its end value, which on a width factor is a
+              // bar wider than the track it sits in.
+              widthFactor: value.clamp(0.0, 1.0),
+              child: ColoredBox(
+                color: TideColors.lantern.withValues(alpha: 0.7),
+                child: const SizedBox(height: _height),
+              ),
             ),
           ],
         ),

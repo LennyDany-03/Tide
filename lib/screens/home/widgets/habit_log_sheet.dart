@@ -510,7 +510,7 @@ class _HoldRow extends StatelessWidget {
         children: [
           _Nudge(
             icon: Icons.remove_rounded,
-            semanticLabel: 'Log one less',
+            semanticLabel: 'Mark one less',
             enabled: canDecrease,
             onTap: () => onNudge(-1),
           ),
@@ -525,7 +525,7 @@ class _HoldRow extends StatelessWidget {
           const SizedBox(width: 10),
           _Nudge(
             icon: Icons.add_rounded,
-            semanticLabel: 'Log one more',
+            semanticLabel: 'Mark one more',
             enabled: !complete,
             onTap: () => onNudge(1),
           ),
@@ -610,12 +610,12 @@ class _HoldButton extends StatelessWidget {
         final banked = holding && progress >= 1;
 
         final label = complete
-            ? 'All logged'
+            ? 'All marked'
             : banked
-            ? 'Lift to log another'
+            ? 'Lift to mark another'
             : holding
             ? 'Keep holding…'
-            : 'Hold to log';
+            : 'Hold to mark';
 
         return Stack(
           children: [

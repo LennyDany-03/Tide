@@ -42,19 +42,66 @@ class MilestoneRoute extends StatefulWidget {
 
   /// The badge, and the margin it keeps from the page edge.
   static const double discSize = 58;
-  static const double _edge = 24;
+  static const double edge = 24;
+
+  /// The air between a badge and the caption reading off it.
+  static const double labelGap = 16;
+
+  /// Where each marker stands, as a signed fraction: the sign picks the
+  /// side, and the magnitude is how far in from that edge the badge sits,
+  /// where 1 would be the centre of the page.
+  ///
+  /// Hand-authored rather than hashed off the index, because the two things
+  /// that make this table work are the two a hash gets wrong. No magnitude
+  /// passes 0.62, so a badge never reaches the middle — the caption lives in
+  /// the column the badge is not using, and a marker parked in the centre
+  /// leaves it nowhere to go and puts the line straight through it. And the
+  /// sides deliberately do not strictly alternate: several pairs run the
+  /// same way twice, which is what stops the route reading as a zigzag with
+  /// a fixed period. Twenty-nine entries against twenty-eight markers, so a
+  /// longer catalogue never wraps onto the same phase either.
+  static const List<double> _lanes = [
+    -0.04, 0.30, -0.46, 0.12, 0.58, -0.20, -0.62, 0.36,
+    0.02, -0.34, 0.60, -0.08, 0.26, -0.54, 0.44, -0.16,
+    0.10, -0.60, 0.52, 0.18, -0.30, 0.62, -0.42, 0.06,
+    -0.24, 0.48, -0.12, 0.34, -0.50,
+  ];
+
+  static double _laneAt(int index) => _lanes[index % _lanes.length];
+
+  /// Whether marker [index] stands in the left half, so its caption takes
+  /// the right.
+  static bool onLeftAt(int index) => _laneAt(index) < 0;
+
+  /// How far marker [index] has wandered in from its edge, 0..1. The
+  /// painter leans its control points by this, so a leg that travels a long
+  /// way sideways is drawn with more slack than one that barely moves.
+  static double laneReachAt(int index) =>
+      (_laneAt(index).abs() / 0.62).clamp(0.0, 1.0);
 
   /// Where marker [index]'s badge is centred, in pixels.
   ///
-  /// Two columns, alternating — not a wave through the middle of the page.
-  /// A serpentine looked better in isolation and was worse in use: with the
-  /// badges near the centre their captions sat under them, in the same band
-  /// the line had to cross to reach the next badge, so the route ran
-  /// through its own labels. Pushing the badges to the edges puts the
-  /// captions in the space the line is not using.
-  static double columnAt(int index, double width) => index.isEven
-      ? _edge + discSize / 2
-      : width - _edge - discSize / 2;
+  /// Two *sides*, not two columns. The badges used to sit hard against the
+  /// same two x positions the whole way down, which reads as a ladder —
+  /// correct about the order and silent about everything else. Letting each
+  /// one wander in from its edge by its own amount turns the same
+  /// information into a route that was walked rather than ruled, which is
+  /// the whole conceit of the screen.
+  ///
+  /// The wander obeys the rule the two-column version was already obeying:
+  /// a badge stays in its own half, because the caption has to fit in the
+  /// other one. A serpentine through the middle was tried and was worse —
+  /// with the badges near the centre their captions sat under them, in the
+  /// same band the line had to cross to reach the next badge, so the route
+  /// ran through its own labels.
+  static double columnAt(int index, double width) {
+    final lane = _laneAt(index);
+    final rest = edge + discSize / 2;
+    final reach = (width / 2 - rest).clamp(0.0, double.infinity);
+    return lane < 0
+        ? rest + lane.abs() * reach
+        : width - rest - lane.abs() * reach;
+  }
 
   @override
   State<MilestoneRoute> createState() => _MilestoneRouteState();
@@ -121,14 +168,17 @@ class _MilestoneRouteState extends State<MilestoneRoute>
     final count = statuses.length;
     if (count == 0) return 0;
 
-    var last = -1;
-    for (var i = 0; i < count; i++) {
-      if (statuses[i].unlocked) last = i;
-    }
+    // The first badge still locked, rather than the last one unlocked.
+    // Those are the same index only while the unlocked badges form an
+    // unbroken prefix, which the catalogue's ordering rule exists to
+    // guarantee — but reading it this way means a badge that unlocks out of
+    // turn costs one marker's worth of accuracy instead of throwing the
+    // lantern to the end of the route.
+    final next = statuses.indexWhere((status) => !status.unlocked);
 
-    if (last == count - 1) return 1;
-    if (last < 0) return (statuses.first.progress * 0.5) / count;
-    return (last + 0.5 + statuses[last + 1].progress) / count;
+    if (next < 0) return 1;
+    if (next == 0) return (statuses.first.progress * 0.5) / count;
+    return (next - 0.5 + statuses[next].progress) / count;
   }
 
   @override
@@ -174,7 +224,9 @@ class _MilestoneRouteState extends State<MilestoneRoute>
                   child: _Marker(
                     status: statuses[i],
                     isNext: i == nextIndex,
-                    onLeft: i.isEven,
+                    onLeft: MilestoneRoute.onLeftAt(i),
+                    column: MilestoneRoute.columnAt(i, constraints.maxWidth),
+                    bandWidth: constraints.maxWidth,
                     remaining: statuses[i].milestone.threshold - widget.streak,
                     delay: TideMotion.routeDraw ~/ (statuses.length + 1) * i,
                     onTap: () => widget.onTap(statuses[i]),
@@ -194,6 +246,8 @@ class _Marker extends StatefulWidget {
     required this.status,
     required this.isNext,
     required this.onLeft,
+    required this.column,
+    required this.bandWidth,
     required this.remaining,
     required this.delay,
     required this.onTap,
@@ -204,8 +258,14 @@ class _Marker extends StatefulWidget {
   /// The next one to fall. It carries the ring and the distance.
   final bool isNext;
 
-  /// Which column the badge stands in. The caption takes the other side.
+  /// Which half the badge stands in. The caption takes the other one.
   final bool onLeft;
+
+  /// The badge's centre, in pixels across the band — wherever the route's
+  /// lane table put it.
+  final double column;
+
+  final double bandWidth;
 
   /// Days still to go. Only shown on [isNext].
   final int remaining;
@@ -240,6 +300,15 @@ class _MarkerState extends State<_Marker> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
+  /// How far in the caption's block begins, measured from the same edge the
+  /// badge is standing against: past the disc, plus its air.
+  double get _labelStart {
+    final clear = MilestoneRoute.discSize / 2 + MilestoneRoute.labelGap;
+    return widget.onLeft
+        ? widget.column + clear
+        : widget.bandWidth - widget.column + clear;
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = widget.status;
@@ -267,23 +336,46 @@ class _MarkerState extends State<_Marker> with SingleTickerProviderStateMixin {
         child: PressScale(
           onTap: unlocked ? widget.onTap : null,
           enabled: unlocked,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
+          // A stack rather than the two-cell row this used to be. A row can
+          // only put the badge in one of two places — hard left or hard
+          // right — which was the whole reason the route was a zigzag. The
+          // badge is placed at its own x here, and the caption is measured
+          // off the badge rather than off the page, so a marker that has
+          // wandered a long way in neither leaves a gap its label fails to
+          // fill nor runs its label underneath itself.
+          child: SizedBox.expand(
+            child: Stack(
               children: [
-                if (widget.onLeft)
-                  _Disc(status: status, isNext: widget.isNext, accent: accent),
-                if (!widget.onLeft)
-                  Expanded(child: _Label(status: status, caption: caption,
-                      unlocked: unlocked, isNext: widget.isNext,
-                      alignEnd: true)),
-                const SizedBox(width: 16),
-                if (widget.onLeft)
-                  Expanded(child: _Label(status: status, caption: caption,
-                      unlocked: unlocked, isNext: widget.isNext,
-                      alignEnd: false)),
-                if (!widget.onLeft)
-                  _Disc(status: status, isNext: widget.isNext, accent: accent),
+                Positioned(
+                  top: 0,
+                  bottom: 0,
+                  left: widget.onLeft ? _labelStart : MilestoneRoute.edge,
+                  right: widget.onLeft ? MilestoneRoute.edge : _labelStart,
+                  child: Align(
+                    alignment: widget.onLeft
+                        ? Alignment.centerLeft
+                        : Alignment.centerRight,
+                    child: _Label(
+                      status: status,
+                      caption: caption,
+                      unlocked: unlocked,
+                      isNext: widget.isNext,
+                      alignEnd: !widget.onLeft,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: widget.column - MilestoneRoute.discSize / 2,
+                  top:
+                      (MilestoneRoute.stepHeight - MilestoneRoute.discSize) / 2,
+                  width: MilestoneRoute.discSize,
+                  height: MilestoneRoute.discSize,
+                  child: _Disc(
+                    status: status,
+                    isNext: widget.isNext,
+                    accent: accent,
+                  ),
+                ),
               ],
             ),
           ),
@@ -438,6 +530,11 @@ class _RoutePainter extends CustomPainter {
   /// half a step down from the band's top.
   static const double _discCentre = MilestoneRoute.stepHeight / 2;
 
+  /// One control point's pull, as a fraction of a step. Capped so that any
+  /// two of them together stay under a whole step.
+  static double _slackAt(int index) =>
+      0.28 + 0.19 * MilestoneRoute.laneReachAt(index);
+
   Path _buildPath(Size size) {
     final points = <Offset>[
       for (var i = 0; i < count; i++)
@@ -460,11 +557,18 @@ class _RoutePainter extends CustomPainter {
       // A pair of vertical-tangent control points: the line leaves each
       // badge going straight down and arrives at the next one the same way,
       // which is what keeps the curve from crowding the labels.
+      //
+      // The two lean by different amounts, and by an amount tied to how far
+      // that particular leg has to travel sideways. A fixed 0.45 on both
+      // ends drew the same S-bend twenty-seven times over, which is a motif
+      // rather than a path. They stay well short of summing to a whole
+      // step, so the line never doubles back on itself vertically — messy
+      // is the look, a kink is a bug.
       path.cubicTo(
         a.dx,
-        a.dy + MilestoneRoute.stepHeight * 0.45,
+        a.dy + MilestoneRoute.stepHeight * _slackAt(i),
         b.dx,
-        b.dy - MilestoneRoute.stepHeight * 0.45,
+        b.dy - MilestoneRoute.stepHeight * _slackAt(i + 7),
         b.dx,
         b.dy,
       );

@@ -224,7 +224,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _stepAt(int index) => switch (index) {
     0 => const WelcomeStep(),
     1 => const ExplainerStep(
-      eyebrow: 'Log',
+      eyebrow: 'Mark',
       title: 'One swipe, and the day is done',
       body:
           'No forms, no timers, no check-in screen. Carry the card to the '
@@ -243,7 +243,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       eyebrow: 'Read',
       title: 'The shape shows up over weeks',
       body:
-          'Every day you log lands in the grid. What you are actually '
+          'Every day you mark lands in the grid. What you are actually '
           'building is the pattern, not the number.',
       demo: HistoryLoopDemo(),
     ),

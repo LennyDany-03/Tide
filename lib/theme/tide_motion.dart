@@ -182,4 +182,15 @@ abstract final class TideMotion {
 
   /// The onboarding background drift — the only screen allowed it.
   static const Duration ambientDrift = Duration(seconds: 24);
+
+  /// One full burn of the streak fire.
+  ///
+  /// The exception to the rule above: this loop is deliberately *not* slow.
+  /// Everything else ambient in the app is atmosphere and reads wrong if
+  /// you can see it working, but a fire that idles at breathing pace does
+  /// not read as fire — it reads as a flame-shaped logo being scaled. The
+  /// flicker inside the painter runs at three, seven and eleven times this
+  /// rate, which puts its fastest term around five per second, in the range
+  /// a real flame actually moves at.
+  static const Duration flameCycle = Duration(milliseconds: 2200);
 }
