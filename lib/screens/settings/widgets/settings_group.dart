@@ -2,16 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_typography.dart';
+import '../../../widgets/tide_surface.dart';
 
-/// A titled group of settings rows, hairline-separated.
+/// A titled group of settings rows on one raised surface.
 ///
-/// The rows sit on the page rather than inside a rounded panel. Three panels
-/// down a settings screen is the grouped-list convention, but this app has
-/// already made its choice on the main screen — habits are hairline rows on
-/// the ground — and running the same structure here means Settings reads as
-/// the same product rather than as a screen borrowed from the OS. The
-/// hairlines carry the grouping; the panel was drawing a box around what the
-/// spacing had already separated.
+/// The rows used to sit directly on the page, on the argument that habits
+/// on Home were hairline rows on the ground and Settings should match. That
+/// argument has expired: habits are cards now, History and Insights are
+/// panels, and Settings on bare ground was the last screen still built the
+/// old way — so the thing that was meant to make it look like the same
+/// product was the one thing making it look like a different one.
+///
+/// The hairlines stay, inside the panel, separating rows. The panel is what
+/// says the group is a group; the hairlines are what say where one row ends
+/// and the next begins. Those are two different jobs and the spacing alone
+/// was doing neither of them well.
 class SettingsGroup extends StatelessWidget {
   const SettingsGroup({super.key, required this.title, required this.rows});
 
@@ -24,13 +29,46 @@ class SettingsGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Text(title, style: TideType.sectionHeader),
+          padding: const EdgeInsets.only(left: 4, bottom: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 3,
+                height: 13,
+                decoration: BoxDecoration(
+                  color: TideColors.lantern,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                title,
+                style: TideType.label.copyWith(color: TideColors.bone),
+              ),
+            ],
+          ),
         ),
-        for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) Container(height: 1, color: TideColors.hairline),
-          rows[i],
-        ],
+        TideSurface(
+          color: TideColors.shelf,
+          padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[
+                if (i > 0)
+                  Padding(
+                    // Inset from the left so the rule starts where the text
+                    // does, not under the icons — a divider that cuts
+                    // through a column of marks reads as a table.
+                    padding: const EdgeInsets.only(left: 62),
+                    child: Container(height: 1, color: TideColors.hairline),
+                  ),
+                rows[i],
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }

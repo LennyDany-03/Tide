@@ -8,7 +8,6 @@ import '../theme/tide_elevation.dart';
 import '../theme/tide_gradients.dart';
 import '../theme/tide_motion.dart';
 import '../theme/tide_typography.dart';
-import 'habit_glyph.dart';
 import 'press_scale.dart';
 
 /// The bottom bar: a frosted panel floating clear of the screen edge.
@@ -20,11 +19,19 @@ import 'press_scale.dart';
 /// every scrolling tab pads its content by [reservedHeight].
 ///
 /// The active tab is marked by ink, not by furniture. A travelling pill
-/// with its own wash, border, glow and indicator capsule — the previous
+/// with its own wash, border, glow and indicator capsule — an earlier
 /// design — put more decoration on the nav bar than on the content it
-/// navigates. Weight and colour say the same thing and take no space, and
-/// the weight shift means the selection is still readable without relying
-/// on colour alone.
+/// navigates. Colour, weight and a filled icon say the same thing and take
+/// no space, and the two shifts that are not colour mean the selection is
+/// still readable without relying on colour alone.
+///
+/// One piece of furniture came back, deliberately, and it is three pixels
+/// tall: a lit edge that travels along the top of the panel to the tab you
+/// are on. That is not the pill returning. The pill was a container the
+/// selected tab sat inside, which is why it needed a fill and a border and
+/// a glow to hold itself together; this is a mark on the panel's own edge,
+/// and its whole job is that it *moves* — a switch you can see travel is a
+/// switch you understand you caused.
 class TideTabBar extends StatelessWidget {
   const TideTabBar({
     super.key,
@@ -83,16 +90,55 @@ class TideTabBar extends StatelessWidget {
                   borderRadius: _radius,
                   border: Border.all(color: TideColors.hairline),
                 ),
-                child: Row(
+                child: Stack(
                   children: [
-                    for (var i = 0; i < tabs.length; i++)
-                      Expanded(
-                        child: _Tab(
-                          tab: tabs[i],
-                          active: i == currentIndex,
-                          onTap: () => onTap(i),
+                    // The traveller, on the panel's top edge.
+                    //
+                    // Confined to a three-pixel band at the top and slid
+                    // along it, rather than aligned inside the whole panel:
+                    // given the full height to work with it centred itself
+                    // vertically and came out sitting on the label.
+                    //
+                    // The fraction is the *centre* of tab i, which is
+                    // (i + 0.5) / n — not i / (n - 1), which pins the first
+                    // and last tabs to the panel's outer edges rather than
+                    // to the tabs they belong to.
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 3,
+                      child: AnimatedAlign(
+                        duration: TideMotion.pillSlide,
+                        curve: TideMotion.pillCurve,
+                        alignment: Alignment(
+                          2 * (currentIndex + 0.5) / tabs.length - 1,
+                          0,
+                        ),
+                        child: Container(
+                          width: 26,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: TideColors.lantern,
+                            borderRadius: const BorderRadius.vertical(
+                              bottom: Radius.circular(2),
+                            ),
+                          ),
                         ),
                       ),
+                    ),
+                    Row(
+                      children: [
+                        for (var i = 0; i < tabs.length; i++)
+                          Expanded(
+                            child: _Tab(
+                              tab: tabs[i],
+                              active: i == currentIndex,
+                              onTap: () => onTap(i),
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -130,7 +176,27 @@ class _Tab extends StatelessWidget {
                   // The 2px lift that pairs with the crossfade on the page
                   // behind it, so the whole tab switch moves together.
                   offset: Offset(0, -TideMotion.tabSlide * 0.5 * t),
-                  child: HabitGlyph(glyph: tab.glyph, size: 17, color: tint),
+                  // Crossfaded rather than swapped: at 21px the outline and
+                  // the filled shape share most of their geometry, so a
+                  // hard swap reads as the icon flickering while a
+                  // crossfade reads as it thickening.
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Opacity(
+                          opacity: 1 - t,
+                          child: Icon(tab.icon, size: 21, color: tint),
+                        ),
+                        Opacity(
+                          opacity: t,
+                          child: Icon(tab.activeIcon, size: 21, color: tint),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(

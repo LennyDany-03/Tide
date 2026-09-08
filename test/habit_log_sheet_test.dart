@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
 
@@ -183,7 +182,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 700));
 
-    expect(find.byIcon(Icons.insights_rounded), findsNothing);
+    // The menu has closed behind the push. Asserted on one of its own
+    // labels rather than on an icon: the Insights tab wears the same
+    // insights mark the menu's details row does, so an icon finder here
+    // matches the navigation bar and never fails.
+    expect(find.text('Hold to delete'), findsNothing);
     expect(find.text('Morning water'), findsWidgets);
   });
 }
