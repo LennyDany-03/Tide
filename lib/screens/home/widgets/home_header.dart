@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../../config/app_constants.dart';
-import '../../../config/tour_catalog.dart';
 import '../../../services/models/tide_glyph.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/habit_glyph.dart';
 import '../../../widgets/press_scale.dart';
-import '../../../widgets/tour/tour_anchor.dart';
 
 /// Date line, screen title, and the way through to milestones.
+///
+/// The add control used to sit here too, four pixels from the milestones
+/// glyph: two small marks in the same corner going to two entirely
+/// unrelated places. Adding a habit now lives in the list itself, which is
+/// where the next habit would go anyway.
 ///
 /// Three things removed here, all of them the same mistake — decoration
 /// standing in for hierarchy. The lit dot before the date, the gradient
@@ -22,12 +25,10 @@ class HomeHeader extends StatelessWidget {
     super.key,
     required this.date,
     required this.onMilestones,
-    required this.onAddHabit,
   });
 
   final DateTime date;
   final VoidCallback onMilestones;
-  final VoidCallback onAddHabit;
 
   /// "Sunday, 6 September" — written the way a person says it. The previous
   /// line was `SUN · 6 SEP`, which is chrome: abbreviated, tracked out,
@@ -56,36 +57,11 @@ class HomeHeader extends StatelessWidget {
         PressScale(
           onTap: onMilestones,
           child: const Padding(
-            padding: EdgeInsets.all(10),
+            padding: EdgeInsets.fromLTRB(10, 10, 4, 10),
             child: HabitGlyph(
               glyph: TideGlyph.sparkle,
-              size: 19,
+              size: 21,
               color: TideColors.bone,
-            ),
-          ),
-        ),
-        const SizedBox(width: 4),
-        // The tour's last stop, and the only action on an empty Today.
-        TourAnchor(
-          stop: TourStop.add,
-          child: PressScale(
-            onTap: onAddHabit,
-            child: Container(
-              width: 38,
-              height: 38,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: TideColors.lantern.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: TideColors.lantern.withValues(alpha: 0.24),
-                ),
-              ),
-              child: const Icon(
-                Icons.add_rounded,
-                size: 20,
-                color: TideColors.lantern,
-              ),
             ),
           ),
         ),

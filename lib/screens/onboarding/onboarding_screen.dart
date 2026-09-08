@@ -56,9 +56,17 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   static const int _stepCount = 5;
 
+  /// The label on the primary button.
+  ///
+  /// The last page used to say "Create your account", which named a form
+  /// rather than an outcome and was also a promise the app no longer keeps:
+  /// the screen it opens leads with log in, because most people reaching it
+  /// twice are not new. "Get started" is what the button actually does, and
+  /// it is the first page that gives up the phrase — page one is offering a
+  /// walk-through, so it says so.
   String get _primaryLabel {
-    if (_step == 0) return 'Get started';
-    if (_step == _stepCount - 1) return 'Create your account';
+    if (_step == 0) return 'Show me how';
+    if (_step == _stepCount - 1) return 'Get started';
     return 'Next';
   }
 
@@ -112,10 +120,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     router.go(Routes.auth);
   }
 
-  /// How far into the morph the next screen takes over. Late enough that
-  /// the ring has visibly moved, early enough that nothing is ever fully
-  /// gone first.
-  static const Duration _handOff = Duration(milliseconds: 300);
+  /// How far into the morph the next screen takes over.
+  ///
+  /// It was 300ms, which was past the point the page had finished leaving:
+  /// the copy, the chrome and the ring all clear by about 210ms, so there
+  /// was a blank beat with nothing on it before the account screen even
+  /// started arriving. Handing over at 160 puts the incoming page's fade
+  /// underneath the tail of the outgoing one, which is the overlap the
+  /// morph exists for.
+  static const Duration _handOff = Duration(milliseconds: 120);
 
   void _skip() {
     TideScope.read(context).completeOnboarding();

@@ -8,7 +8,6 @@ import '../../theme/tide_gradients.dart';
 import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/press_scale.dart';
-import '../../widgets/segmented_pill.dart';
 import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_button.dart';
 import '../../widgets/tide_field.dart';
@@ -25,16 +24,29 @@ import 'widgets/password_strength.dart';
 /// history in it. Those are two different first screens, and the form is
 /// where the app finds out which one to show.
 ///
-/// It is one screen with two modes rather than two screens. Sign-up and
-/// log-in differ by a single field and a single line of copy; splitting
-/// them across a route boundary would mean a user who picked wrong has to
-/// navigate to fix it, and would put a page transition in the middle of a
-/// decision that should cost a tap.
+/// **It opens on log in.** Sign-up was the default because onboarding runs
+/// in front of it on a first launch, which made it look like everybody
+/// arriving here was new. Everybody arriving here for the *second* time is
+/// not, and they were being handed a form with an extra field, a password
+/// meter and the wrong verb on the button — every single time. A returning
+/// user is the common case for any screen that exists after the first day.
 ///
-/// The mark at the top is the ring onboarding just handed over — it draws
-/// itself in again at the size the closing morph was shrinking toward, so
-/// the two screens read as one object arriving rather than as a flow that
-/// ended and a form that started.
+/// It is one screen with two modes rather than two screens. Log-in and
+/// sign-up differ by a single field and a line of copy; splitting them
+/// across a route boundary would mean a user who landed on the wrong one
+/// has to navigate to fix it, and would put a page transition in the middle
+/// of a decision that should cost a tap.
+///
+/// The mode switch is a sentence at the bottom rather than a segmented
+/// control at the top. A pill labelled "Create account / Log in" is two
+/// tabs of equal weight sitting above a form that only serves one of them,
+/// so the page has to be read twice: once to see which half is selected,
+/// once to read the form. A line that says what this screen is *not* and
+/// offers the other one is read in the order people actually read a page.
+///
+/// The mark above the title is the ring onboarding just handed over. It
+/// arrives already closed rather than redrawing itself, because the whole
+/// claim of the hand-off is that it is the same object.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -42,14 +54,14 @@ class AuthScreen extends StatefulWidget {
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-enum _Mode { signUp, logIn }
+enum _Mode { logIn, signUp }
 
 class _AuthScreenState extends State<AuthScreen> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
 
-  _Mode _mode = _Mode.signUp;
+  _Mode _mode = _Mode.logIn;
 
   /// The email button and the Google button each carry their own wait, so
   /// the one you did not press stays legible instead of both going busy.
@@ -79,13 +91,12 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
-  void _setMode(int index) {
-    final next = index == 0 ? _Mode.signUp : _Mode.logIn;
-    if (next == _mode) return;
+  void _toggleMode() {
+    if (_busy) return;
     // Complaints belong to the mode that raised them: a name the log-in
     // form does not ask for must not still be marked as missing.
     setState(() {
-      _mode = next;
+      _mode = _signingUp ? _Mode.logIn : _Mode.signUp;
       _errors.clear();
     });
   }
@@ -199,9 +210,9 @@ class _AuthScreenState extends State<AuthScreen> {
     return Scaffold(
       backgroundColor: TideColors.deepWater,
       // The keyboard is handled by padding the scroll view rather than by
-      // resizing the page: the mark is anchored to the top and letting the
-      // Scaffold shrink the body would drag it up and out of frame every
-      // time a field takes focus.
+      // resizing the page: letting the Scaffold shrink the body would drag
+      // the title and the mark up and out of frame every time a field takes
+      // focus, which is most of the time this screen is on.
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
@@ -209,13 +220,14 @@ class _AuthScreenState extends State<AuthScreen> {
           SafeArea(
             child: Column(
               children: [
-                _header(),
+                _backRow(),
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(24, 8, 24, 24 + insets),
+                    padding: EdgeInsets.fromLTRB(24, 4, 24, 24 + insets),
                     child: _form(),
                   ),
                 ),
+                _modeSwitch(insets),
               ],
             ),
           ),
@@ -224,7 +236,7 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _header() {
+  Widget _backRow() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 4, 24, 0),
       child: Row(
@@ -245,12 +257,6 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
           const Spacer(),
-          const TideMark(
-            size: 40,
-            strokeWidth: 2,
-            coreSize: 5,
-            delay: Duration(milliseconds: 80),
-          ),
         ],
       ),
     );
@@ -260,10 +266,20 @@ class _AuthScreenState extends State<AuthScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 14),
-        // The headline says which mode you are in; the pill below is how you
-        // change it. Two readouts of the same state, but the big one is the
-        // one you read without looking for it.
+        // The mark sits above the headline, on the left, where the ring
+        // onboarding was carrying comes to rest — and where the eye starts
+        // reading rather than in the corner it ends in.
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: TideMark(
+            size: 60,
+            strokeWidth: 2.5,
+            coreSize: 7,
+            drawIn: false,
+          ),
+        ),
+        const SizedBox(height: 24),
+
         AnimatedSwitcher(
           duration: TideMotion.tabSwitch,
           child: Text(
@@ -280,14 +296,7 @@ class _AuthScreenState extends State<AuthScreen> {
               : 'Pick up where the loop left off.',
           style: TideType.bodyMuted,
         ),
-        const SizedBox(height: 26),
-
-        SegmentedPill(
-          labels: const ['Create account', 'Log in'],
-          selectedIndex: _signingUp ? 0 : 1,
-          onChanged: _setMode,
-        ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 30),
 
         // Only the name field comes and goes, and it does so by height so
         // the fields below slide rather than jump. Rebuilding the whole form
@@ -370,7 +379,7 @@ class _AuthScreenState extends State<AuthScreen> {
         const _OrRule(),
 
         TideButton(
-          label: _signingUp ? 'Sign up with Google' : 'Log in with Google',
+          label: 'Continue with Google',
           variant: TideButtonVariant.secondary,
           phase: _googlePhase,
           enabled: _phase == TideButtonPhase.idle,
@@ -388,6 +397,43 @@ class _AuthScreenState extends State<AuthScreen> {
           textAlign: TextAlign.center,
         ),
       ],
+    );
+  }
+
+  /// The other mode, offered as a sentence.
+  ///
+  /// Pinned to the bottom of the screen rather than left at the end of the
+  /// scroll: it is the one control on this page that a person may be
+  /// looking for before they have read anything, and hiding it under a form
+  /// they do not want to fill in is the whole reason people abandon an
+  /// account screen.
+  Widget _modeSwitch(double insets) {
+    if (insets > 0) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 4, 24, 14),
+      child: PressScale(
+        onTap: _toggleMode,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _signingUp
+                    ? 'Already have an account?'
+                    : 'New to Tide?',
+                style: TideType.labelMuted,
+              ),
+              const SizedBox(width: 7),
+              Text(
+                _signingUp ? 'Log in' : 'Create one',
+                style: TideType.label.copyWith(color: TideColors.lantern),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -27,6 +27,7 @@ class TideMark extends StatefulWidget {
     this.strokeWidth = 4,
     this.coreSize = 14,
     this.orbit = true,
+    this.drawIn = true,
     this.delay = const Duration(milliseconds: 180),
   });
 
@@ -38,6 +39,16 @@ class TideMark extends StatefulWidget {
 
   /// Whether the lit point runs the circumference once the ring is drawn.
   final bool orbit;
+
+  /// Whether the ring draws itself in, or is simply already closed.
+  ///
+  /// Off wherever the mark is being *handed* one screen to the next. The
+  /// point of that hand-off is that it is one object arriving, and an
+  /// object that redraws itself from an empty arc the moment it lands is
+  /// plainly a second object — it also takes a full second to do it, so
+  /// there is a long beat where the thing that was supposed to have
+  /// travelled is not there at all.
+  final bool drawIn;
 
   final Duration delay;
 
@@ -59,6 +70,11 @@ class _TideMarkState extends State<TideMark> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    if (!widget.drawIn) {
+      _draw.value = 1;
+      if (widget.orbit) _orbit.repeat();
+      return;
+    }
     Future<void>.delayed(widget.delay, () {
       if (!mounted) return;
       _draw.forward();

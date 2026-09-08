@@ -20,7 +20,7 @@ abstract final class SeedData {
       _build(
         id: 'morning-water',
         name: 'Morning water',
-        glyph: TideGlyph.crescent,
+        glyph: TideGlyph.water,
         type: HabitType.quantity,
         target: 8,
         unit: 'glasses',
@@ -40,7 +40,7 @@ abstract final class SeedData {
       _build(
         id: 'read-pages',
         name: 'Read 20 pages',
-        glyph: TideGlyph.lines,
+        glyph: TideGlyph.read,
         type: HabitType.binary,
         target: 1,
         unit: '',
@@ -59,7 +59,7 @@ abstract final class SeedData {
       _build(
         id: 'move-30',
         name: 'Move 30 min',
-        glyph: TideGlyph.peak,
+        glyph: TideGlyph.run,
         type: HabitType.duration,
         target: 30,
         unit: 'min',
@@ -75,7 +75,7 @@ abstract final class SeedData {
       _build(
         id: 'no-screens',
         name: 'No screens after 10',
-        glyph: TideGlyph.square,
+        glyph: TideGlyph.screenOff,
         type: HabitType.binary,
         target: 1,
         unit: '',

@@ -59,6 +59,29 @@ class TideShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onFirstTab = navigationShell.currentIndex == 0;
+
+    // Android's back button on History, Insights or Settings used to close
+    // the app. Nothing was wrong with the router — there was simply nothing
+    // on the stack to pop, because switching tabs replaces the branch
+    // rather than pushing onto it, so back fell through to the system and
+    // the system quit.
+    //
+    // Back on a secondary tab now means what it means everywhere else on
+    // Android: go back to where you came from, which for a tab bar is the
+    // first tab. Only Today may exit the app, and only from its own root —
+    // a screen pushed inside a branch pops normally, because the branch
+    // navigator handles the gesture before this ever sees it.
+    return PopScope(
+      canPop: onFirstTab,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) navigationShell.goBranch(0);
+      },
+      child: _scaffold(context),
+    );
+  }
+
+  Widget _scaffold(BuildContext context) {
     return Scaffold(
       backgroundColor: TideColors.deepWater,
       // The tab bar is frosted glass, so the page has to keep going behind

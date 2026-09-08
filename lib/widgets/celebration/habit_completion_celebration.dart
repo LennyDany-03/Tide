@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../config/celebration_copy.dart';
 import '../../services/models/celebration_cue.dart';
-import '../../services/models/tide_glyph.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
@@ -75,7 +75,7 @@ class _HabitCompletionCelebrationState extends State<HabitCompletionCelebration>
       liveRegion: true,
       label: frozen
           ? 'Streak protected. ${widget.cue.habitName} frozen.'
-          : 'Mission complete. ${widget.cue.habitName} completed.',
+          : '${widget.cue.habitName} completed.',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _dismiss,
@@ -142,6 +142,17 @@ class _MilestoneStyleMessage extends StatelessWidget {
   final CelebrationCue cue;
   final Color accent;
 
+  /// The headline, drawn from the copy set that matches what just
+  /// happened and seeded by the cue so it holds still while it is read.
+  String get _headline {
+    final lines = switch (cue.type) {
+      CelebrationCueType.freeze => CelebrationCopy.frozen,
+      CelebrationCueType.completion =>
+        cue.dayComplete ? CelebrationCopy.dayComplete : CelebrationCopy.completion,
+    };
+    return CelebrationCopy.pick(lines, cue.nonce);
+  }
+
   @override
   Widget build(BuildContext context) {
     final frozen = cue.type == CelebrationCueType.freeze;
@@ -151,7 +162,7 @@ class _MilestoneStyleMessage extends StatelessWidget {
         ? 'The whole day is surfaced'
         : '${cue.streak} days, surfaced';
     return SizedBox(
-      width: 250,
+      width: 290,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -170,7 +181,7 @@ class _MilestoneStyleMessage extends StatelessWidget {
             child: frozen
                 ? Icon(Icons.ac_unit_rounded, size: 48, color: accent)
                 : HabitGlyph(
-                    glyph: _glyphFor(cue.habitId),
+                    glyph: cue.glyph,
                     size: 53,
                     color: accent,
                     strokeWidth: 2.25,
@@ -178,7 +189,7 @@ class _MilestoneStyleMessage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            frozen ? 'Streak protected' : 'Mission complete',
+            _headline,
             style: TideType.hero.copyWith(
               color: accent,
               decoration: TextDecoration.none,
@@ -200,20 +211,5 @@ class _MilestoneStyleMessage extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  /// The global overlay only receives a habit id. A stable marker keeps the
-  /// centre visual specific to the habit without adding a second icon set.
-  TideGlyph _glyphFor(String habitId) {
-    const glyphs = [
-      TideGlyph.dot,
-      TideGlyph.crescent,
-      TideGlyph.diamond,
-      TideGlyph.peak,
-      TideGlyph.hexagon,
-      TideGlyph.sparkle,
-    ];
-    final hash = habitId.codeUnits.fold<int>(0, (sum, unit) => sum + unit);
-    return glyphs[hash % glyphs.length];
   }
 }

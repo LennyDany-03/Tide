@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'tide_glyph.dart';
+
 enum CelebrationCueType { completion, freeze }
 
 
@@ -17,6 +19,7 @@ class CelebrationCue {
   const CelebrationCue({
     required this.habitId,
     required this.habitName,
+    required this.glyph,
     required this.type,
     required this.streak,
     required this.dayComplete,
@@ -25,6 +28,12 @@ class CelebrationCue {
 
   final String habitId;
   final String habitName;
+
+  /// The habit's own icon. Carried on the cue rather than looked up by id,
+  /// because the overlay lives above the router and hashing the id into a
+  /// stand-in shape — which is what it used to do — showed people a mark
+  /// that was not the one on their card.
+  final TideGlyph glyph;
   final CelebrationCueType type;
   /// The streak *including* the day just logged — the figure the panel
   /// reports.

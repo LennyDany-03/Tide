@@ -21,22 +21,42 @@ Future<void> settle(WidgetTester tester, [int ms = 700]) async {
   await tester.pump(const Duration(milliseconds: 1200));
 }
 
-/// Walks the explanation and lands on the auth form.
+/// Walks the explanation and lands on the auth form, which opens on log in.
 Future<void> reachAuth(WidgetTester tester) async {
   await tester.pumpWidget(const TideApp());
   await settle(tester, 900);
 
-  await tester.tap(find.text('Get started'));
+  await tester.tap(find.text('Show me how'));
   await settle(tester);
   for (var i = 0; i < 3; i++) {
     await tester.tap(find.text('Next'));
     await settle(tester);
   }
-  await tester.tap(find.text('Create your account'));
+  await tester.tap(find.text('Get started'));
   await settle(tester, 900);
 }
 
+/// Presses one of the account form's buttons, scrolling it into view first.
+/// The form is longer than a short window, and the mode switch is pinned
+/// across the bottom of it.
+Future<void> pressAuthButton(WidgetTester tester, String label) async {
+  final target = find.widgetWithText(TideButton, label);
+  await tester.ensureVisible(target);
+  await settle(tester, 200);
+  await tester.tap(target);
+  await settle(tester);
+}
+
+/// And crosses over to the sign-up half of it.
+Future<void> reachSignUp(WidgetTester tester) async {
+  await reachAuth(tester);
+  await tester.tap(find.text('Create one'));
+  await settle(tester);
+}
+
 /// Fills the sign-up form and waits out the button's fake round trip.
+///
+/// Assumes the form is already in sign-up mode — see [reachSignUp].
 Future<void> signUp(
   WidgetTester tester, {
   String name = 'Sam Reyes',
@@ -49,7 +69,7 @@ Future<void> signUp(
   await tester.enterText(fields.at(2), password);
   await tester.pump();
 
-  await tester.tap(find.widgetWithText(TideButton, 'Create account'));
+  await pressAuthButton(tester, 'Create account');
   // Busy, then the checkmark, then the route change.
   await settle(tester, 700);
   await settle(tester, 500);
@@ -65,7 +85,7 @@ void main() {
       await settle(tester, 900);
 
       expect(find.text('Tide'), findsOneWidget);
-      expect(find.text('Get started'), findsOneWidget);
+      expect(find.text('Show me how'), findsOneWidget);
       expect(find.text('Skip'), findsOneWidget);
       expect(
         find.byIcon(Icons.arrow_back_rounded),
@@ -80,7 +100,7 @@ void main() {
       await tester.pumpWidget(const TideApp());
       await settle(tester, 900);
 
-      await tester.tap(find.text('Get started'));
+      await tester.tap(find.text('Show me how'));
       await settle(tester);
       expect(find.text('One swipe, and the day is done'), findsOneWidget);
 
@@ -112,7 +132,11 @@ void main() {
       await tester.drag(find.byType(PageView), const Offset(-40, 0));
       await settle(tester);
 
-      expect(find.text('Get started'), findsOneWidget, reason: 'still page one');
+      expect(
+        find.text('Show me how'),
+        findsOneWidget,
+        reason: 'still page one',
+      );
       expect(
         tester.state(find.byType(TideMark)),
         same(before),
@@ -124,22 +148,25 @@ void main() {
       await tester.pumpWidget(const TideApp());
       await settle(tester, 900);
 
-      await tester.tap(find.text('Get started'));
+      await tester.tap(find.text('Show me how'));
       await settle(tester);
       expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.arrow_back_rounded));
       await settle(tester);
 
-      expect(find.text('Get started'), findsOneWidget);
+      expect(find.text('Show me how'), findsOneWidget);
       expect(find.byIcon(Icons.arrow_back_rounded), findsNothing);
     });
 
     testWidgets('the last page hands off to the account form', (tester) async {
       await reachAuth(tester);
 
-      expect(find.text('Start your first loop'), findsOneWidget);
-      expect(find.widgetWithText(TideButton, 'Create account'), findsOneWidget);
+      // Log in first: most people reaching this screen have been here
+      // before, and handing a returning user a sign-up form every time is
+      // the wrong default.
+      expect(find.text('Welcome back'), findsOneWidget);
+      expect(find.widgetWithText(TideButton, 'Log in'), findsOneWidget);
     });
 
     testWidgets('skip goes to the form, not straight into the app', (
@@ -151,7 +178,7 @@ void main() {
       await tester.tap(find.text('Skip'));
       await settle(tester, 900);
 
-      expect(find.text('Start your first loop'), findsOneWidget);
+      expect(find.text('Welcome back'), findsOneWidget);
     });
   });
 
@@ -159,10 +186,9 @@ void main() {
     testWidgets('refuses an incomplete sign-up and says which field', (
       tester,
     ) async {
-      await reachAuth(tester);
+      await reachSignUp(tester);
 
-      await tester.tap(find.widgetWithText(TideButton, 'Create account'));
-      await settle(tester);
+      await pressAuthButton(tester, 'Create account');
 
       expect(find.text('What should we call you?'), findsOneWidget);
       expect(find.text('Email is required'), findsOneWidget);
@@ -177,7 +203,7 @@ void main() {
     testWidgets('catches a malformed email and a short password', (
       tester,
     ) async {
-      await reachAuth(tester);
+      await reachSignUp(tester);
 
       final fields = find.byType(TextField);
       await tester.enterText(fields.at(0), 'Sam');
@@ -185,16 +211,23 @@ void main() {
       await tester.enterText(fields.at(2), 'short');
       await tester.pump();
 
-      await tester.tap(find.widgetWithText(TideButton, 'Create account'));
-      await settle(tester);
+      await pressAuthButton(tester, 'Create account');
 
       expect(find.text('That does not look like an email'), findsOneWidget);
       expect(find.text('Use at least 8 characters'), findsOneWidget);
     });
 
-    testWidgets('switching to log in drops the name field', (tester) async {
+    testWidgets('crossing to sign-up adds the name field, and back', (
+      tester,
+    ) async {
       await reachAuth(tester);
+      expect(find.byType(TextField), findsNWidgets(2));
+
+      await tester.tap(find.text('Create one'));
+      await settle(tester);
+
       expect(find.byType(TextField), findsNWidgets(3));
+      expect(find.text('Start your first loop'), findsOneWidget);
 
       await tester.tap(find.text('Log in'));
       await settle(tester);
@@ -206,7 +239,7 @@ void main() {
 
   group('signing up opens an empty Today with a tour', () {
     testWidgets('the app arrives blank', (tester) async {
-      await reachAuth(tester);
+      await reachSignUp(tester);
       await signUp(tester);
 
       expect(find.text('Today'), findsWidgets);
@@ -225,7 +258,7 @@ void main() {
     testWidgets('the tour lights the first stop and can be walked', (
       tester,
     ) async {
-      await reachAuth(tester);
+      await reachSignUp(tester);
       await signUp(tester);
 
       // The overlay waits for Today to paint before closing in on it.
@@ -240,7 +273,7 @@ void main() {
     });
 
     testWidgets('skipping the tour leaves Today usable', (tester) async {
-      await reachAuth(tester);
+      await reachSignUp(tester);
       await signUp(tester);
       await settle(tester, 900);
 
