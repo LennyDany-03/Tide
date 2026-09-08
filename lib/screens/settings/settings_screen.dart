@@ -5,24 +5,21 @@ import '../../config/app_constants.dart';
 import '../../config/app_routes.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
-import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
-import '../../widgets/hold_to_fill.dart';
 import '../../widgets/stagger_list.dart';
 import '../../widgets/tide_switch.dart';
 import '../../widgets/tide_tab_bar.dart';
 import 'widgets/account_card.dart';
 import 'widgets/settings_group.dart';
 import 'widgets/settings_row.dart';
-import 'widgets/sync_pulse_dot.dart';
 
-/// Account, notifications, sync, data.
+/// Account, notifications, app.
 ///
-/// The quiet screen. Rows settle in on arrival, toggles get a small spring,
-/// sync keeps its slow pulse — and that is the entire animation budget.
-/// Every other screen in Tide competes for attention; this one is where the
-/// app stops performing, which is what makes the rest of it feel deliberate
-/// rather than merely busy.
+/// The quiet screen. Rows settle in on arrival and toggles get a small
+/// spring — and that is the entire animation budget. Every other screen in
+/// Tide competes for attention; this one is where the app stops performing,
+/// which is what makes the rest of it feel deliberate rather than merely
+/// busy.
 ///
 /// What it was: a bare name row, then three ungrouped columns of
 /// left-aligned sentences on open ground. Every line the same size, the
@@ -30,26 +27,16 @@ import 'widgets/sync_pulse_dot.dart';
 /// looking for a specific thing — so finding it meant reading all fourteen.
 /// Groups are panels now and every row leads with its own mark, which turns
 /// that read into a glance.
-class SettingsScreen extends StatefulWidget {
+///
+/// The sync-and-data group is gone, and so is the demo-data restore. All
+/// four of those rows described machinery that does not exist: there is no
+/// service behind iCloud sync, no file behind the CSV export, and the
+/// delete and restore controls both operated on an in-memory store that
+/// resets itself on every launch anyway. A settings screen that offers
+/// four controls over nothing is worse than a shorter one — it is the part
+/// of the app that is supposed to tell the truth about how it behaves.
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  bool _confirmingDelete = false;
-
-  void _exportCsv() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Export prepared — every log, as CSV.',
-          style: TideType.label,
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -121,83 +108,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
 
             SettingsGroup(
-              title: 'Sync and data',
-              rows: [
-                SettingsRow(
-                  label: 'iCloud sync',
-                  icon: Icons.cloud_done_rounded,
-                  trailing: SyncPulseDot(lastSync: store.lastSync),
-                  onTap: store.sync,
-                ),
-                SettingsRow(
-                  label: 'Export CSV',
-                  subtitle: 'Every log, as a spreadsheet',
-                  icon: Icons.ios_share_rounded,
-                  showChevron: true,
-                  onTap: _exportCsv,
-                ),
-                SettingsRow(
-                  label: 'Delete all data',
-                  icon: Icons.delete_outline_rounded,
-                  destructive: true,
-                  showChevron: !_confirmingDelete,
-                  onTap: () => setState(() => _confirmingDelete = true),
-                ),
-                // The destructive confirmation expands inline, using the
-                // same coral hold as every other delete in the app.
-                AnimatedSize(
-                  duration: TideMotion.tabSwitch,
-                  curve: TideMotion.tabCurve,
-                  alignment: Alignment.topCenter,
-                  child: _confirmingDelete
-                      ? Padding(
-                          padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'This removes every habit and every log. It '
-                                'cannot be undone.',
-                                style: TideType.labelMuted,
-                              ),
-                              const SizedBox(height: 12),
-                              HoldToConfirmButton(
-                                label: 'Hold to delete everything',
-                                holdingLabel: 'Keep holding…',
-                                onConfirm: () {
-                                  store.deleteAllData();
-                                  setState(() => _confirmingDelete = false);
-                                },
-                              ),
-                              const SizedBox(height: 10),
-                              Center(
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () =>
-                                      setState(() => _confirmingDelete = false),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 8,
-                                      horizontal: 16,
-                                    ),
-                                    child: Text(
-                                      'Cancel',
-                                      style: TideType.label.copyWith(
-                                        color: TideColors.silt,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : const SizedBox(width: double.infinity),
-                ),
-              ],
-            ),
-
-            SettingsGroup(
               title: 'App',
               rows: [
                 SettingsRow(
@@ -221,13 +131,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.help_outline_rounded,
                   showChevron: true,
                   onTap: () {},
-                ),
-                SettingsRow(
-                  label: 'Restore demo data',
-                  subtitle: 'Puts the sample history back',
-                  icon: Icons.restore_rounded,
-                  showChevron: true,
-                  onTap: store.restoreSeed,
                 ),
               ],
             ),
