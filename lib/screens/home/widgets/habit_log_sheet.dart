@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,8 +12,6 @@ import '../../../theme/tide_typography.dart';
 import '../../../widgets/habit_glyph.dart';
 import '../../../widgets/hold_to_fill.dart';
 import '../../../widgets/press_scale.dart';
-import '../../../widgets/ripple_burst.dart';
-import '../../../widgets/tide_ring.dart';
 import '../../../widgets/tide_sheet.dart';
 
 /// Logging a habit that has a count, raised as a bottom sheet.
@@ -23,17 +23,26 @@ import '../../../widgets/tide_sheet.dart';
 /// parts. It also put a slow gesture on a row you scroll past, so brushing
 /// the list logged things.
 ///
-/// Here the count is the subject of its own surface: the ring shows where
-/// the day stands, and one hold banks one unit. You stop when the number is
-/// right, which is the thing the sweep never let you do.
+/// Here the count is the subject of its own surface, and one hold banks one
+/// unit. You stop when the number is right, which is the thing the sweep
+/// never let you do.
 ///
-/// The hold used to run as a metronome — a unit on touch-down and another
-/// every quarter second after — which traded one unaddressable gesture for
-/// a faster one: a resting thumb filled the target before you could react
-/// to any single unit of it. A hold now costs one unit and then goes dead
-/// until the finger lifts. The nudge buttons flanking it are the answer to
-/// what that costs a thirty-minute target, and they are also the only way
-/// to walk a count back down after overshooting it.
+/// **The redesign.** This was a progress ring with the count inside it and
+/// a caption underneath explaining the controls. Three things were wrong
+/// with that. The ring is the app's most reused object — it is on every
+/// habit card, in the save button, behind the empty state — so the one
+/// screen that exists to be *about* a quantity looked like everything else.
+/// A ring is also a poor instrument for a count: an arc at 62% does not
+/// answer "how many more", it answers "roughly how far", and this screen is
+/// only ever open because somebody wants the first answer. And the whole
+/// middle of the sheet was spent restating the controls in a sentence.
+///
+/// What replaces it is a vessel filling up — the level rises, the units are
+/// ruled across it, and the figure sits beside it at the size the screen
+/// deserves. It is the product's own metaphor stated literally, on the one
+/// screen where a literal reading is the useful one, and it leaves the
+/// space the caption was using to say the thing that actually matters:
+/// how many are left.
 ///
 /// A sheet rather than a pushed screen, for the same reason as the day
 /// breakdown: you are still looking at Today, and Today should stay behind
@@ -90,8 +99,25 @@ class _LogSheet extends StatefulWidget {
   State<_LogSheet> createState() => _LogSheetState();
 }
 
-class _LogSheetState extends State<_LogSheet> {
-  int _burst = 0;
+class _LogSheetState extends State<_LogSheet>
+    with SingleTickerProviderStateMixin {
+  /// The water moving when something lands in it.
+  ///
+  /// The app's rule is that motion has to be caused by something the user
+  /// did, and this obeys it exactly: the surface is flat until a unit is
+  /// banked, then it rocks once and settles. An idling wave would be
+  /// decoration; a wave that only moves when the level does is the level
+  /// reporting itself.
+  late final AnimationController _slosh = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+
+  @override
+  void dispose() {
+    _slosh.dispose();
+    super.dispose();
+  }
 
   /// Moves the day's count by [delta], clamped to the target.
   ///
@@ -107,12 +133,14 @@ class _LogSheetState extends State<_LogSheet> {
     if (next == logged) return;
 
     widget.onLog(next);
+    _slosh
+      ..reset()
+      ..forward();
 
     // Only reaching the target celebrates. Stepping back down to it after
     // an overshoot is a correction, not an arrival.
     if (delta > 0 && next >= habit.target) {
       HapticFeedback.heavyImpact();
-      setState(() => _burst++);
     }
   }
 
@@ -121,14 +149,17 @@ class _LogSheetState extends State<_LogSheet> {
     final habit = TideScope.of(context).habitById(widget.habitId);
     if (habit == null) return const SizedBox.shrink();
 
-    final logged = habit.amountOn(DateTime.now());
-    final complete = habit.isCompleteOn(DateTime.now());
+    final today = DateTime.now();
+    final logged = habit.amountOn(today);
+    final complete = habit.isCompleteOn(today);
+    final remaining = (habit.target - logged).clamp(0, habit.target);
 
     return TideSheet(
+      eyebrow: '${habit.targetLabel} a day',
       title: habit.name,
       leading: _Glyph(habit: habit),
       onDismiss: () => Navigator.of(context).pop(),
-      maxHeightFactor: 0.7,
+      maxHeightFactor: 0.72,
       footer: _HoldRow(
         complete: complete,
         canDecrease: logged > 0,
@@ -136,40 +167,52 @@ class _LogSheetState extends State<_LogSheet> {
         onNudge: _nudge,
         onDone: () => Navigator.of(context).pop(),
       ),
-      // Scrollable so the ring is never the thing that gets clipped. The
+      // Scrollable so the vessel is never the thing that gets clipped. The
       // body is sized by what is left after the header and the hold control,
-      // and on a short screen — or at the top of the text-scale band — that
-      // is less than the ring and its line of copy want.
+      // and at the top of the text-scale band that is less than the column
+      // and its figure want.
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+        // Centred rather than stretched: the row sits inside a scroll
+        // view, so there is no bounded height for a stretch to resolve
+        // against — the vessel carries the height and the readout centres
+        // against it.
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            RippleBurst(
-              trigger: _burst,
-              // The one place the spill is wanted: the ring is centred in
-              // open sheet, and the wash reading past it is the reward for
-              // reaching the target.
-              clip: false,
-              child: TideRing(
-                progress: habit.progressOn(DateTime.now()),
-                size: 132,
-                strokeWidth: 4,
-                // Keeps pace with the count. The default fill is longer
-                // than a step, so a held run would leave the ring trailing
-                // several units behind the number inside it.
-                duration: TideMotion.holdStep,
-                child: _Readout(logged: logged, habit: habit),
+            SizedBox(
+              width: 92,
+              height: 200,
+              child: AnimatedBuilder(
+                animation: _slosh,
+                builder: (context, _) => TweenAnimationBuilder<double>(
+                  tween: Tween<double>(end: habit.progressOn(today)),
+                  duration: TideMotion.holdStep,
+                  curve: TideMotion.tabCurve,
+                  builder: (context, level, _) => CustomPaint(
+                    painter: _VesselPainter(
+                      level: level,
+                      slosh: _slosh.value,
+                      // Ruled per unit while the units are countable. Past a
+                      // dozen the lines stop being a scale and start being
+                      // hatching, so a duration habit gets quarters instead.
+                      divisions: habit.target <= 12
+                          ? habit.target.round()
+                          : 4,
+                      complete: complete,
+                    ),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 18),
-            Text(
-              complete
-                  ? 'Target reached for today.'
-                  : 'One hold logs one. Lift and hold again for the next, '
-                        'or nudge it with − and +.',
-              textAlign: TextAlign.center,
-              style: TideType.bodyMuted,
+            const SizedBox(width: 22),
+            Expanded(
+              child: _Readout(
+                logged: logged,
+                habit: habit,
+                remaining: remaining,
+                complete: complete,
+              ),
             ),
           ],
         ),
@@ -178,38 +221,216 @@ class _LogSheetState extends State<_LogSheet> {
   }
 }
 
-/// The count, inside the ring.
+/// The figure, what it is counted in, and how much is left.
+///
+/// Left-aligned beside the vessel rather than centred inside a ring. A
+/// number that big is the thing the eye lands on, and a left edge shared
+/// with the two lines under it makes the three read as one statement
+/// instead of three centred captions.
 class _Readout extends StatelessWidget {
-  const _Readout({required this.logged, required this.habit});
+  const _Readout({
+    required this.logged,
+    required this.habit,
+    required this.remaining,
+    required this.complete,
+  });
 
   final num logged;
   final Habit habit;
+  final num remaining;
+  final bool complete;
+
+  /// "3 glasses to go", "15 min to go" — the answer to the only question
+  /// anybody opens this sheet with.
+  String get _left {
+    final amount = remaining.round();
+    final unit = habit.unit.isEmpty ? '' : ' ${habit.unit}';
+    return '$amount$unit to go';
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           '${logged.round()}',
           style: TideType.gauge(
-            46,
-            letterSpacing: -2.4,
-            color: habit.isCompleteOn(DateTime.now())
-                ? TideColors.lantern
-                : TideColors.bone,
+            64,
+            letterSpacing: -3.4,
+            color: complete ? TideColors.lantern : TideColors.bone,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text('of ${habit.targetLabel}', style: TideType.labelMuted),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: complete
+                ? TideColors.lantern.withValues(alpha: 0.12)
+                : TideColors.trench,
+            borderRadius: TideElevation.radius12,
+          ),
+          child: Text(
+            complete ? 'Target reached for today.' : _left,
+            style: TideType.label.copyWith(
+              color: complete ? TideColors.lantern : TideColors.silt,
+            ),
+          ),
+        ),
       ],
     );
   }
 }
 
-/// The habit's mark, in the sheet header where the FAB's disc sits on the
-/// add/edit sheet — so a sheet always opens with the thing it is about in
-/// the same corner.
+/// The vessel: a recessed column, the level in it, and the units ruled
+/// across it.
+class _VesselPainter extends CustomPainter {
+  const _VesselPainter({
+    required this.level,
+    required this.slosh,
+    required this.divisions,
+    required this.complete,
+  });
+
+  /// 0..1 of the target.
+  final double level;
+
+  /// 0..1 of one rock-and-settle, fired when a unit lands.
+  final double slosh;
+
+  /// How many units the column is ruled into.
+  final int divisions;
+
+  final bool complete;
+
+  static const double _radius = 26;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final body = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      const Radius.circular(_radius),
+    );
+
+    // The well. Darker than the page, because a recess shows the water
+    // below it — the same reading every input in the app gets.
+    canvas.drawRRect(body, Paint()..color = TideColors.trench);
+
+    canvas.save();
+    canvas.clipRRect(body);
+
+    if (level > 0) {
+      _paintWater(canvas, size);
+    }
+    _paintRules(canvas, size);
+
+    canvas.restore();
+
+    canvas.drawRRect(
+      body,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = complete
+            ? TideColors.lantern.withValues(alpha: 0.5)
+            : TideColors.hairline,
+    );
+  }
+
+  void _paintWater(Canvas canvas, Size size) {
+    // A rocking surface that decays to flat. Amplitude is small on purpose:
+    // this is water settling after something was added to it, not a sea.
+    final decay = slosh == 0 ? 0.0 : (1 - slosh) * (1 - slosh);
+    final amplitude = 7 * decay;
+    final phase = slosh * math.pi * 4;
+
+    final surface = size.height * (1 - level.clamp(0.0, 1.0));
+    final path = Path()..moveTo(0, surface);
+
+    // Sampled rather than drawn as two arcs: the crest has to stay put at
+    // the edges of the column while the middle moves, and a quadratic
+    // through three points drifts at the walls.
+    const steps = 24;
+    for (var i = 0; i <= steps; i++) {
+      final x = size.width * i / steps;
+      final wave =
+          math.sin((i / steps) * math.pi * 2 + phase) *
+          amplitude *
+          math.sin((i / steps) * math.pi);
+      path.lineTo(x, surface + wave);
+    }
+    path
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            TideColors.lantern.withValues(alpha: 0.85),
+            TideColors.lantern.withValues(alpha: 0.42),
+          ],
+        ).createShader(Rect.fromLTWH(0, surface, size.width, size.height)),
+    );
+
+    // A bright line along the surface itself, so the level has an edge
+    // rather than fading into the fill under it.
+    final crest = Path()..moveTo(0, surface);
+    for (var i = 0; i <= steps; i++) {
+      final x = size.width * i / steps;
+      final wave =
+          math.sin((i / steps) * math.pi * 2 + phase) *
+          amplitude *
+          math.sin((i / steps) * math.pi);
+      crest.lineTo(x, surface + wave);
+    }
+    canvas.drawPath(
+      crest,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = TideColors.bone.withValues(alpha: 0.55),
+    );
+  }
+
+  /// The unit marks. Short ticks off the left wall rather than full rules:
+  /// a line all the way across cuts the water in half at every unit, and at
+  /// eight of them the column stops reading as one body of anything.
+  void _paintRules(Canvas canvas, Size size) {
+    if (divisions < 2) return;
+
+    final paint = Paint()
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round
+      ..color = TideColors.bone.withValues(alpha: 0.14);
+
+    for (var i = 1; i < divisions; i++) {
+      final y = size.height * (1 - i / divisions);
+      canvas.drawLine(
+        Offset(size.width * 0.30, y),
+        Offset(size.width * 0.70, y),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_VesselPainter old) =>
+      old.level != level ||
+      old.slosh != slosh ||
+      old.divisions != divisions ||
+      old.complete != complete;
+}
+
+/// The habit's mark, in the sheet header where the add screen puts its own —
+/// so a sheet always opens with the thing it is about in the same corner.
 class _Glyph extends StatelessWidget {
   const _Glyph({required this.habit});
 
@@ -227,7 +448,7 @@ class _Glyph extends StatelessWidget {
       child: Center(
         child: HabitGlyph(
           glyph: habit.glyph,
-          size: 16,
+          size: 17,
           color: TideColors.lantern,
         ),
       ),
@@ -324,7 +545,7 @@ class _Nudge extends StatelessWidget {
         enabled: enabled,
         label: semanticLabel,
         child: Container(
-          width: 52,
+          width: 54,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: TideColors.trench,
@@ -383,23 +604,31 @@ class _HoldButton extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(
                 horizontal: 18,
-                vertical: 16,
+                vertical: 17,
               ),
               decoration: BoxDecoration(
-                color: TideColors.lantern.withValues(
-                  alpha: complete ? 0.10 : 0.14,
-                ),
+                color: complete
+                    ? TideColors.lantern.withValues(alpha: 0.10)
+                    : TideColors.lantern,
                 borderRadius: TideElevation.radius12,
-                border: Border.all(
-                  color: TideColors.lantern.withValues(
-                    alpha: complete ? 0.22 : 0.34,
-                  ),
-                ),
+                border: complete
+                    ? Border.all(
+                        color: TideColors.lantern.withValues(alpha: 0.3),
+                      )
+                    : null,
               ),
               child: Center(
                 child: Text(
                   label,
-                  style: TideType.button.copyWith(color: TideColors.lantern),
+                  style: TideType.button.copyWith(
+                    // Solid accent while there is something to log: this is
+                    // the primary action on the sheet and it used to be a
+                    // 14%-alpha wash, quieter than the two corrections
+                    // flanking it.
+                    color: complete
+                        ? TideColors.lantern
+                        : TideColors.deepWater,
+                  ),
                 ),
               ),
             ),
@@ -414,8 +643,8 @@ class _HoldButton extends StatelessWidget {
                     child: FractionallySizedBox(
                       widthFactor: complete ? 0 : progress,
                       child: ColoredBox(
-                        color: TideColors.lantern.withValues(
-                          alpha: banked ? 0.30 : 0.20,
+                        color: TideColors.deepWater.withValues(
+                          alpha: banked ? 0.24 : 0.16,
                         ),
                         child: const SizedBox.expand(),
                       ),

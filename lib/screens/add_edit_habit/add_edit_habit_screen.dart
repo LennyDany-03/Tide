@@ -11,11 +11,12 @@ import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/habit_glyph.dart';
 import '../../widgets/hold_to_fill.dart';
+import '../../widgets/press_scale.dart';
 import '../../widgets/ripple_burst.dart';
 import '../../widgets/segmented_pill.dart';
+import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_button.dart';
-import '../../widgets/tide_fab.dart';
-import '../../widgets/tide_sheet.dart';
+import '../../widgets/tide_dialog.dart';
 import 'widgets/day_selector.dart';
 import 'widgets/freeze_stepper.dart';
 import 'widgets/icon_picker.dart';
@@ -23,27 +24,35 @@ import 'widgets/live_habit_preview.dart';
 import 'widgets/name_field.dart';
 import 'widgets/reminder_row.dart';
 import 'widgets/target_fields.dart';
-import 'widgets/unsaved_changes_nudge.dart';
 
 /// Create or edit a habit.
 ///
-/// Presented as a sheet the FAB grows into. Everything on it feeds the live
-/// preview at the top, so the form is never describing a habit in the
-/// abstract — the card is right there, changing as you type.
-class AddEditHabitSheet extends StatefulWidget {
-  const AddEditHabitSheet({super.key, this.habitId});
+/// A screen, not a sheet. It was a sheet that grew out of the FAB — a
+/// modal, non-opaque route that scaled a nine-field form up from one corner
+/// while a `BackdropFilter` blurred everything behind it, every frame of
+/// the way. That is the most expensive transition the app could possibly
+/// have chosen, and it was spent on the longest-lived screen in it: a
+/// blurred live page underneath a form nobody fills in in under a minute.
+/// On a mid-range phone the entrance dropped frames before the first field
+/// was even visible.
+///
+/// The form itself is unchanged in kind — everything on it still feeds the
+/// live preview at the top, so it is never describing a habit in the
+/// abstract. It simply arrives the way a page arrives.
+class AddEditHabitScreen extends StatefulWidget {
+  const AddEditHabitScreen({super.key, this.habitId});
 
   /// Null creates; a habit id edits.
   final String? habitId;
 
   @override
-  State<AddEditHabitSheet> createState() => _AddEditHabitSheetState();
+  State<AddEditHabitScreen> createState() => _AddEditHabitScreenState();
 }
 
-class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
+class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
   final TextEditingController _name = TextEditingController();
 
-  TideGlyph _glyph = TideGlyph.diamond;
+  TideGlyph _glyph = TideGlyph.water;
   HabitType _type = HabitType.binary;
   num _target = 1;
   String _unit = '';
@@ -56,7 +65,10 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
   int _errorTick = 0;
   int _savedTick = 0;
   bool _dirty = false;
-  bool _showUnsavedNudge = false;
+
+  /// True from the moment leaving has been decided, so a save that pops and
+  /// a back gesture cannot both drive the route at once.
+  bool _leaving = false;
 
   Habit? _existing;
 
@@ -82,11 +94,12 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
       _freezes = habit.freezeAllowance;
     }
 
-    _name.addListener(() => _markDirty());
+    _name.addListener(_markDirty);
   }
 
   @override
   void dispose() {
+    _name.removeListener(_markDirty);
     _name.dispose();
     super.dispose();
   }
@@ -116,6 +129,7 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
           if (_unit.isEmpty || _unit == 'min') _unit = 'glasses';
           if (_target <= 1) _target = 8;
         case HabitType.duration:
+          // Duration is always carried in minutes; the control formats it.
           _unit = 'min';
           if (_target <= 1) _target = 30;
       }
@@ -157,9 +171,10 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
       return;
     }
 
+    FocusScope.of(context).unfocus();
     setState(() => _phase = TideButtonPhase.busy);
     // A beat of spinner before the checkmark, so the save reads as one
-    // continuous motion rather than the sheet blinking out.
+    // continuous motion rather than the page blinking out.
     await Future<void>.delayed(const Duration(milliseconds: 420));
     if (!mounted) return;
 
@@ -201,6 +216,8 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
     setState(() {
       _phase = TideButtonPhase.done;
       _savedTick++;
+      _leaving = true;
+      _dirty = false;
     });
 
     await Future<void>.delayed(TideMotion.ripple);
@@ -208,67 +225,142 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
   }
 
   void _delete() {
+    setState(() => _leaving = true);
     TideScope.read(context).deleteHabit(widget.habitId!);
     context.pop();
   }
 
-  void _attemptDismiss() {
-    if (_dirty && !_showUnsavedNudge) {
-      setState(() => _showUnsavedNudge = true);
+  /// The one way out. Both the × and the system back gesture end here, so
+  /// they cannot disagree about what unsaved means.
+  Future<void> _attemptLeave() async {
+    if (_leaving) return;
+    if (!_dirty) {
+      context.pop();
       return;
     }
-    context.pop();
+    setState(() => _leaving = true);
+    final discard = await confirmDiscardChanges(context);
+    if (!mounted) return;
+    if (discard) {
+      context.pop();
+    } else {
+      setState(() => _leaving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // The home indicator's inset, except while the keyboard is up — the
+    // scaffold has already lifted the whole body by then, and adding the
+    // gesture inset on top of that leaves a band of dead ground between the
+    // save button and the keys.
+    final media = MediaQuery.of(context);
+    final bottom = media.viewInsets.bottom > 0 ? 0.0 : media.padding.bottom;
+
     return PopScope(
-      canPop: !_dirty || _showUnsavedNudge,
+      canPop: !_dirty || _leaving,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) setState(() => _showUnsavedNudge = true);
+        if (!didPop) _attemptLeave();
       },
-      child: RippleBurst(
-        trigger: _savedTick,
-        color: TideColors.lantern,
-        origin: Alignment.bottomCenter,
-        intensity: 1.6,
-        child: TideSheet(
-          title: _isEditing ? 'Edit habit' : 'New habit',
-          leading: TideFabMorphTarget(
-            // Ground colour, because the disc under it is solid lantern —
-            // the glyph was inheriting the accent and disappearing into it.
-            child: HabitGlyph(
-              glyph: _glyph,
-              size: 16,
-              color: TideColors.deepWater,
-            ),
-          ),
-          onDismiss: _attemptDismiss,
-          footer: Column(
-            mainAxisSize: MainAxisSize.min,
+      child: Scaffold(
+        backgroundColor: TideColors.deepWater,
+        body: RippleBurst(
+          trigger: _savedTick,
+          color: TideColors.lantern,
+          origin: Alignment.bottomCenter,
+          intensity: 1.6,
+          child: Stack(
             children: [
-              UnsavedChangesNudge(
-                visible: _showUnsavedNudge,
-                onDiscard: () => context.pop(),
-                onKeepEditing: () => setState(() => _showUnsavedNudge = false),
+              const Positioned.fill(child: TideBackdrop()),
+              Column(
+                children: [
+                  _header(),
+                  Expanded(child: _form()),
+                  _footer(bottom),
+                ],
               ),
-              TideButton(
-                label: _isEditing ? 'Save changes' : 'Create habit',
-                phase: _phase,
-                onPressed: _save,
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: TideTopScrim(),
               ),
             ],
           ),
-          child: _form(),
         ),
+      ),
+    );
+  }
+
+  Widget _header() {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        14,
+        MediaQuery.paddingOf(context).top + 10,
+        20,
+        6,
+      ),
+      child: Row(
+        children: [
+          PressScale(
+            onTap: _attemptLeave,
+            child: const SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(
+                Icons.arrow_back_rounded,
+                size: 21,
+                color: TideColors.bone,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              _isEditing ? 'Edit habit' : 'New habit',
+              style: TideType.hero,
+            ),
+          ),
+          // The chosen icon, restated at the top of the page. It is the one
+          // part of the form you cannot see the effect of without looking
+          // back up at the preview.
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: TideColors.lantern,
+              shape: BoxShape.circle,
+            ),
+            child: HabitGlyph(
+              glyph: _glyph,
+              size: 18,
+              color: TideColors.deepWater,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _footer(double bottom) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + bottom),
+      decoration: BoxDecoration(
+        color: TideColors.deepWater,
+        border: Border(top: BorderSide(color: TideColors.hairline)),
+      ),
+      child: TideButton(
+        label: _isEditing ? 'Save changes' : 'Create habit',
+        phase: _phase,
+        onPressed: _save,
       ),
     );
   }
 
   Widget _form() {
     return ListView(
-      shrinkWrap: true,
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
       children: [
         LiveHabitPreview(
           name: _name.text,
@@ -330,7 +422,7 @@ class _AddEditHabitSheetState extends State<AddEditHabitSheet> {
         ),
 
         if (_isEditing) ...[
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           HoldToConfirmButton(
             label: 'Hold to delete habit',
             holdingLabel: 'Keep holding…',

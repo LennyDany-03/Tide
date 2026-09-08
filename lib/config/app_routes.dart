@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../screens/achievements/achievements_screen.dart';
-import '../screens/add_edit_habit/add_edit_habit_sheet.dart';
+import '../screens/add_edit_habit/add_edit_habit_screen.dart';
 import '../screens/auth/auth_screen.dart';
 import '../screens/calendar/calendar_screen.dart';
 import '../screens/habit_detail/habit_detail_screen.dart';
@@ -41,9 +41,30 @@ abstract final class AppRoutes {
       navigatorKey: _rootKey,
       initialLocation: startOnboarded ? Routes.today : Routes.onboarding,
       routes: [
+        // A plain fade, explicitly.
+        //
+        // Left as a default page, this route wore the platform's own
+        // transition — on Android a zoom — and onboarding's closing move is
+        // a ring travelling to a specific point on the next screen. The
+        // page zooming out from under it while it travelled is what made
+        // the hand-off read as two animations fighting, and it is the
+        // reason the mark appeared to jump size on its way across.
         GoRoute(
           path: Routes.onboarding,
-          builder: (context, state) => const OnboardingScreen(),
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
+            key: state.pageKey,
+            transitionDuration: TideMotion.sheetIn,
+            reverseTransitionDuration: TideMotion.sheetOut,
+            transitionsBuilder: (context, animation, secondary, child) =>
+                FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: animation,
+                    curve: TideMotion.tabCurve,
+                  ),
+                  child: child,
+                ),
+            child: const OnboardingScreen(),
+          ),
         ),
 
         // Sign-up and log-in. A `go` rather than a push in both directions:
@@ -54,7 +75,7 @@ abstract final class AppRoutes {
           path: Routes.auth,
           pageBuilder: (context, state) => CustomTransitionPage<void>(
             key: state.pageKey,
-            transitionDuration: TideMotion.morph,
+            transitionDuration: TideMotion.sheetIn,
             reverseTransitionDuration: TideMotion.sheetOut,
             // Rises and settles, catching the ring the closing onboarding
             // step is shrinking toward. A plain fade here left the mark
@@ -148,23 +169,29 @@ abstract final class AppRoutes {
           builder: (context, state) => const AchievementsScreen(),
         ),
 
-        // Sheets. Non-opaque so the screen behind stays visible, which is
-        // what makes them read as contextual rather than as a detour.
+        // The habit editor. A full page rather than a sheet: it is the
+        // longest-lived screen in the app and it used to arrive by scaling
+        // a nine-field form out of the FAB's corner over a live blurred
+        // page, which is the single most expensive frame budget the app
+        // could have spent, on the screen least able to afford it.
         GoRoute(
           path: Routes.newHabit,
           parentNavigatorKey: _rootKey,
           pageBuilder: (context, state) =>
-              _sheet(state, const AddEditHabitSheet(), morph: true),
+              _page(state, const AddEditHabitScreen()),
         ),
         GoRoute(
           path: '/habit/:id/edit',
           parentNavigatorKey: _rootKey,
-          pageBuilder: (context, state) => _sheet(
+          pageBuilder: (context, state) => _page(
             state,
-            AddEditHabitSheet(habitId: state.pathParameters['id']),
-            morph: true,
+            AddEditHabitScreen(habitId: state.pathParameters['id']),
           ),
         ),
+
+        // The paywall stays a sheet. It genuinely is contextual — it
+        // interrupts an action and hands it back — and it is on screen for
+        // a few seconds, not a few minutes.
         GoRoute(
           path: Routes.upgrade,
           parentNavigatorKey: _rootKey,
@@ -174,23 +201,48 @@ abstract final class AppRoutes {
     );
   }
 
-  /// [morph] picks the FAB-origin growth used by add/edit; everything else
-  /// rises from the bottom edge.
-  static CustomTransitionPage<void> _sheet(
-    GoRouterState state,
-    Widget child, {
-    bool morph = false,
-  }) {
+  /// A full page arriving from the right.
+  ///
+  /// Opaque, so nothing underneath is composited while it is up, and no
+  /// blur anywhere — a short slide over a fade is the cheapest transition
+  /// that still reads as "forward", and it costs the same on a phone with
+  /// four cores as it does on one with eight.
+  static CustomTransitionPage<void> _page(GoRouterState state, Widget child) {
+    return CustomTransitionPage<void>(
+      key: state.pageKey,
+      transitionDuration: TideMotion.tabSwitch,
+      reverseTransitionDuration: TideMotion.tabSwitch,
+      transitionsBuilder: (context, animation, secondary, child) {
+        final eased = CurvedAnimation(
+          parent: animation,
+          curve: TideMotion.tabCurve,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: eased,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.06, 0),
+              end: Offset.zero,
+            ).animate(eased),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+
+  /// Sheets rise from the bottom edge over a dimmed page.
+  static CustomTransitionPage<void> _sheet(GoRouterState state, Widget child) {
     return CustomTransitionPage<void>(
       key: state.pageKey,
       opaque: false,
       barrierDismissible: true,
       barrierColor: Colors.transparent,
-      transitionDuration: morph ? TideMotion.morph : TideMotion.sheetIn,
+      transitionDuration: TideMotion.sheetIn,
       reverseTransitionDuration: TideMotion.sheetOut,
-      transitionsBuilder: morph
-          ? tideMorphSheetTransition
-          : tideSheetTransition,
+      transitionsBuilder: tideSheetTransition,
       child: child,
     );
   }

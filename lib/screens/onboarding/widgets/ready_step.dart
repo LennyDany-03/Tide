@@ -16,11 +16,24 @@ import '../../../widgets/tide_mark.dart';
 /// just showed, in one line each with the glyph they were shown under, and
 /// it hands the ring on.
 ///
-/// [morph] is driven by the screen as it exits. The ring rises and
-/// *shrinks* rather than swelling, because what it is travelling toward is
-/// the small mark at the top of the auth screen — the last thing onboarding
-/// shows and the first thing sign-up shows are one object moving, not two
-/// screens that happen to both have a circle.
+/// [morph] is driven by the screen as it exits. The ring travels up and to
+/// the left and *shrinks* rather than swelling, because what it is
+/// travelling toward is the small mark above the title on the auth
+/// screen — the last thing onboarding shows and the first thing the account
+/// screen shows are one object moving, not two screens that happen to both
+/// have a circle.
+///
+/// The two things that were wrong with it, both of them timing. The copy
+/// left at 2.2× the morph and the chrome left at the same rate, but the
+/// ring held its opacity almost to the end — so for the back half of the
+/// hand-off the screen was a single small circle drifting on an empty page,
+/// which is the frame that read as the animation breaking. And it drifted
+/// straight up toward a mark that was in the top *right* corner, then
+/// arrived to find that mark drawing itself in from an empty arc over a
+/// full second. Nothing was continuous about it.
+///
+/// Now the ring leaves with everything else, aimed at where the mark
+/// actually lands, and the mark on the other side is simply already there.
 class ReadyStep extends StatelessWidget {
   const ReadyStep({super.key, required this.morph});
 
@@ -34,24 +47,46 @@ class ReadyStep extends StatelessWidget {
     (TideGlyph.striped, 'The grid shows the shape of the month'),
   ];
 
+  /// Where the mark ends up on the account screen: the page margin plus
+  /// half its own width, measured from the left edge.
+  static const double _landingX = 24 + 30;
+
+  /// And how far above the ring's resting place that is. Approximate on
+  /// purpose — the ring dissolves before it lands, and the eye reads a
+  /// hand-off from the direction and the shrink, not from the last pixel.
+  static const double _landingRise = 130;
+
+  /// 124 down to the 60 the account screen wears.
+  static const double _landingScale = 60 / 124;
+
   @override
   Widget build(BuildContext context) {
-    final travel = Curves.easeInCubic.transform(morph);
+    // Ease *out*, not in. Eased in, the ring spent the first half of the
+    // hand-off barely moving and then vanished — it had covered nine per
+    // cent of the distance by the time its opacity ran out, which is a
+    // fade dressed up as a journey. Leaving fast and decelerating means
+    // most of the travel happens while it is still bright.
+    final travel = Curves.easeOutCubic.transform(morph);
+    final width = MediaQuery.sizeOf(context).width;
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Spacer(),
         Transform.translate(
-          // Up and toward where the auth mark sits.
-          offset: Offset(0, -150 * travel),
+          // Up and across, toward the corner the mark lands in — not
+          // straight up toward nothing.
+          offset: Offset(
+            (_landingX - width / 2) * travel,
+            -_landingRise * travel,
+          ),
           child: Transform.scale(
-            scale: 1 - 0.58 * travel,
+            scale: 1 - (1 - _landingScale) * travel,
             child: Opacity(
-              // Held opaque well into the move, then dropped fast. Fading
-              // linearly from the first frame meant the ring was already
-              // half gone before it had gone anywhere.
-              opacity: (1 - travel * 1.35).clamp(0.0, 1.0),
+              // Leaves at the same rate as the copy and the chrome. Holding
+              // it opaque to the end is what left one small ring alone on a
+              // blank page for the back half of the hand-off.
+              opacity: (1 - morph * 2.2).clamp(0.0, 1.0),
               child: const TideMark(size: 124, strokeWidth: 3.5, coreSize: 11),
             ),
           ),
@@ -69,7 +104,7 @@ class ReadyStep extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 28),
                 child: Text(
-                  'Make an account and Tide will keep the loop for you.',
+                  'Sign in and Tide will keep the loop for you.',
                   style: TideType.bodyMuted,
                   textAlign: TextAlign.center,
                 ),

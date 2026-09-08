@@ -33,7 +33,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 900));
 
     expect(find.text('Tide'), findsOneWidget);
-    expect(find.text('Get started'), findsOneWidget);
+    expect(find.text('Show me how'), findsOneWidget);
     // Skip stays visible and equally weighted throughout the flow.
     expect(find.text('Skip'), findsOneWidget);
   });

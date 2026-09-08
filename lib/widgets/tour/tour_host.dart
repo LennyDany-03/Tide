@@ -27,7 +27,7 @@ class TourHost extends StatelessWidget {
 
   final Widget child;
 
-  /// Opens the add-habit sheet. Handed down rather than looked up: the
+  /// Opens the add-habit screen. Handed down rather than looked up: the
   /// router is not in scope above `MaterialApp.router`'s own builder.
   final VoidCallback onAddHabit;
 
@@ -46,10 +46,7 @@ class TourHost extends StatelessWidget {
             // style and merges its underline into whatever TideType asked
             // for. That is why the first build of this had a rule under
             // every line of the caption. One inherited style at the root of
-            // the overlay fixes all of them, including the shared demo's,
-            // which is better than the alternative the celebration overlay
-            // took: `decoration: TextDecoration.none` repeated on each Text,
-            // where the next Text anybody adds is underlined again.
+            // the overlay fixes all of them, including the shared demo's.
             child: DefaultTextStyle(
               style: TideType.body,
               child: TourOverlay(
@@ -75,9 +72,24 @@ class TourHost extends StatelessWidget {
 /// modal cards that happen to have holes in them, and they would stop
 /// looking at what is underneath.
 ///
-/// The caption rides with the light for the same reason, and re-lays itself
-/// above or below the hole depending on which side has room, so the panel
-/// never covers the thing it is describing.
+/// Three things were wrong with the first version of this, and all three
+/// were the same mistake — everything animating at once, in one tree.
+///
+/// The step's text swapped through an `AnimatedSwitcher` *while* the light
+/// was still travelling and the panel was still resizing, so three
+/// animations of three different lengths overlapped and the caption
+/// visibly rubber-banded. The panel was also laid out against the *moving*
+/// hole, which relaid the whole caption — text, gauge, and on one step a
+/// running demo — every single frame of the travel. And the ambient rim
+/// pulse was merged into the same `AnimatedBuilder` as the caption, so that
+/// entire subtree rebuilt sixty times a second for the whole tour, whether
+/// anything was moving or not.
+///
+/// Now: the caption fades out, the light travels alone, the caption fades
+/// back in at its new home. Nothing crossfades against anything, the
+/// caption is laid out once per step against the light's *destination*, and
+/// the pulse drives one small painter behind its own repaint boundary and
+/// nothing else.
 class TourOverlay extends StatefulWidget {
   const TourOverlay({
     super.key,
@@ -97,13 +109,16 @@ class _TourOverlayState extends State<TourOverlay>
   /// The light moving from one target to the next.
   late final AnimationController _travel = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 560),
+    duration: _travelTime,
   );
 
-  /// The caption arriving, once — subsequent steps slide rather than fade.
-  late final AnimationController _enter = AnimationController(
+  /// The caption's presence. Driven to 0 before a step change and back to 1
+  /// once the light is on its way, so the panel is never legible while it
+  /// is somewhere it should not be.
+  late final AnimationController _presence = AnimationController(
     vsync: this,
-    duration: TideMotion.sheetIn,
+    duration: _captionIn,
+    reverseDuration: _captionOut,
   );
 
   /// The ring breathing around the hole. Ambient, and earned: the tour is a
@@ -114,12 +129,32 @@ class _TourOverlayState extends State<TourOverlay>
     duration: TideMotion.breathe,
   )..repeat(reverse: true);
 
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _presence,
+    curve: Curves.easeOut,
+    reverseCurve: Curves.easeIn,
+  );
+
+  late final Animation<Offset> _rise =
+      Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
+        CurvedAnimation(parent: _presence, curve: TideMotion.sheetCurve),
+      );
+
   int _step = 0;
 
   Rect? _from;
   Rect? _to;
   double _fromRadius = 0;
   double _toRadius = 0;
+
+  /// A step change is in flight. Blocks the scrim's tap-to-advance, so a
+  /// second tap cannot start a second hand-off over the top of the first —
+  /// which is what made the light stutter when the panel was tapped
+  /// through impatiently.
+  bool _moving = false;
+
+  /// The opening step has found its target and the caption has been let in.
+  bool _opened = false;
 
   /// Frames spent waiting for an anchor to turn up.
   int _waited = 0;
@@ -132,6 +167,17 @@ class _TourOverlayState extends State<TourOverlay>
   /// first thing a new account sees should be their empty Today, not a
   /// scrim over a screen they never got to look at.
   static const Duration _settle = Duration(milliseconds: 520);
+
+  /// The light's flight, and the caption's two halves. The caption leaves
+  /// faster than it arrives — an exit that lingers reads as hesitation,
+  /// where an arrival that lingers reads as arrival.
+  static const Duration _travelTime = Duration(milliseconds: 480);
+  static const Duration _captionOut = Duration(milliseconds: 150);
+  static const Duration _captionIn = Duration(milliseconds: 260);
+
+  /// How far into the light's flight the caption starts coming back. Enough
+  /// that the eye has followed the light off the old target first.
+  static const Duration _captionDelay = Duration(milliseconds: 130);
 
   List<TourStep> get _steps => TourCatalog.steps;
 
@@ -150,7 +196,7 @@ class _TourOverlayState extends State<TourOverlay>
   @override
   void dispose() {
     _travel.dispose();
-    _enter.dispose();
+    _presence.dispose();
     _rim.dispose();
     super.dispose();
   }
@@ -178,7 +224,7 @@ class _TourOverlayState extends State<TourOverlay>
         _from = _to;
         _to = null;
       });
-      _enter.forward();
+      _open();
       return;
     }
 
@@ -192,7 +238,15 @@ class _TourOverlayState extends State<TourOverlay>
     _travel
       ..reset()
       ..forward();
-    _enter.forward();
+    _open();
+  }
+
+  /// Lets the caption in, once, on the opening step. Later steps are driven
+  /// by [_advance], which sequences the fade against the travel itself.
+  void _open() {
+    if (_opened) return;
+    _opened = true;
+    _presence.forward();
   }
 
   /// Where the light starts on the very first step: bigger than the screen,
@@ -203,81 +257,84 @@ class _TourOverlayState extends State<TourOverlay>
 
   static const double _openingSpread = 140;
 
-  void _advance() {
+  /// One step to the next, as a sequence rather than a pile.
+  Future<void> _advance() async {
+    if (_moving) return;
     if (_isLast) {
       widget.onFinish();
       return;
     }
+
+    _moving = true;
+    await _presence.reverse();
+    if (!mounted) return;
+
     setState(() => _step++);
     _resolve();
-  }
 
-  /// The hole this frame.
-  (Rect, double) get _hole {
-    final to = _to;
-    if (to == null) return (Rect.zero, 0);
-    final from = _from;
-    if (from == null) return (to, _toRadius);
-
-    final t = TideMotion.morphCurve.transform(_travel.value);
-    return (
-      Rect.lerp(from, to, t)!,
-      _fromRadius + (_toRadius - _fromRadius) * t,
-    );
+    await Future<void>.delayed(_captionDelay);
+    if (!mounted) return;
+    await _presence.forward();
+    _moving = false;
   }
 
   @override
   Widget build(BuildContext context) {
     final padding = MediaQuery.paddingOf(context);
 
-    return AnimatedBuilder(
-      animation: Listenable.merge([_travel, _enter, _rim]),
-      builder: (context, _) {
-        final (hole, radius) = _hole;
-        final pulse = Curves.easeInOut.transform(_rim.value);
+    return Stack(
+      children: [
+        // The scrim takes every tap: the screen underneath is being
+        // explained, not operated, and a stray tap landing on a real
+        // control mid-tour is how a guided flow loses its place.
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _advance,
+            child: _Spotlight(
+              travel: _travel,
+              rim: _rim,
+              from: _from,
+              to: _to,
+              fromRadius: _fromRadius,
+              toRadius: _toRadius,
+            ),
+          ),
+        ),
 
-        return Stack(
-          children: [
-            // The scrim takes every tap: the screen underneath is being
-            // explained, not operated, and a stray tap landing on a real
-            // control mid-tour is how a guided flow loses its place.
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _advance,
-                child: CustomPaint(
-                  painter: _SpotlightPainter(
-                    hole: hole,
-                    radius: radius,
-                    pulse: pulse,
-                    scrim: TideColors.scrim,
+        // Laid out against the light's *destination*, not against where it
+        // happens to be this frame. The panel therefore lays out once per
+        // step instead of once per frame, and it is invisible for the whole
+        // of the move anyway.
+        Positioned.fill(
+          child: CustomSingleChildLayout(
+            delegate: _CaptionLayout(hole: _to, padding: padding),
+            child: FadeTransition(
+              opacity: _fade,
+              child: SlideTransition(
+                position: _rise,
+                // A faded-out panel still hit-tests, and "Skip tour" is
+                // under the caller's thumb during the hand-off. Nothing in
+                // here takes a tap until it is legible again.
+                child: AnimatedBuilder(
+                  animation: _presence,
+                  child: _caption(),
+                  builder: (context, child) => IgnorePointer(
+                    ignoring: _presence.value < 0.5,
+                    child: child,
                   ),
                 ),
               ),
             ),
-            Positioned.fill(
-              child: IgnorePointer(
-                ignoring: _enter.value < 0.5,
-                child: Opacity(
-                  opacity: Curves.easeOut.transform(_enter.value),
-                  child: CustomSingleChildLayout(
-                    delegate: _CaptionLayout(
-                      hole: hole.isEmpty ? null : hole,
-                      padding: padding,
-                    ),
-                    child: _caption(),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 
   Widget _caption() {
     return TideSurface(
+      key: ValueKey(_step),
       color: TideColors.shoal,
       floating: true,
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -296,31 +353,13 @@ class _TourOverlayState extends State<TourOverlay>
             ],
           ),
           const SizedBox(height: 16),
-          // The panel resizes into the next step rather than snapping,
-          // which matters because the step carrying the demo is twice the
-          // height of the ones that do not.
-          AnimatedSize(
-            duration: TideMotion.sheetIn,
-            curve: TideMotion.sheetCurve,
-            alignment: Alignment.topLeft,
-            child: AnimatedSwitcher(
-              duration: TideMotion.tabSwitch,
-              child: Column(
-                key: ValueKey(_step),
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_current.title, style: TideType.hero),
-                  const SizedBox(height: 8),
-                  Text(_current.body, style: TideType.bodyMuted),
-                  if (_current.demo == TourDemo.swipe) ...[
-                    const SizedBox(height: 20),
-                    const SwipeLoopDemo(name: 'Evening walk', streak: 4),
-                  ],
-                ],
-              ),
-            ),
-          ),
+          Text(_current.title, style: TideType.hero),
+          const SizedBox(height: 8),
+          Text(_current.body, style: TideType.bodyMuted),
+          if (_current.demo == TourDemo.swipe) ...[
+            const SizedBox(height: 20),
+            const SwipeLoopDemo(name: 'Evening walk', streak: 4),
+          ],
           const SizedBox(height: 20),
           Row(
             children: [
@@ -350,6 +389,91 @@ class _TourOverlayState extends State<TourOverlay>
   double get _progress => (_step + 1) / _steps.length;
 }
 
+/// The scrim with the hole in it, and the ring breathing around the hole.
+///
+/// Two painters, not one, and each behind its own repaint boundary. The
+/// scrim costs a full-screen path difference and only changes while the
+/// light is travelling; the ring is a single stroked rectangle and changes
+/// every frame forever. Painting them together meant paying the first
+/// price at the second rate for the entire length of the tour.
+class _Spotlight extends StatelessWidget {
+  const _Spotlight({
+    required this.travel,
+    required this.rim,
+    required this.from,
+    required this.to,
+    required this.fromRadius,
+    required this.toRadius,
+  });
+
+  final Animation<double> travel;
+  final Animation<double> rim;
+  final Rect? from;
+  final Rect? to;
+  final double fromRadius;
+  final double toRadius;
+
+  /// The hole at [t] of the current flight.
+  (Rect, double) _holeAt(double t) {
+    final target = to;
+    if (target == null) return (Rect.zero, 0);
+    final start = from;
+    if (start == null) return (target, toRadius);
+
+    final eased = TideMotion.morphCurve.transform(t);
+    return (
+      Rect.lerp(start, target, eased)!,
+      fromRadius + (toRadius - fromRadius) * eased,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: travel,
+              builder: (context, _) {
+                final (hole, radius) = _holeAt(travel.value);
+                return CustomPaint(
+                  painter: _ScrimPainter(
+                    hole: hole,
+                    radius: radius,
+                    scrim: TideColors.scrim,
+                  ),
+                  size: Size.infinite,
+                );
+              },
+            ),
+          ),
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: Listenable.merge([travel, rim]),
+                builder: (context, _) {
+                  final (hole, radius) = _holeAt(travel.value);
+                  return CustomPaint(
+                    painter: _RimPainter(
+                      hole: hole,
+                      radius: radius,
+                      pulse: Curves.easeInOut.transform(rim.value),
+                    ),
+                    size: Size.infinite,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Places the caption beside the light without ever covering it.
 ///
 /// A delegate rather than a stack of aligned boxes, because the decision
@@ -359,8 +483,8 @@ class _TourOverlayState extends State<TourOverlay>
 class _CaptionLayout extends SingleChildLayoutDelegate {
   const _CaptionLayout({required this.hole, required this.padding});
 
-  /// Null on a step whose target could not be found; the caption then takes
-  /// the middle of the screen.
+  /// The light's destination. Null on a step whose target could not be
+  /// found; the caption then takes the middle of the screen.
   final Rect? hole;
 
   final EdgeInsets padding;
@@ -389,7 +513,7 @@ class _CaptionLayout extends SingleChildLayoutDelegate {
     final x = (size.width - childSize.width) / 2;
     final target = hole;
 
-    if (target == null) {
+    if (target == null || target.isEmpty) {
       return Offset(x, (size.height - childSize.height) / 2);
     }
 
@@ -414,21 +538,16 @@ class _CaptionLayout extends SingleChildLayoutDelegate {
       old.hole != hole || old.padding != padding;
 }
 
-/// The scrim, the hole in it, and the ring breathing around the hole.
-class _SpotlightPainter extends CustomPainter {
-  const _SpotlightPainter({
+/// The dark, and the hole cut in it.
+class _ScrimPainter extends CustomPainter {
+  const _ScrimPainter({
     required this.hole,
     required this.radius,
-    required this.pulse,
     required this.scrim,
   });
 
   final Rect hole;
   final double radius;
-
-  /// 0..1, breathing.
-  final double pulse;
-
   final Color scrim;
 
   @override
@@ -449,6 +568,32 @@ class _SpotlightPainter extends CustomPainter {
       ),
       Paint()..color = scrim,
     );
+  }
+
+  @override
+  bool shouldRepaint(_ScrimPainter old) =>
+      old.hole != hole || old.radius != radius;
+}
+
+/// The lit edge of the hole, and the ring pushing out from it.
+class _RimPainter extends CustomPainter {
+  const _RimPainter({
+    required this.hole,
+    required this.radius,
+    required this.pulse,
+  });
+
+  final Rect hole;
+  final double radius;
+
+  /// 0..1, breathing.
+  final double pulse;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (hole.isEmpty) return;
+
+    final cut = RRect.fromRectAndRadius(hole, Radius.circular(radius));
 
     // A hairline on the cut itself, so the target has an edge even where it
     // is the same colour as the page behind the scrim.
@@ -476,6 +621,6 @@ class _SpotlightPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SpotlightPainter old) =>
+  bool shouldRepaint(_RimPainter old) =>
       old.hole != hole || old.radius != radius || old.pulse != pulse;
 }

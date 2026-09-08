@@ -255,6 +255,7 @@ class TideStore extends ChangeNotifier {
     _pendingHabitCue = CelebrationCue(
       habitId: habit.id,
       habitName: habit.name,
+      glyph: habit.glyph,
       type: CelebrationCueType.completion,
       streak: StreakCalculator.currentStreak(habit),
       dayComplete: summaryFor(day).isFullyLogged,
@@ -290,6 +291,7 @@ class TideStore extends ChangeNotifier {
     _pendingHabitCue = CelebrationCue(
       habitId: habit.id,
       habitName: habit.name,
+      glyph: habit.glyph,
       type: CelebrationCueType.freeze,
       streak: StreakCalculator.currentStreak(habit),
       dayComplete: false,

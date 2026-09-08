@@ -5,11 +5,19 @@ import 'package:flutter/material.dart';
 import '../services/models/tide_glyph.dart';
 import '../theme/tide_colors.dart';
 
-/// Draws the abstract glyph set.
+/// Renders a glyph, whichever family it belongs to.
 ///
-/// Painted rather than shipped as an icon font so the shapes inherit the
-/// exact stroke weight of the rings beside them — a habit card's glyph and
-/// its progress ring are the same instrument, drawn at the same weight.
+/// The abstract marks are painted rather than shipped as an icon font, so
+/// the shapes inherit the exact stroke weight of the rings beside them — a
+/// milestone badge and its progress ring are the same instrument, drawn at
+/// the same weight. The pictographic set comes from the bundled Material
+/// font, because a walking figure drawn by hand at 17px is a worse walking
+/// figure, not a more consistent one.
+///
+/// Callers never branch on which is which: one widget, one [size], and the
+/// two families land on the same optical weight. Material's glyphs carry
+/// their own padding inside the em box, so they are set fractionally
+/// larger to match a painted mark of the nominal size.
 class HabitGlyph extends StatelessWidget {
   const HabitGlyph({
     super.key,
@@ -24,15 +32,31 @@ class HabitGlyph extends StatelessWidget {
   final Color? color;
   final double strokeWidth;
 
+  /// Makes an icon-font glyph read at the same size as a painted one.
+  static const double _iconScale = 1.12;
+
   @override
   Widget build(BuildContext context) {
+    final tint = color ?? TideColors.lantern;
+    final icon = glyph.icon;
+
+    if (icon != null) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Center(
+          child: Icon(icon, size: size * _iconScale, color: tint),
+        ),
+      );
+    }
+
     return SizedBox(
       width: size,
       height: size,
       child: CustomPaint(
         painter: _GlyphPainter(
           glyph: glyph,
-          color: color ?? TideColors.lantern,
+          color: tint,
           strokeWidth: strokeWidth,
         ),
       ),
@@ -189,6 +213,11 @@ class _GlyphPainter extends CustomPainter {
         }
         path.close();
         canvas.drawPath(path, fill);
+
+      // Everything with an icon is set from the font by HabitGlyph and
+      // never reaches the painter.
+      default:
+        break;
     }
   }
 

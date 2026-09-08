@@ -11,6 +11,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/tide_button.dart';
 import '../../widgets/tide_tab_bar.dart';
 import '../../widgets/tour/tour_anchor.dart';
+import 'widgets/add_habit_tile.dart';
 import 'widgets/habit_card.dart';
 import 'widgets/habit_context_menu.dart';
 import 'widgets/habit_log_sheet.dart';
@@ -149,9 +150,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: HomeHeader(
                       date: DateTime.now(),
                       onMilestones: () => context.push(Routes.milestones),
-                      onAddHabit: () => context.push(
-                        store.canAddHabit ? Routes.newHabit : Routes.upgrade,
-                      ),
                     ),
                   ),
                 ),
@@ -179,10 +177,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       body:
                           'Pick something small and daily. The rhythm '
                           'matters more than the size.',
-                      action: TideButton(
-                        label: 'Add your first habit',
-                        expand: false,
-                        onPressed: () => context.push(Routes.newHabit),
+                      // The tour's last stop. On an empty Today this is the
+                      // only add control there is, so the light has to land
+                      // here rather than on the tile below the list.
+                      action: TourAnchor(
+                        stop: TourStop.add,
+                        child: TideButton(
+                          label: 'Add your first habit',
+                          expand: false,
+                          onPressed: () => context.push(Routes.newHabit),
+                        ),
                       ),
                     ),
                   ),
@@ -221,8 +225,25 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
+                // One slot below the last habit, where the next one would
+                // go. This is the tour's add stop on a Today that already
+                // has something on it.
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: TourAnchor(
+                      stop: TourStop.add,
+                      child: AddHabitTile(
+                        atLimit: !store.canAddHabit,
+                        onTap: () => context.push(
+                          store.canAddHabit ? Routes.newHabit : Routes.upgrade,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
-              // Clears the FAB and the floating tab bar it sits above.
+              // Clears the floating tab bar the list sits under.
               SliverToBoxAdapter(
                 child: SizedBox(
                   height: TideTabBar.reservedHeight(context) + 40,
