@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../services/models/habit.dart';
-import '../../services/streak_calculator.dart';
 import '../../services/tide_scope.dart';
+import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/tide_section.dart';
@@ -11,12 +10,27 @@ import 'widgets/day_breakdown_sheet.dart';
 import 'widgets/intensity_legend.dart';
 import 'widgets/month_grid.dart';
 import 'widgets/month_pager_header.dart';
+import 'widgets/month_summary.dart';
+import 'widgets/weekday_rhythm.dart';
+import 'widgets/year_grid.dart';
 
-/// History — every habit at once, month by month.
+/// History — every habit at once, month by month, then year and week.
 ///
 /// Where Habit detail answers "how is this one going", this answers "how
 /// am I going", which is why its cells are aggregates rather than a single
 /// habit's logs.
+///
+/// It used to stop dead under the month grid: two bare figures on open
+/// ground and then two hundred pixels of nothing. A month is the wrong and
+/// only scale to read a habit at — thirty cells is too few to show a
+/// pattern and too many to show a day — so the screen now steps out to a
+/// year and back in to a week, and each of the three answers a question the
+/// others cannot.
+///
+/// **Month** — which days. **Year** — what the shape of this looks like at
+/// a distance, which is the view that makes a long run feel like something.
+/// **Week** — where it actually breaks, which is the only one of the three
+/// you can act on.
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
 
@@ -41,6 +55,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
   }
 
+  void _openDay(DateTime date) {
+    showDayBreakdown(
+      context,
+      date: date,
+      entries: TideScope.read(context).breakdownFor(date),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = TideScope.of(context);
@@ -54,7 +76,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
       ),
       children: [
         const Text('History', style: TideType.screenTitle),
+        const SizedBox(height: 6),
+        Text(
+          'Everything you have marked, at three distances.',
+          style: TideType.labelMuted,
+        ),
         const SizedBox(height: 26),
+
         MonthPagerHeader(
           month: _month,
           forward: _forward,
@@ -84,65 +112,73 @@ class _CalendarScreenState extends State<CalendarScreen> {
             key: ValueKey('${_month.year}-${_month.month}'),
             month: _month,
             habits: store.allHabits,
-            onDayTapped: (date) => showDayBreakdown(
-              context,
-              date: date,
-              entries: store.breakdownFor(date),
-            ),
+            onDayTapped: _openDay,
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         const IntensityLegend(),
-        const SizedBox(height: 30),
-        const TideRule(),
-        const SizedBox(height: 22),
-        _MonthSummary(month: _month, habits: store.allHabits),
+        const SizedBox(height: 26),
+
+        MonthSummary(month: _month, habits: store.allHabits),
+        const SizedBox(height: 34),
+
+        const _SectionHead(
+          title: 'The last year',
+          detail: 'Every day, one square. Tap one to open it.',
+        ),
+        const SizedBox(height: 18),
+        YearGrid(habits: store.allHabits, onDayTapped: _openDay),
+        const SizedBox(height: 34),
+
+        const _SectionHead(
+          title: 'Your rhythm',
+          detail: 'How each weekday has held over the last eight weeks.',
+        ),
+        const SizedBox(height: 18),
+        WeekdayRhythm(rates: store.weekdayRates),
       ],
     );
   }
 }
 
-/// What the month above actually came to.
+/// A section's name and the one line explaining what it is showing.
 ///
-/// The grid used to end halfway down the screen with nothing under it. A
-/// month of cells answers "which days" precisely and "how did it go" not at
-/// all, so this says the second thing in one line.
-class _MonthSummary extends StatelessWidget {
-  const _MonthSummary({required this.month, required this.habits});
+/// The rule sits above the title rather than under it: a line under a
+/// heading underlines the heading, where a line above it closes the section
+/// before — which is the job that actually needed doing on a screen this
+/// long.
+class _SectionHead extends StatelessWidget {
+  const _SectionHead({required this.title, required this.detail});
 
-  final DateTime month;
-  final List<Habit> habits;
+  final String title;
+  final String detail;
 
   @override
   Widget build(BuildContext context) {
-    final today = DateUtils.dateOnly(DateTime.now());
-    final days = DateUtils.getDaysInMonth(month.year, month.month);
-
-    var elapsed = 0;
-    var full = 0;
-    var carried = 0.0;
-
-    for (var day = 1; day <= days; day++) {
-      final date = DateTime(month.year, month.month, day);
-      if (date.isAfter(today)) break;
-      elapsed++;
-      final ratio = StreakCalculator.daySummary(habits, date).ratio;
-      carried += ratio;
-      if (ratio >= 1) full++;
-    }
-
-    if (elapsed == 0) {
-      return Text('Nothing logged yet this month', style: TideType.bodyMuted);
-    }
-
-    final rate = (carried / elapsed * 100).round();
-
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: TideFigure(value: '$full', caption: 'days fully logged'),
+        const TideRule(),
+        const SizedBox(height: 22),
+        Row(
+          children: [
+            Container(
+              width: 3,
+              height: 15,
+              decoration: BoxDecoration(
+                color: TideColors.lantern,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(title, style: TideType.hero.copyWith(fontSize: 19)),
+          ],
         ),
-        Expanded(child: TideFigure(value: '$rate%', caption: 'of the month')),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 13),
+          child: Text(detail, style: TideType.labelMuted),
+        ),
       ],
     );
   }

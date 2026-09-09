@@ -30,7 +30,7 @@ class IntensityLegend extends StatelessWidget {
           ),
         ],
         const SizedBox(width: 10),
-        Text('All logged', style: TideType.labelMuted),
+        Text('All marked', style: TideType.labelMuted),
       ],
     );
   }

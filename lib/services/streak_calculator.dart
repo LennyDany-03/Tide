@@ -139,6 +139,59 @@ abstract final class StreakCalculator {
     return scheduled == 0 ? 0 : completed / scheduled;
   }
 
+  /// One ratio per day for the last [days] days, oldest first, ending on
+  /// [asOf] — the series behind History's year grid.
+  ///
+  /// Days with nothing scheduled come back as -1 rather than 0, because a
+  /// grid has to be able to tell "nothing was asked of you" from "you were
+  /// asked and did not". Zero is a miss; -1 is a rest day.
+  static List<double> dailySeries(
+    List<Habit> habits, {
+    int days = 371,
+    DateTime? asOf,
+  }) {
+    final today = DateUtils.dateOnly(asOf ?? DateTime.now());
+    return List<double>.generate(days, (index) {
+      final day = today.subtract(Duration(days: days - 1 - index));
+      final summary = daySummary(habits, day);
+      return summary.scheduled == 0 ? -1 : summary.ratio;
+    });
+  }
+
+  /// The longest run of fully-logged days inside [month], and how many of
+  /// its elapsed days were full.
+  static ({int full, int elapsed, double carried, int longest}) monthShape(
+    List<Habit> habits,
+    DateTime month, {
+    DateTime? asOf,
+  }) {
+    final today = DateUtils.dateOnly(asOf ?? DateTime.now());
+    final days = DateUtils.getDaysInMonth(month.year, month.month);
+
+    var elapsed = 0;
+    var full = 0;
+    var carried = 0.0;
+    var run = 0;
+    var longest = 0;
+
+    for (var day = 1; day <= days; day++) {
+      final date = DateTime(month.year, month.month, day);
+      if (date.isAfter(today)) break;
+      elapsed++;
+      final ratio = daySummary(habits, date).ratio;
+      carried += ratio;
+      if (ratio >= 1) {
+        full++;
+        run++;
+        if (run > longest) longest = run;
+      } else {
+        run = 0;
+      }
+    }
+
+    return (full: full, elapsed: elapsed, carried: carried, longest: longest);
+  }
+
   /// Weekly completion rates for the last [weeks] weeks, oldest first —
   /// the series behind the Insights eight-week chart.
   static List<double> weeklySeries(

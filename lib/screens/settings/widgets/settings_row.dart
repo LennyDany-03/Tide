@@ -1,19 +1,29 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/tide_colors.dart';
+import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
 
 /// A row in a settings group.
 ///
-/// Note what this does *not* do: no press scale, no ripple, no stagger.
-/// Settings is the screen that holds back, and its press state is a quiet
-/// background fade and nothing else. Knowing where not to animate is part
-/// of the same discipline as knowing where to.
+/// Each one leads with its own mark. A settings screen is the one place a
+/// user arrives already looking for something specific, and a column of
+/// left-aligned sentences is the worst possible shape to scan for a
+/// specific thing — you have to read every line to rule it out. An icon per
+/// row turns that into a glance, and it is the single change that separates
+/// a settings screen that looks finished from one that looks like a list of
+/// strings.
+///
+/// Note what this still does *not* do: no press scale, no ripple. Settings
+/// is the screen that holds back, and its press state is a quiet background
+/// fade and nothing else. Knowing where not to animate is part of the same
+/// discipline as knowing where to.
 class SettingsRow extends StatefulWidget {
   const SettingsRow({
     super.key,
     required this.label,
+    this.icon,
     this.onTap,
     this.trailing,
     this.subtitle,
@@ -22,6 +32,11 @@ class SettingsRow extends StatefulWidget {
   });
 
   final String label;
+
+  /// The row's mark. Null on the rows that are not really rows — the inline
+  /// cancel under a destructive confirmation.
+  final IconData? icon;
+
   final VoidCallback? onTap;
   final Widget? trailing;
   final String? subtitle;
@@ -37,9 +52,7 @@ class _SettingsRowState extends State<SettingsRow> {
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.destructive
-        ? TideColors.coral
-        : TideColors.bone;
+    final tint = widget.destructive ? TideColors.coral : TideColors.bone;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -54,9 +67,30 @@ class _SettingsRowState extends State<SettingsRow> {
         color: _pressed
             ? TideColors.bone.withValues(alpha: 0.04)
             : Colors.transparent,
-        padding: const EdgeInsets.symmetric(vertical: 17),
+        padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
         child: Row(
           children: [
+            if (widget.icon != null) ...[
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: widget.destructive
+                      ? TideColors.coral.withValues(alpha: 0.10)
+                      : TideColors.bone.withValues(alpha: 0.05),
+                  borderRadius: TideElevation.radius12,
+                ),
+                child: Icon(
+                  widget.icon,
+                  size: 18,
+                  color: widget.destructive
+                      ? TideColors.coral
+                      : TideColors.silt,
+                ),
+              ),
+              const SizedBox(width: 14),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,7 +98,7 @@ class _SettingsRowState extends State<SettingsRow> {
                 children: [
                   Text(
                     widget.label,
-                    style: TideType.heading.copyWith(color: color),
+                    style: TideType.heading.copyWith(color: tint),
                   ),
                   if (widget.subtitle != null) ...[
                     const SizedBox(height: 3),
@@ -73,13 +107,18 @@ class _SettingsRowState extends State<SettingsRow> {
                 ],
               ),
             ),
-            if (widget.trailing != null) widget.trailing!,
+            if (widget.trailing != null) ...[
+              const SizedBox(width: 10),
+              widget.trailing!,
+            ],
             if (widget.showChevron) ...[
               const SizedBox(width: 8),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
                 size: 20,
-                color: TideColors.silt,
+                color: widget.destructive
+                    ? TideColors.coral.withValues(alpha: 0.7)
+                    : TideColors.silt,
               ),
             ],
           ],

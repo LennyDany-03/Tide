@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
 
@@ -46,7 +45,7 @@ void main() {
     await openSheet(tester);
 
     expect(find.text('of 8 glasses'), findsOneWidget);
-    expect(find.text('Hold to log'), findsOneWidget);
+    expect(find.text('Hold to mark'), findsOneWidget);
     // Opening it logs nothing on its own.
     expect(find.text('5 of 8'), findsOneWidget);
   });
@@ -57,7 +56,7 @@ void main() {
     await openSheet(tester);
 
     final gesture = await tester.startGesture(
-      tester.getCenter(find.text('Hold to log')),
+      tester.getCenter(find.text('Hold to mark')),
     );
 
     // The press is the start of a commit now, not the commit itself.
@@ -81,7 +80,7 @@ void main() {
     await openSheet(tester);
 
     final gesture = await tester.startGesture(
-      tester.getCenter(find.text('Hold to log')),
+      tester.getCenter(find.text('Hold to mark')),
     );
 
     expect(await pumpUntil(tester, find.text('6 of 8')), isTrue);
@@ -93,7 +92,7 @@ void main() {
     expect(find.text('6 of 8'), findsOneWidget);
     expect(find.text('7 of 8'), findsNothing);
     expect(
-      find.text('Lift to log another'),
+      find.text('Lift to mark another'),
       findsOneWidget,
       reason: 'a spent hold should say so rather than reading as stuck',
     );
@@ -107,7 +106,7 @@ void main() {
     await openShell(tester);
     await openSheet(tester);
 
-    final button = tester.getCenter(find.text('Hold to log'));
+    final button = tester.getCenter(find.text('Hold to mark'));
 
     final first = await tester.startGesture(button);
     expect(await pumpUntil(tester, find.text('6 of 8')), isTrue);
@@ -129,13 +128,13 @@ void main() {
     await openShell(tester);
     await openSheet(tester);
 
-    await tester.tap(find.bySemanticsLabel('Log one more'));
+    await tester.tap(find.bySemanticsLabel('Mark one more'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('6 of 8'), findsOneWidget);
 
     // Walking a count back down is the thing the hold alone cannot do, and
     // the reason an overshoot used to mean leaving the day wrong.
-    await tester.tap(find.bySemanticsLabel('Log one less'));
+    await tester.tap(find.bySemanticsLabel('Mark one less'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('5 of 8'), findsOneWidget);
 
@@ -150,11 +149,11 @@ void main() {
     await openSheet(tester);
 
     for (var i = 0; i < 3; i++) {
-      await tester.tap(find.bySemanticsLabel('Log one more'));
+      await tester.tap(find.bySemanticsLabel('Mark one more'));
       await tester.pump(const Duration(milliseconds: 300));
     }
 
-    expect(find.text('All logged'), findsOneWidget);
+    expect(find.text('All marked'), findsOneWidget);
     expect(find.text('Target reached for today.'), findsOneWidget);
 
     semantics.dispose();
@@ -183,7 +182,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 700));
 
-    expect(find.byIcon(Icons.insights_rounded), findsNothing);
+    // The menu has closed behind the push. Asserted on one of its own
+    // labels rather than on an icon: the Insights tab wears the same
+    // insights mark the menu's details row does, so an icon finder here
+    // matches the navigation bar and never fails.
+    expect(find.text('Hold to delete'), findsNothing);
     expect(find.text('Morning water'), findsWidgets);
   });
 }

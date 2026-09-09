@@ -207,12 +207,27 @@ class _BranchStackState extends State<_BranchStack>
   /// Fraction of the screen a drag has to cross to commit.
   static const double _commitAt = 0.22;
 
-  /// Or the speed it has to be thrown at, in pixels per second.
-  static const double _flingAt = 380;
-
   /// Past the first and last tab there is nothing to reveal, so the page
   /// gives a little and springs back rather than sliding off nothing.
   static const double _resistance = 0.28;
+
+  /// A lane down each edge of the page that belongs to the tab swipe
+  /// outright, whatever is underneath it.
+  ///
+  /// The shell's recogniser sits above the branches but *below* anything
+  /// inside them, so on Today — where habit cards claim the horizontal axis
+  /// for logging and freezing — the page swipe had almost nowhere left to
+  /// start from. Today's list margin left 20px of clear page either side,
+  /// which is a lane only in the sense that a thumb can miss it: it is
+  /// narrower than the contact patch aiming for it.
+  ///
+  /// Forty is a full touch target, so half of it now overlaps the cards.
+  /// That is the trade and it is the right way round — the outer 20px of a
+  /// card is its own padding, past the ring on one side and the streak
+  /// figure on the other, and nobody aims a log swipe there. The strips are
+  /// translucent, so only the horizontal drag is taken: taps and vertical
+  /// scrolls pass straight through to the screen behind.
+  static const double _gutter = 40;
 
   bool get _moving => _drag != 0;
 
@@ -303,7 +318,9 @@ class _BranchStackState extends State<_BranchStack>
     final crossed = _width > 0 && _drag.abs() / _width > _commitAt;
     // A fling only counts if it is still heading the way the drag was
     // going; a flick back the other way is a cancel, however fast.
-    final flung = velocity.abs() > _flingAt && velocity.sign == _drag.sign;
+    final flung =
+        velocity.abs() > TideMotion.swipeFlingVelocity &&
+        velocity.sign == _drag.sign;
 
     if (crossed || flung) {
       _commit(target);
@@ -363,26 +380,66 @@ class _BranchStackState extends State<_BranchStack>
     _width = MediaQuery.sizeOf(context).width;
     final incoming = _incoming;
 
-    return GestureDetector(
-      // Deferring to the child leaves taps and vertical scrolls reaching the
-      // page exactly as before; only the horizontal drag is claimed, and a
-      // habit row's own swipe-to-log still wins it because that recogniser
-      // sits deeper in the tree.
-      onHorizontalDragStart: widget.swipeEnabled ? _onStart : null,
-      onHorizontalDragUpdate: widget.swipeEnabled ? _onUpdate : null,
-      onHorizontalDragEnd: widget.swipeEnabled ? _onEnd : null,
-      child: Stack(
-        children: [
-          for (var i = 0; i < widget.branches.length; i++)
-            _Branch(
-              active: i == _index,
-              shown: i == _index || i == incoming,
-              moving: _moving,
-              snap: _byHand,
-              dx: _offsetOf(i, incoming),
-              child: widget.branches[i],
-            ),
+    // `expand` so the branch stack still receives the tight constraints it
+    // did when it was this method's only child — the gutters are positioned
+    // and would otherwise leave the page sizing itself off its own content.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        GestureDetector(
+          // Deferring to the child leaves taps and vertical scrolls reaching
+          // the page exactly as before; only the horizontal drag is claimed,
+          // and a habit row's own swipe-to-log still wins it because that
+          // recogniser sits deeper in the tree.
+          onHorizontalDragStart: widget.swipeEnabled ? _onStart : null,
+          onHorizontalDragUpdate: widget.swipeEnabled ? _onUpdate : null,
+          onHorizontalDragEnd: widget.swipeEnabled ? _onEnd : null,
+          child: Stack(
+            children: [
+              for (var i = 0; i < widget.branches.length; i++)
+                _Branch(
+                  active: i == _index,
+                  shown: i == _index || i == incoming,
+                  moving: _moving,
+                  snap: _byHand,
+                  dx: _offsetOf(i, incoming),
+                  child: widget.branches[i],
+                ),
+            ],
+          ),
+        ),
+
+        // Last in the stack, and that is the whole mechanism: a stack is
+        // hit-tested topmost-first, so a drag beginning in a lane reaches
+        // these recognisers *before* the card underneath and takes the
+        // arena instead of losing it on depth. Deferring to the child was
+        // the right call everywhere else on the page; it just left Today
+        // with no unclaimed strip to start a page swipe from.
+        if (widget.swipeEnabled) ...[
+          _lane(left: true),
+          _lane(left: false),
         ],
+      ],
+    );
+  }
+
+  /// One edge lane, reserved for the tab swipe.
+  ///
+  /// Translucent rather than opaque: the lane takes part in hit testing so
+  /// its drag recogniser is entered into the arena, but the screen behind it
+  /// is hit too, so taps and vertical scrolls land where they always did.
+  Widget _lane({required bool left}) {
+    return Positioned(
+      top: 0,
+      bottom: 0,
+      left: left ? 0 : null,
+      right: left ? null : 0,
+      width: _gutter,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: _onStart,
+        onHorizontalDragUpdate: _onUpdate,
+        onHorizontalDragEnd: _onEnd,
       ),
     );
   }

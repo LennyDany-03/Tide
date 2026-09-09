@@ -84,7 +84,7 @@ abstract final class TourCatalog {
       title: 'The day, as one figure',
       body:
           'How much of today is done, with the water standing at the level '
-          'you have reached. It fills as you log.',
+          'you have reached. It fills as you mark.',
       inset: 10,
       radius: 20,
     ),
@@ -92,7 +92,7 @@ abstract final class TourCatalog {
       stop: TourStop.list,
       title: 'Habits live here',
       body:
-          'Each one is a card. Carry it right to log the day — that is the '
+          'Each one is a card. Carry it right to mark the day — that is the '
           'whole gesture, and it is the only one you need.',
       demo: TourDemo.swipe,
       inset: 4,

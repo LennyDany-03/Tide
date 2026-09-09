@@ -79,6 +79,11 @@ class _HomeScreenState extends State<HomeScreen> {
     TideScope.read(context).unfreeze(habit.id);
   }
 
+  /// Clears today's log, from a swipe back across a finished card.
+  void _undo(Habit habit) {
+    TideScope.read(context).unlog(habit.id);
+  }
+
   /// Fires the day-complete moment once, on the transition into a finished
   /// day — never on a rebuild that happens to find the day already done.
   /// Counted habits log from their own sheet, one unit at a time.
@@ -162,8 +167,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     completed: summary.completed,
                     scheduled: summary.scheduled,
                     weeklyRate: store.weeklyRate,
+                    weeklySeries: store.weeklySeries(),
                     bestStreak: store.bestActiveStreak,
                     dayComplete: summary.isFullyLogged,
+                    onStreakTap: () => context.push(Routes.milestones),
                   ),
                 ),
               ),
@@ -219,6 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             onComplete: () => _log(habit, habit.target),
                             onFreeze: () => _freeze(habit),
                             onUnfreeze: () => _unfreeze(habit),
+                            onUndo: () => _undo(habit),
                           );
                         },
                       ),

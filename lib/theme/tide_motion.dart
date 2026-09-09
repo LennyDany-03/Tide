@@ -74,6 +74,22 @@ abstract final class TideMotion {
   /// Fraction of card width a swipe must cross to commit.
   static const double swipeThreshold = 0.4;
 
+  /// The speed, in pixels per second, at which a horizontal drag stops being
+  /// an action on a card and becomes a page thrown at the tab bar.
+  ///
+  /// One number with two owners, deliberately. A habit card's swipe sits
+  /// below the shell's tab swipe in the tree and so wins the gesture arena
+  /// by depth — a flick meant as "next tab" that happened to start on a card
+  /// never reached the shell at all. Distance could not tell the two apart
+  /// either: the flick crossed [swipeThreshold] on its way past and logged
+  /// the habit. Speed can. A considered swipe is aimed and slows into the
+  /// threshold; a page fling is already gone by the time it gets there.
+  ///
+  /// The shell commits a fling at this speed and the card refuses one at the
+  /// same speed, so there is no band where a gesture is fast enough to have
+  /// been a page swipe and still counts as a deliberate log.
+  static const double swipeFlingVelocity = 380;
+
   /// Snapping into place after crossing the threshold.
   static const Duration swipeSettle = Duration(milliseconds: 260);
 
@@ -166,4 +182,15 @@ abstract final class TideMotion {
 
   /// The onboarding background drift — the only screen allowed it.
   static const Duration ambientDrift = Duration(seconds: 24);
+
+  /// One full burn of the streak fire.
+  ///
+  /// The exception to the rule above: this loop is deliberately *not* slow.
+  /// Everything else ambient in the app is atmosphere and reads wrong if
+  /// you can see it working, but a fire that idles at breathing pace does
+  /// not read as fire — it reads as a flame-shaped logo being scaled. The
+  /// flicker inside the painter runs at three, seven and eleven times this
+  /// rate, which puts its fastest term around five per second, in the range
+  /// a real flame actually moves at.
+  static const Duration flameCycle = Duration(milliseconds: 2200);
 }

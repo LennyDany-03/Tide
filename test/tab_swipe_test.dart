@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
+import 'package:tide/screens/home/widgets/habit_card.dart';
 import 'package:tide/widgets/tide_tab_bar.dart';
 
 /// The tab bar is the shell's own readout of which branch is selected, so
@@ -146,16 +147,41 @@ void main() {
   testWidgets('a habit row keeps its own swipe', (tester) async {
     await openShell(tester);
 
-    // The row's swipe-to-log recogniser sits deeper than the shell's, so it
-    // should win the arena and the tab should not move underneath it.
-    await tester.fling(
-      find.text('No screens after 10'),
+    // The first row rather than the last. On a short viewport the bottom
+    // card sits under the frosted tab bar, so this flung the bar itself and
+    // passed for the wrong reason: the tab was never going to move because
+    // nothing ever reached the shell *or* the card.
+    //
+    // The row's swipe recogniser sits deeper than the shell's, so it wins
+    // the arena and the tab does not move underneath it.
+    await tester.fling(find.text('Morning water'), const Offset(-320, 0), 900);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(selectedTab(tester), 0);
+  });
+
+  testWidgets('the edge lane pages even with a habit row under it', (
+    tester,
+  ) async {
+    await openShell(tester);
+
+    // Six pixels inside the card's own right edge, so the gesture starts on
+    // a habit rather than in the page margin either side of the list — that
+    // margin was always clear, and starting there would prove nothing.
+    //
+    // The lane is last in the shell's stack, and a stack is hit-tested
+    // topmost-first, so its recogniser is entered into the arena before the
+    // card's and takes the gesture instead of losing it on depth.
+    final card = tester.getRect(find.byType(HabitCard).first);
+    await tester.flingFrom(
+      Offset(card.right - 6, card.center.dy),
       const Offset(-320, 0),
       900,
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(selectedTab(tester), 0);
+    expect(selectedTab(tester), 1);
   });
 }

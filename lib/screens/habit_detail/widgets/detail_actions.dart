@@ -48,7 +48,7 @@ class DetailActions extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'Deleting removes every log for this habit.',
+          'Deleting removes every mark for this habit.',
           style: TideType.labelMuted,
           textAlign: TextAlign.center,
         ),

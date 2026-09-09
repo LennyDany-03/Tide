@@ -36,6 +36,14 @@ import '../../../widgets/swipe_log_background.dart';
 ///   count opens the log sheet, where its units are metered out one at a
 ///   time.
 ///
+/// The trailing side of the body reads the day rather than offering one
+/// fixed action: an open day is frozen, a frozen day gives its token back,
+/// and a day already logged is undone. Undo lives here rather than in a
+/// snackbar because it is the *same* gesture reversed — the thing you reach
+/// for when a swipe logged a habit you did not mean to log is the swipe
+/// back, and a card that has to be found again in a list of four is not
+/// where that reach ends up.
+///
 /// **A long press anywhere on the card** raises the context menu. It used
 /// to be reachable only from the ring, which is a 34px target for the one
 /// gesture people go looking for when they want to edit or delete
@@ -60,6 +68,7 @@ class HabitCard extends StatefulWidget {
     required this.onComplete,
     required this.onFreeze,
     required this.onUnfreeze,
+    required this.onUndo,
   });
 
   final Habit habit;
@@ -82,6 +91,11 @@ class HabitCard extends StatefulWidget {
   /// Called with the amount to log — the full target, from a swipe.
   final VoidCallback onFreeze;
   final VoidCallback onUnfreeze;
+
+  /// Clears today's log. The freeze side turns into this once the habit is
+  /// finished, so the gesture that logged it by accident is also the one
+  /// that takes it back.
+  final VoidCallback onUndo;
 
   /// Taller than the hairline rows it replaced: a card needs its content to
   /// sit off its own edges, not just off its neighbours.
@@ -108,11 +122,14 @@ class _HabitCardState extends State<HabitCard>
   double _phase = 0;
   double _cardWidth = 0;
 
-  bool get _done =>
-      widget.habit.isCompleteOn(DateTime.now()) ||
-      widget.habit.isFrozenOn(DateTime.now());
+  /// Logged to target today — earned, as opposed to held.
+  bool get _completed => widget.habit.isCompleteOn(DateTime.now());
 
   bool get _frozen => widget.habit.isFrozenOn(DateTime.now());
+
+  /// The day is settled either way, which is what the card's colouring and
+  /// its second line care about.
+  bool get _done => _completed || _frozen;
 
   double get _progress => widget.habit.progressOn(DateTime.now());
 
@@ -151,11 +168,35 @@ class _HabitCardState extends State<HabitCard>
   void _onDragEnd(DragEndDetails details) {
     final fraction = _cardWidth == 0 ? 0.0 : _drag.abs() / _cardWidth;
 
-    if (fraction >= TideMotion.swipeThreshold) {
+    // Distance used to decide this on its own, and distance on its own
+    // cannot tell a habit being logged from a page being thrown at the tab
+    // bar. This card's recogniser sits below the shell's and wins the arena
+    // by depth, so a flick meant as "next tab" that started on a card never
+    // reached the shell — it crossed the threshold on the way past and
+    // logged the habit. Speed is the tell, and the bar is the shell's own
+    // fling speed: anything quick enough to have been a page swipe springs
+    // back untouched rather than guessing.
+    //
+    // A flick back the other way is caught by the same check, which is
+    // correct — a gesture the hand has already reversed is a cancel.
+    final flung =
+        details.velocity.pixelsPerSecond.dx.abs() >=
+        TideMotion.swipeFlingVelocity;
+
+    if (fraction >= TideMotion.swipeThreshold && !flung) {
       if (_drag > 0 && widget.habit.type == HabitType.binary) {
         _commitLog();
       } else if (_drag < 0) {
-        _frozen ? _commitUnfreeze() : _commitFreeze();
+        // Three readings of one side, in order of what the day already is.
+        // A frozen day gives its token back; a finished day is taken back;
+        // an open day is protected.
+        if (_frozen) {
+          _commitUnfreeze();
+        } else if (_completed) {
+          _commitUndo();
+        } else {
+          _commitFreeze();
+        }
       } else {
         _animateDragHome(TideMotion.swipeCancel, TideMotion.swipeCancelCurve);
       }
@@ -182,6 +223,14 @@ class _HabitCardState extends State<HabitCard>
     HapticFeedback.selectionClick();
     _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
     widget.onUnfreeze();
+  }
+
+  /// The lighter selection tick rather than the medium impact the commits
+  /// use: taking something back should not feel like landing it.
+  void _commitUndo() {
+    HapticFeedback.selectionClick();
+    _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
+    widget.onUndo();
   }
 
   void _animateDragHome(Duration duration, Curve curve) {
@@ -228,32 +277,63 @@ class _HabitCardState extends State<HabitCard>
       builder: (context, constraints) {
         _cardWidth = constraints.maxWidth;
 
+        // Rounded, not square. The stack used to clip with `Clip.hardEdge`,
+        // which is a rectangle — so a card sliding out of the row was cut
+        // off with a hard right angle at whichever end it was leaving,
+        // while the socket behind it kept the 20px radius. The two corners
+        // disagreed for the whole length of every swipe, which is exactly
+        // the moment the card is the only thing anybody is looking at.
+        //
+        // One rounded clip round the whole row instead: the socket, the
+        // card and the card's exit are all the same shape, and at rest the
+        // clip sits exactly on the card's own border.
         return SizedBox(
           height: HabitCard.height,
-          child: Stack(
-            clipBehavior: Clip.hardEdge,
-            children: [
-              Positioned.fill(
-                child: SwipeLogBackground(
-                  offset: _drag,
-                  width: _cardWidth,
-                  phase: _phase,
-                  radius: HabitCard.radius,
-                  freezeAvailable: widget.habit.freezesRemaining > 0,
-                  freezeOnRight: false,
-                  unfreezing: _frozen,
+          child: ClipRRect(
+            borderRadius: HabitCard.radius,
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: SwipeLogBackground(
+                    offset: _drag,
+                    width: _cardWidth,
+                    phase: _phase,
+                    radius: HabitCard.radius,
+                    freezeAvailable: widget.habit.freezesRemaining > 0,
+                    freezeOnRight: false,
+                    unfreezing: _frozen,
+                    undoing: _completed,
+                  ),
                 ),
-              ),
-              Transform.translate(
-                offset: Offset(_drag, 0),
-                child: _body(),
-              ),
-            ],
+                Transform.translate(
+                  offset: Offset(_drag, 0),
+                  child: _body(),
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
+
+  /// The card keeps all four corners, the whole way through a swipe.
+  ///
+  /// The alternative was tried and looked worse. Straightening whichever
+  /// edge had moved *into* the row is the tidier idea on paper — that side
+  /// has stopped being the edge of anything — and it does remove the seam
+  /// where the card's curve meets the socket's. But what it actually reads
+  /// as is the card being sliced off flat against the backdrop, and the
+  /// thing a swipe is supposed to say is that a card has *lifted away* and
+  /// left a socket behind it. A card is a rounded object; it does not stop
+  /// being one because part of it is over a tint.
+  ///
+  /// The seam is fine. The corner that genuinely was wrong is the row's,
+  /// and that is fixed one level up in [build]: the stack used to clip with
+  /// `Clip.hardEdge`, which is a rectangle, so the card left the row
+  /// through a right angle while the socket kept its radius.
 
   Widget _body() {
     final detail = _detail;
@@ -329,8 +409,9 @@ class _HabitCardState extends State<HabitCard>
     );
 
     // Right reveals the warm check on the left for binary habits; left
-    // reveals the ice freeze on the right for every habit. Counted habits
-    // still use their drawer for progress, so their right swipe returns.
+    // reveals the trailing side for every habit — ice to freeze an open
+    // day, neutral ink to take back a finished one. Counted habits still
+    // use their drawer for progress, so their right swipe returns.
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onHorizontalDragUpdate: _onDragUpdate,

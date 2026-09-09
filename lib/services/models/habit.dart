@@ -19,7 +19,7 @@ enum HabitType {
 
   /// The one-line hint shown under a habit name on Home.
   String get gestureHint => switch (this) {
-    HabitType.binary => 'swipe right to log',
+    HabitType.binary => 'swipe right to mark',
     HabitType.quantity => 'tap to count up',
     HabitType.duration => 'tap to count up',
   };

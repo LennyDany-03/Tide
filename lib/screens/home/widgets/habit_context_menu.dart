@@ -181,7 +181,7 @@ class _Menu extends StatelessWidget {
               if (onLogProgress != null) ...[
                 _MenuRow(
                   icon: Icons.add_task_rounded,
-                  label: 'Log progress',
+                  label: 'Mark progress',
                   primary: true,
                   onTap: () {
                     Navigator.of(context).pop();

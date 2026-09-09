@@ -18,6 +18,8 @@ class TideWave extends StatelessWidget {
     this.strokeWidth = 2,
     this.fill = false,
     this.waves = 1.6,
+    this.taperStart = true,
+    this.taperEnd = true,
   });
 
   /// 0..1 — how far the water has been pulled.
@@ -34,6 +36,22 @@ class TideWave extends StatelessWidget {
 
   final double waves;
 
+  /// Which ends of the curve are drawn down to the midline.
+  ///
+  /// Both by default, and both is right for the pull-to-refresh: a curve
+  /// running off either side of the screen reads as clipped rather than as
+  /// water.
+  ///
+  /// The swipe trail tapers only at its *outer* end. Flattened at the end
+  /// against the card, the fill below the curve drops to half-height right
+  /// at the seam, which leaves the darker tint above it as a band hugging
+  /// the card's edge — and a dark band along one edge of a card is a drop
+  /// shadow, whatever it was meant to be. Holding full amplitude there is
+  /// also the truer reading: the water is deepest where the finger pulled
+  /// it from.
+  final bool taperStart;
+  final bool taperEnd;
+
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
@@ -44,6 +62,8 @@ class TideWave extends StatelessWidget {
         strokeWidth: strokeWidth,
         fill: fill,
         waves: waves,
+        taperStart: taperStart,
+        taperEnd: taperEnd,
       ),
       size: Size.infinite,
     );
@@ -58,6 +78,8 @@ class TideWavePainter extends CustomPainter {
     this.strokeWidth = 2,
     this.fill = false,
     this.waves = 1.6,
+    this.taperStart = true,
+    this.taperEnd = true,
   });
 
   final double amplitude;
@@ -66,6 +88,16 @@ class TideWavePainter extends CustomPainter {
   final double strokeWidth;
   final bool fill;
   final double waves;
+  final bool taperStart;
+  final bool taperEnd;
+
+  /// How much of the wave's amplitude survives at [t] along the curve.
+  double _taperAt(double t) {
+    if (taperStart && taperEnd) return math.sin(math.pi * t);
+    if (taperStart) return math.sin(math.pi * t / 2);
+    if (taperEnd) return math.sin(math.pi * (1 - t) / 2);
+    return 1;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -79,10 +111,7 @@ class TideWavePainter extends CustomPainter {
     for (var i = 0; i <= steps; i++) {
       final x = size.width * i / steps;
       final theta = (i / steps) * waves * 2 * math.pi + phase;
-      // Taper the wave at both ends so it reads as water inside the card
-      // rather than a curve that has been clipped off.
-      final taper = math.sin(math.pi * i / steps);
-      path.lineTo(x, midline - math.sin(theta) * peak * taper);
+      path.lineTo(x, midline - math.sin(theta) * peak * _taperAt(i / steps));
     }
 
     if (fill) {
@@ -90,7 +119,26 @@ class TideWavePainter extends CustomPainter {
         ..lineTo(size.width, size.height)
         ..lineTo(0, size.height)
         ..close();
-      canvas.drawPath(filled, Paint()..color = color.withValues(alpha: 0.18));
+
+      // Graded down from the surface rather than a flat wash. A single
+      // alpha across the whole fill puts one solid value against another
+      // solid value with the curve as a hard border between them, so the
+      // trail read as two stacked slabs — and the darker one, being the
+      // one at the top, read as shade. Light falls on water at the
+      // surface and runs out with depth; drawing that is what makes the
+      // boundary a waterline instead of an edge.
+      canvas.drawPath(
+        filled,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              color.withValues(alpha: 0.24),
+              color.withValues(alpha: 0.10),
+            ],
+          ).createShader(Offset.zero & size),
+      );
     }
 
     canvas.drawPath(
@@ -110,5 +158,7 @@ class TideWavePainter extends CustomPainter {
       old.amplitude != amplitude ||
       old.phase != phase ||
       old.color != color ||
-      old.fill != fill;
+      old.fill != fill ||
+      old.taperStart != taperStart ||
+      old.taperEnd != taperEnd;
 }

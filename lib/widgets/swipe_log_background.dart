@@ -12,6 +12,13 @@ import 'tide_wave.dart';
 /// held almost flat, because a freeze preserves the loop rather than
 /// advancing it.
 ///
+/// Left on a habit that is *already* logged is [undoing] instead, and it is
+/// neither warm nor cold: plain [TideColors.bone]. Taking a log back is not
+/// an advance and not a freeze, and the palette reserves frost for a frozen
+/// day and coral for destruction — neither of which this is, since the log
+/// comes straight back with a swipe the other way. Neutral ink is the
+/// honest third reading: the card is going back to nothing.
+///
 /// The two directions must never share a colour, and for a while they did.
 /// The freeze side was written for a `foamCyan` that the redesign deleted,
 /// so it fell back to lantern and both swipes came out the same warm amber
@@ -29,6 +36,7 @@ class SwipeLogBackground extends StatelessWidget {
     this.freezeAvailable = true,
     this.freezeOnRight = false,
     this.unfreezing = false,
+    this.undoing = false,
   });
 
   /// Signed pixels the card has travelled.
@@ -49,6 +57,11 @@ class SwipeLogBackground extends StatelessWidget {
   final bool freezeOnRight;
   final bool unfreezing;
 
+  /// The habit is already logged, so the freeze side is showing an undo.
+  /// Takes precedence over the freeze reading: a day you have finished is
+  /// not a day you would spend a token to protect.
+  final bool undoing;
+
   bool get _freezing => freezeOnRight ? offset > 0 : offset < 0;
 
   bool get _completing => !_freezing;
@@ -63,6 +76,7 @@ class SwipeLogBackground extends StatelessWidget {
 
   Color get _color {
     if (_completing) return TideColors.lantern;
+    if (undoing) return TideColors.bone;
     return freezeAvailable ? TideColors.frost : TideColors.coral;
   }
 
@@ -70,10 +84,14 @@ class SwipeLogBackground extends StatelessWidget {
   ///
   /// [TideColors.frost] is a near-white, so it carries far more luminance
   /// per unit of alpha than lantern; matched numerically the freeze side
-  /// blows out into a grey slab while the log side is still a tint.
+  /// blows out into a grey slab while the log side is still a tint. Lower
+  /// again now that the tint sits on the trench rather than on the page:
+  /// the recess is darker to begin with, so the same alpha lifted the ice
+  /// further clear of the card than it should ever get. A socket must read
+  /// as *under* the row, whatever colour is being washed into it.
   double get _tintAlpha {
-    final base = _completing ? 0.10 : 0.06;
-    final gain = _completing ? 0.14 : 0.10;
+    final base = _completing ? 0.10 : 0.045;
+    final gain = _completing ? 0.14 : 0.075;
     return base + gain * _approach;
   }
 
@@ -85,7 +103,7 @@ class SwipeLogBackground extends StatelessWidget {
 
   IconData get _icon {
     if (_completing) return Icons.check_rounded;
-    if (unfreezing) return Icons.undo_rounded;
+    if (unfreezing || undoing) return Icons.undo_rounded;
     return freezeAvailable ? Icons.ac_unit_rounded : Icons.block_rounded;
   }
 
@@ -102,6 +120,19 @@ class SwipeLogBackground extends StatelessWidget {
       borderRadius: radius,
       child: Stack(
         children: [
+          // An opaque recess first, and only then the tint.
+          //
+          // The tint used to be painted straight onto whatever was behind
+          // the row, which is the page. Frost is a near-white, so a freeze
+          // swipe laid a pale wash over deep water and the exposed socket
+          // came out *lighter* than the card that had just slid off it —
+          // a card lifting away from a slab of grey rather than out of
+          // anything. The trench is the app's own recess colour, darker
+          // than the page for exactly this reason, and the tint reads as
+          // light falling into the cut instead of a panel behind it.
+          const Positioned.fill(
+            child: ColoredBox(color: TideColors.trench),
+          ),
           Positioned.fill(
             child: ColoredBox(color: _color.withValues(alpha: _tintAlpha)),
           ),
@@ -119,6 +150,13 @@ class SwipeLogBackground extends StatelessWidget {
               color: _color,
               fill: true,
               strokeWidth: 1.5,
+              // Taper the outer end only. The end against the card is the
+              // one the water was pulled from, and flattening it there
+              // left a band of bare tint above the fill running the whole
+              // height of the seam — which is the "shadow" the card looked
+              // like it was casting onto its own backdrop.
+              taperStart: offset > 0,
+              taperEnd: offset < 0,
             ),
           ),
 

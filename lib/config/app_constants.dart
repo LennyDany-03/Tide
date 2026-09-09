@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../services/models/tide_glyph.dart';
-
 /// Product-level constants: limits, copy and the tab manifest.
 abstract final class AppConstants {
   static const String appName = 'Tide';
@@ -54,20 +52,63 @@ abstract final class AppConstants {
 }
 
 /// One destination in the bottom tab bar.
+///
+/// Named by a pair of icons rather than by one of the app's abstract marks.
+/// The marks are good at what they are for — a vocabulary of shapes that
+/// belongs to this product and to no other — but a navigation bar is the
+/// one place in an app where being *recognisable* beats being distinctive.
+/// A crescent does not say "insights" to anybody who has not already
+/// learned that it does, and the four of them together read as decoration
+/// with words underneath rather than as four places to go.
+///
+/// Two icons each, outline and filled, because that is how the selected
+/// state is carried: the shape thickens rather than a block of furniture
+/// sliding underneath it.
 @immutable
 class TideTab {
-  const TideTab({required this.label, required this.glyph, required this.path});
+  const TideTab({
+    required this.label,
+    required this.icon,
+    required this.activeIcon,
+    required this.path,
+  });
 
   final String label;
-  final TideGlyph glyph;
+
+  /// Unselected: the outline.
+  final IconData icon;
+
+  /// Selected: the same shape, filled.
+  final IconData activeIcon;
+
   final String path;
 
-  /// Four tabs and a floating add action — Milestones and Upgrade are
-  /// reached contextually rather than taking a slot here.
+  /// Four tabs — Milestones and Upgrade are reached contextually rather
+  /// than taking a slot here.
   static const List<TideTab> all = [
-    TideTab(label: 'Today', glyph: TideGlyph.diamondOutline, path: '/today'),
-    TideTab(label: 'History', glyph: TideGlyph.striped, path: '/history'),
-    TideTab(label: 'Insights', glyph: TideGlyph.crescent, path: '/insights'),
-    TideTab(label: 'Settings', glyph: TideGlyph.diamond, path: '/settings'),
+    TideTab(
+      label: 'Today',
+      icon: Icons.wb_sunny_outlined,
+      activeIcon: Icons.wb_sunny_rounded,
+      path: '/today',
+    ),
+    TideTab(
+      label: 'History',
+      icon: Icons.calendar_month_outlined,
+      activeIcon: Icons.calendar_month_rounded,
+      path: '/history',
+    ),
+    TideTab(
+      label: 'Insights',
+      icon: Icons.insights_outlined,
+      activeIcon: Icons.insights_rounded,
+      path: '/insights',
+    ),
+    TideTab(
+      label: 'Settings',
+      icon: Icons.settings_outlined,
+      activeIcon: Icons.settings_rounded,
+      path: '/settings',
+    ),
   ];
 }
