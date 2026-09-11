@@ -1,25 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
+import 'package:tide/services/auth/demo_auth_service.dart';
+import 'package:tide/services/device_flags.dart';
 import 'package:tide/services/tide_store.dart';
 import 'package:tide/widgets/tide_button.dart';
 import 'package:tide/widgets/tide_mark.dart';
 
-/// Fixed pumps throughout rather than `pumpAndSettle`: onboarding runs a
-/// drifting backdrop, an orbiting mark and three looping demos, and the
-/// tour breathes a ring around its spotlight. None of them ever settle, by
-/// design.
-Future<void> settle(WidgetTester tester, [int ms = 700]) async {
-  await tester.pump();
-  await tester.pump(Duration(milliseconds: ms));
-  // A timed pump advances the clock in one jump, so anything built during
-  // that frame — a page arriving under the scroll, a step's staggered copy —
-  // schedules its entrance timer relative to the clock *after* the jump. One
-  // more pump flushes those, which is also what stops them being reported as
-  // pending timers when the tree is torn down. Long enough to clear the
-  // slowest of them: the welcome copy, which waits out the ring at 760ms.
-  await tester.pump(const Duration(milliseconds: 1200));
-}
+import 'support/flow.dart';
 
 /// Walks the explanation and lands on the auth form, which opens on log in.
 Future<void> reachAuth(WidgetTester tester) async {
@@ -36,17 +24,6 @@ Future<void> reachAuth(WidgetTester tester) async {
   await settle(tester, 900);
 }
 
-/// Presses one of the account form's buttons, scrolling it into view first.
-/// The form is longer than a short window, and the mode switch is pinned
-/// across the bottom of it.
-Future<void> pressAuthButton(WidgetTester tester, String label) async {
-  final target = find.widgetWithText(TideButton, label);
-  await tester.ensureVisible(target);
-  await settle(tester, 200);
-  await tester.tap(target);
-  await settle(tester);
-}
-
 /// And crosses over to the sign-up half of it.
 Future<void> reachSignUp(WidgetTester tester) async {
   await reachAuth(tester);
@@ -54,7 +31,7 @@ Future<void> reachSignUp(WidgetTester tester) async {
   await settle(tester);
 }
 
-/// Fills the sign-up form and waits out the button's fake round trip.
+/// Fills the sign-up form, submits it, and waits out the welcome.
 ///
 /// Assumes the form is already in sign-up mode — see [reachSignUp].
 Future<void> signUp(
@@ -70,10 +47,7 @@ Future<void> signUp(
   await tester.pump();
 
   await pressAuthButton(tester, 'Create account');
-  // Busy, then the checkmark, then the route change.
-  await settle(tester, 700);
-  await settle(tester, 500);
-  await settle(tester, 600);
+  await crossWelcome(tester);
 }
 
 void main() {
@@ -167,6 +141,11 @@ void main() {
       // the wrong default.
       expect(find.text('Welcome back'), findsOneWidget);
       expect(find.widgetWithText(TideButton, 'Log in'), findsOneWidget);
+      expect(
+        find.byIcon(Icons.arrow_back_rounded),
+        findsOneWidget,
+        reason: 'the launch that showed onboarding can still go back to it',
+      );
     });
 
     testWidgets('skip goes to the form, not straight into the app', (
@@ -286,37 +265,60 @@ void main() {
   });
 
   group('the store behind the form', () {
-    test('signing up clears the demo history and arms the tour', () {
+    test('creating an account clears the demo history and arms the tour', () async {
       final store = TideStore();
       expect(store.habits, isNotEmpty);
       expect(store.tourPending, isFalse);
 
-      store.signUp(name: '  Sam Reyes  ', email: 'sam@example.com');
+      await store.createAccount(
+        name: '  Sam Reyes  ',
+        email: 'sam@example.com',
+        password: 'seawater88',
+      );
 
       expect(store.habits, isEmpty);
       expect(store.today.scheduled, 0);
       expect(store.unlockedMilestoneCount, 0);
       expect(store.tourPending, isTrue);
       expect(store.signedIn, isTrue);
+      expect(store.welcomingNewAccount, isTrue);
       expect(store.onboardingComplete, isTrue);
       expect(store.accountName, 'Sam Reyes', reason: 'trimmed for the avatar');
+      expect(store.account!.firstName, 'Sam', reason: 'what the welcome says');
     });
 
-    test('an unnamed sign-up still has something to call the account', () {
-      final store = TideStore()..signUp(name: '   ', email: 'a@b.co');
-      expect(store.accountName, 'You');
+    test('an account with no name is called by its address', () async {
+      final store = TideStore();
+      await store.createAccount(
+        name: '   ',
+        email: 'a@b.co',
+        password: 'seawater88',
+      );
+      expect(store.accountName, 'a');
+      expect(store.account!.firstName, isNull);
     });
 
-    test('logging in keeps the history and raises no tour', () {
-      final store = TideStore()..signIn(email: 'jules@tide.app');
+    test('logging in keeps the history and raises no tour', () async {
+      final store = TideStore();
+      await store.logIn(
+        email: DemoAuthService.demoEmail,
+        password: DemoAuthService.demoPassword,
+      );
 
       expect(store.habits, hasLength(4));
       expect(store.tourPending, isFalse);
       expect(store.signedIn, isTrue);
+      expect(store.welcomingNewAccount, isFalse);
     });
 
-    test('finishing the tour is idempotent', () {
-      final store = TideStore()..signUp(name: 'Sam', email: 'a@b.co');
+    test('the tour is finished once, and stays finished for the account', () async {
+      final flags = DeviceFlags.memory();
+      final store = TideStore(flags: flags);
+      await store.createAccount(
+        name: 'Sam',
+        email: 'sam@example.com',
+        password: 'seawater88',
+      );
 
       var notifications = 0;
       store.addListener(() => notifications++);
@@ -326,6 +328,14 @@ void main() {
 
       expect(store.tourPending, isFalse);
       expect(notifications, 1, reason: 'the second call is a no-op');
+      expect(flags.tourDone(store.account!.id), isTrue);
+
+      await store.logOut();
+      expect(store.signedIn, isFalse);
+
+      await store.logIn(email: 'sam@example.com', password: 'seawater88');
+      expect(store.tourPending, isFalse, reason: 'the tour does not return');
+      expect(store.welcomingNewAccount, isFalse, reason: 'welcome back now');
     });
   });
 }

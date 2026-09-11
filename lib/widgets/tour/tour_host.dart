@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/tour_catalog.dart';
@@ -23,13 +24,23 @@ import 'tour_anchor.dart';
 /// have nothing to say about the four destinations, which are half of what
 /// a new user needs told.
 class TourHost extends StatelessWidget {
-  const TourHost({super.key, required this.child, required this.onAddHabit});
+  const TourHost({
+    super.key,
+    required this.child,
+    required this.onAddHabit,
+    required this.onToday,
+  });
 
   final Widget child;
 
   /// Opens the add-habit screen. Handed down rather than looked up: the
   /// router is not in scope above `MaterialApp.router`'s own builder.
   final VoidCallback onAddHabit;
+
+  /// Whether Today is the page on screen. A tour can be owed while the
+  /// splash or the welcome is still up, and a spotlight over a screen that
+  /// has none of the tour's anchors is a scrim with a caption on it.
+  final ValueListenable<bool> onToday;
 
   @override
   Widget build(BuildContext context) {
@@ -40,22 +51,29 @@ class TourHost extends StatelessWidget {
         child,
         if (store.tourPending)
           Positioned.fill(
-            // Above the router means above the Navigator, and above the
-            // Navigator there is no Material and therefore no
-            // DefaultTextStyle — every Text falls back to WidgetsApp's error
-            // style and merges its underline into whatever TideType asked
-            // for. That is why the first build of this had a rule under
-            // every line of the caption. One inherited style at the root of
-            // the overlay fixes all of them, including the shared demo's.
-            child: DefaultTextStyle(
-              style: TideType.body,
-              child: TourOverlay(
-                onFinish: store.finishTour,
-                onAddHabit: () {
-                  store.finishTour();
-                  onAddHabit();
-                },
-              ),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: onToday,
+              builder: (context, showing, _) {
+                if (!showing) return const SizedBox.shrink();
+                // Above the router means above the Navigator, and above the
+                // Navigator there is no Material and therefore no
+                // DefaultTextStyle — every Text falls back to WidgetsApp's
+                // error style and merges its underline into whatever
+                // TideType asked for. That is why the first build of this
+                // had a rule under every line of the caption. One inherited
+                // style at the root of the overlay fixes all of them,
+                // including the shared demo's.
+                return DefaultTextStyle(
+                  style: TideType.body,
+                  child: TourOverlay(
+                    onFinish: store.finishTour,
+                    onAddHabit: () {
+                      store.finishTour();
+                      onAddHabit();
+                    },
+                  ),
+                );
+              },
             ),
           ),
       ],

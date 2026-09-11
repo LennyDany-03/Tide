@@ -25,8 +25,9 @@ import 'widgets/welcome_step.dart';
 ///
 /// So it explains instead. Five pages: what Tide is, then the three things
 /// it does — log, hold, read — each *performed* on a loop rather than
-/// described, then the hand-off. Nothing here writes any state; the only
-/// output of the whole flow is a user who knows what the swipe does.
+/// described, then the hand-off. The one thing it writes is that it has been
+/// seen, kept on the device so no later launch shows it again; the real
+/// output of the flow is a user who knows what the swipe does.
 ///
 /// Two affordances the wizard did not need and this does. **Back**, because
 /// an explanation you can only move forward through is a slideshow you are

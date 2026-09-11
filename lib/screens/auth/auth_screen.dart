@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/app_routes.dart';
+import '../../services/auth/auth_service.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_gradients.dart';
@@ -12,17 +13,24 @@ import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_button.dart';
 import '../../widgets/tide_field.dart';
 import '../../widgets/tide_mark.dart';
+import '../../widgets/tide_surface.dart';
 import 'widgets/google_mark.dart';
 import 'widgets/password_strength.dart';
 
 /// The gate between the explanation and the app.
 ///
-/// Front end only, and honest about it — there is no service behind this
-/// the same way there is no persistence behind the habits. What it does
-/// decide is real: creating an account opens Tide genuinely empty and arms
-/// the guided tour, while logging in returns to an account that already has
-/// history in it. Those are two different first screens, and the form is
-/// where the app finds out which one to show.
+/// It talks to a real account service now — `TideStore.auth`, which is
+/// Supabase in a build with a project configured and memory in tests. It
+/// never navigates on success. Signing in changes the store's session and
+/// the router's guard moves the person on to the welcome, so an account
+/// confirmed from an email link lands in exactly the same place as one
+/// typed in here.
+///
+/// **Log in only opens accounts that exist; create only makes ones that do
+/// not.** Each half says so in words and offers the other half, rather than
+/// answering "invalid credentials" and leaving the person to guess whether
+/// they mistyped or never signed up. Continue with Google keeps the same
+/// rule, decided by which half of the form it was pressed from.
 ///
 /// **It opens on log in.** Sign-up was the default because onboarding runs
 /// in front of it on a first launch, which made it look like everybody
@@ -73,6 +81,10 @@ class _AuthScreenState extends State<AuthScreen> {
   /// Which field is complaining, and what about.
   final Map<String, String> _errors = {};
 
+  /// What the form has to say that no single field owns: the offer to switch
+  /// halves, a confirmation email on its way, the network being down.
+  _Notice? _notice;
+
   /// Bumped per submit so the same complaint shakes again.
   int _tick = 0;
 
@@ -98,6 +110,7 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() {
       _mode = _signingUp ? _Mode.logIn : _Mode.signUp;
       _errors.clear();
+      _notice = null;
     });
   }
 
@@ -139,68 +152,160 @@ class _AuthScreenState extends State<AuthScreen> {
         _errors
           ..clear()
           ..addAll(found);
+        _notice = null;
         _tick++;
       });
       return;
     }
 
     final store = TideScope.read(context);
-    final router = GoRouter.of(context);
+    final email = _email.text.trim();
+    FocusScope.of(context).unfocus();
 
     // The button carries the wait rather than a dialog or a spinner over
-    // the page — the same busy-then-check it does when a habit saves, so
-    // the one place in the app that talks to a server looks like the places
-    // that do not.
+    // the page — the same busy-then-check it does when a habit saves.
     setState(() {
       _errors.clear();
+      _notice = null;
       _phase = TideButtonPhase.busy;
     });
-    await Future<void>.delayed(const Duration(milliseconds: 620));
-    if (!mounted) return;
-    setState(() => _phase = TideButtonPhase.done);
-    await Future<void>.delayed(const Duration(milliseconds: 420));
-    if (!mounted) return;
 
-    if (_signingUp) {
-      store.signUp(name: _name.text, email: _email.text);
-    } else {
-      store.signIn(email: _email.text);
+    try {
+      if (_signingUp) {
+        final outcome = await store.createAccount(
+          name: _name.text,
+          email: email,
+          password: _password.text,
+        );
+        if (outcome == SignUpOutcome.confirmEmail) {
+          if (!mounted) return;
+          setState(() {
+            _phase = TideButtonPhase.idle;
+            // Back to log in with the address and password kept: once the
+            // link is opened, that is the form they need, filled in.
+            _mode = _Mode.logIn;
+            _notice = _Notice(
+              tone: _Tone.info,
+              message:
+                  'Check $email for a link to confirm it. Open it on this '
+                  'phone and Tide signs you in — or confirm anywhere, then '
+                  'log in here.',
+            );
+          });
+          return;
+        }
+      } else {
+        await store.logIn(email: email, password: _password.text);
+      }
+      if (!mounted) return;
+      // The router is already on its way to the welcome; this is the tick
+      // the form leaves on.
+      setState(() => _phase = TideButtonPhase.done);
+    } on AuthFailure catch (failure) {
+      if (!mounted) return;
+      setState(() {
+        _phase = TideButtonPhase.idle;
+        _explain(failure);
+      });
     }
-    router.go(Routes.today);
   }
 
-  /// Continue with Google.
+  /// Continue with Google, under the rule of whichever half is showing.
   ///
-  /// Front end only, like the rest of the form: there is no provider to
-  /// hand off to, so this stands in for the handshake and comes back with
-  /// whatever the user had already typed. It deliberately skips
-  /// [_validate] — a provider flow returns its own verified identity, and
-  /// making the user fill in a form before they are allowed to press the
-  /// button that exists to avoid the form would be absurd.
+  /// It skips [_validate]: a provider returns its own verified identity, and
+  /// making somebody fill in the form before they may press the button that
+  /// exists to avoid the form would be absurd.
   Future<void> _continueWithGoogle() async {
     if (_busy) return;
 
     final store = TideScope.read(context);
-    final router = GoRouter.of(context);
-
     setState(() {
       _errors.clear();
+      _notice = null;
       _googlePhase = TideButtonPhase.busy;
     });
-    await Future<void>.delayed(const Duration(milliseconds: 720));
-    if (!mounted) return;
-    setState(() => _googlePhase = TideButtonPhase.done);
-    await Future<void>.delayed(const Duration(milliseconds: 420));
-    if (!mounted) return;
 
-    if (_signingUp) {
-      // The store falls back to a usable name when this is blank, which is
-      // what an empty form arriving here means.
-      store.signUp(name: _name.text, email: _email.text);
-    } else {
-      store.signIn(email: _email.text);
+    try {
+      await store.continueWithGoogle(creating: _signingUp);
+      if (!mounted) return;
+      setState(() => _googlePhase = TideButtonPhase.done);
+    } on AuthFailure catch (failure) {
+      if (!mounted) return;
+      setState(() {
+        _googlePhase = TideButtonPhase.idle;
+        _explain(failure, fromGoogle: true);
+      });
     }
-    router.go(Routes.today);
+  }
+
+  /// Turns a refusal into the sentence the form should say, and where.
+  ///
+  /// Field-shaped problems go on the field, the way validation does.
+  /// Anything that is really a question of which half of the form to be on
+  /// goes in the notice with the other half offered as its action. The
+  /// typed address survives the switch, so it costs one tap and no typing.
+  void _explain(AuthFailure failure, {bool fromGoogle = false}) {
+    final address = fromGoogle ? failure.detail : _email.text.trim();
+    final who = address == null || address.isEmpty ? 'this address' : address;
+
+    switch (failure.problem) {
+      case AuthProblem.noAccount:
+        if (!fromGoogle) _errors['email'] = 'No Tide account uses this email';
+        _notice = _Notice(
+          message: 'There is no account for $who yet.',
+          action: 'Create one',
+          onAction: _toggleMode,
+        );
+      case AuthProblem.accountExists:
+        if (!fromGoogle) {
+          _errors['email'] = 'This email already has an account';
+        }
+        _notice = _Notice(
+          message: 'You already have a Tide account with $who.',
+          action: 'Log in',
+          onAction: _toggleMode,
+        );
+      case AuthProblem.googleAccount:
+        _errors['email'] = 'This email signs in with Google';
+        _notice = const _Notice(
+          message: 'This account was made with Google. Use Continue with '
+              'Google below.',
+        );
+      case AuthProblem.wrongPassword:
+        _errors['password'] = 'That password is not right';
+      case AuthProblem.badCredentials:
+        _errors['password'] = 'Email or password is not right';
+      case AuthProblem.emailNotConfirmed:
+        _notice = _Notice(
+          tone: _Tone.info,
+          message: 'Confirm $who first — the link is in your inbox.',
+        );
+      case AuthProblem.weakPassword:
+        _errors['password'] = 'Choose a stronger password';
+        final detail = failure.detail;
+        if (detail != null) _notice = _Notice(message: detail);
+      case AuthProblem.rateLimited:
+        _notice = const _Notice(
+          message: 'Too many tries for now. Wait a minute, then try again.',
+        );
+      case AuthProblem.offline:
+        _notice = const _Notice(
+          message: 'Tide could not reach the server. Check the connection '
+              'and try again.',
+        );
+      case AuthProblem.cancelled:
+        break;
+      case AuthProblem.googleUnavailable:
+        _notice = _Notice(
+          message:
+              failure.detail ?? 'Google sign-in is not available right now.',
+        );
+      case AuthProblem.unknown:
+        _notice = _Notice(
+          message: failure.detail ?? 'Something went wrong. Try again.',
+        );
+    }
+    _tick++;
   }
 
   @override
@@ -237,29 +342,48 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Widget _backRow() {
+    // Back to the explanation only on the launch that showed it. Onboarding
+    // is once per device; on every launch after, this screen is the front
+    // door and an arrow leading back into the tutorial would be the tutorial
+    // repeating. The row keeps its height either way so the title does not
+    // move between launches.
+    final canGoBack = TideScope.read(context).firstRun;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 4, 24, 0),
       child: Row(
         children: [
-          PressScale(
-            // Back to the explanation, not out of the app. Someone who has
-            // reached the form and wants to re-read what freezes are should
-            // not have to reinstall to find out.
-            onTap: () => context.go(Routes.onboarding),
-            child: SizedBox(
-              width: 44,
-              height: 44,
-              child: Icon(
-                Icons.arrow_back_rounded,
-                size: 19,
-                color: TideColors.silt,
+          if (canGoBack)
+            PressScale(
+              onTap: () => context.go(Routes.onboarding),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(
+                  Icons.arrow_back_rounded,
+                  size: 19,
+                  color: TideColors.silt,
+                ),
               ),
-            ),
-          ),
+            )
+          else
+            const SizedBox(height: 44),
           const Spacer(),
         ],
       ),
     );
+  }
+
+  /// The line under the Google button: what this form actually does with
+  /// what it is given, which depends on what is behind it.
+  String get _footnote {
+    if (TideScope.read(context).auth.isLocalOnly) {
+      return 'No project is connected, so accounts live on this device until '
+          'the app closes.';
+    }
+    return _signingUp
+        ? 'We email a link to confirm the address before the account opens.'
+        : 'You stay signed in on this device until you log out.';
   }
 
   Widget _form() {
@@ -364,6 +488,20 @@ class _AuthScreenState extends State<AuthScreen> {
           visible: _signingUp && _password.text.isNotEmpty,
         ),
 
+        // Opens by height, like the name field, so the buttons below slide
+        // down to make room instead of jumping.
+        AnimatedSize(
+          duration: TideMotion.sheetIn,
+          curve: TideMotion.sheetCurve,
+          alignment: Alignment.topCenter,
+          child: _notice == null
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 20),
+                  child: _NoticePanel(notice: _notice!),
+                ),
+        ),
+
         const SizedBox(height: 28),
         TideButton(
           label: _signingUp ? 'Create account' : 'Log in',
@@ -388,11 +526,7 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
         const SizedBox(height: 18),
         Text(
-          _signingUp
-              ? 'No email is sent and nothing leaves this device — this '
-                    'prototype keeps your account for the session.'
-              : 'Logging in opens the demo history, so there is something to '
-                    'read on every screen.',
+          _footnote,
           style: TideType.labelMuted,
           textAlign: TextAlign.center,
         ),
@@ -433,6 +567,78 @@ class _AuthScreenState extends State<AuthScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+enum _Tone { problem, info }
+
+@immutable
+class _Notice {
+  const _Notice({
+    required this.message,
+    this.tone = _Tone.problem,
+    this.action,
+    this.onAction,
+  });
+
+  final String message;
+  final _Tone tone;
+  final String? action;
+  final VoidCallback? onAction;
+}
+
+/// A sentence the whole form is saying, with the thing to do about it.
+///
+/// A well cut into the page rather than a raised card or a banner: it is
+/// part of the form, sitting where the button is about to be pressed again,
+/// not a message arriving from somewhere else. Coral when something was
+/// refused, the way a field's own error is; lantern when it is simply news.
+class _NoticePanel extends StatelessWidget {
+  const _NoticePanel({required this.notice});
+
+  final _Notice notice;
+
+  @override
+  Widget build(BuildContext context) {
+    final problem = notice.tone == _Tone.problem;
+    final tint = problem ? TideColors.coral : TideColors.lantern;
+    final action = notice.action;
+
+    return TideWell(
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      border: Border.all(color: tint.withValues(alpha: 0.35)),
+      child: Row(
+        children: [
+          Icon(
+            problem
+                ? Icons.error_outline_rounded
+                : Icons.mark_email_unread_outlined,
+            size: 18,
+            color: tint,
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Text(
+              notice.message,
+              style: TideType.label.copyWith(color: TideColors.bone),
+            ),
+          ),
+          if (action != null) ...[
+            const SizedBox(width: 8),
+            PressScale(
+              onTap: notice.onAction,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Text(
+                  action,
+                  style: TideType.label.copyWith(color: TideColors.lantern),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

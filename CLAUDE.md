@@ -4,22 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Tide — a Flutter habit-tracker prototype. The repo directory is `Loopify`, but the Dart package is `tide` (imports are `package:tide/...`) and the Android app id is `com.example.tide`. Flutter 3.44 / Dart SDK ^3.12.2. Dependencies are just `go_router` and `cupertino_icons`; there is no state-management, persistence or networking package.
+Tide — a Flutter habit-tracker prototype. The repo directory is `Loopify`, but the Dart package is `tide` (imports are `package:tide/...`) and the Android app id is `com.example.tide`. Flutter 3.44 / Dart SDK ^3.12.2. Dependencies: `go_router`, `supabase_flutter` (accounts only), `google_sign_in` (native picker → Supabase ID-token sign-in), `shared_preferences` (device flags). There is no state-management package, and habits are not stored anywhere.
 
 ## Commands
 
 ```bash
 flutter pub get
-flutter run                       # -d chrome | windows | <device id>
+flutter run --dart-define-from-file=.env   # -d chrome | windows | <device id>; VS Code's launch.json passes the flag
 flutter analyze                   # lints via flutter_lints (analysis_options.yaml)
 flutter test
 flutter test test/widget_test.dart
 flutter test test/streak_calculator_test.dart --plain-name 'an unlogged today does not break the streak'
 ```
 
+`.env` (git-ignored; template in `.env.example`) holds `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `GOOGLE_WEB_CLIENT_ID`, read as compile-time `String.fromEnvironment` in `lib/config/supabase_config.dart` — a changed `.env` needs a full restart. Without it the app falls back to in-memory accounts. The database side (profiles table, RLS, triggers, `account_status` RPC) is `supabase/auth_setup.sql`, pasted into the Supabase SQL editor.
+
 ## Architecture
 
-**Single in-memory store, no persistence.** `TideStore` (`lib/services/tide_store.dart`) is a `ChangeNotifier` holding every habit, preference and mutation. It boots from `SeedData.habits()` on each launch and never writes anything back — session actions are real (logging moves streaks, stats and heatmaps) but do not survive the process. Adding persistence means adding it here, not in screens.
+**Habits in memory; accounts and two device flags persist.** `TideStore` (`lib/services/tide_store.dart`) is a `ChangeNotifier` holding every habit, preference and mutation. Habits boot from `SeedData.habits()` on each launch and are never written back — session actions are real (logging moves streaks, stats and heatmaps) but do not survive the process. The signed-in account does survive (Supabase keeps the session until log-out), and `DeviceFlags` (`lib/services/device_flags.dart`) remembers that onboarding was seen and which accounts have had the tour. Adding persistence means adding it in the store, not in screens.
+
+**Auth** (`lib/services/auth/`). `AuthService` is the seam: `SupabaseAuthService` for real builds, `DemoAuthService` (in memory, knows `jules@tide.app` / `tidewater`) for tests and unconfigured runs. Both enforce the same rule — log in only reaches an existing account, create only makes a new one — and throw `AuthFailure(AuthProblem…)`, which `AuthScreen` turns into field errors or a notice offering the other mode. Supabase can't distinguish "no account" from "wrong password", so the service asks the `account_status` RPC after a refused login (and before sign-up / Google). Google goes through `google_sign_in` + `signInWithIdToken` so the address is known *before* Supabase creates anything. The store's `logIn` / `createAccount` / `continueWithGoogle` / `logOut` never navigate: an account "arrives" (profile read → new or returning, history chosen, tour armed) and `store.sessionChanges` notifies the router. A new account opens empty with the tour; a returning one opens on the seed data.
 
 **Store access.** `TideScope` (`InheritedNotifier`) is mounted in `main.dart` *above* the router so root-navigator sheets share it. Two accessors, and the difference matters:
 - `context.tide` (extension on `BuildContext`, defined at the bottom of `tide_store.dart`) / `TideScope.of` — reads **and subscribes**; use in `build`.
@@ -29,11 +33,11 @@ flutter test test/streak_calculator_test.dart --plain-name 'an unlogged today do
 
 **Data model.** `Habit` (`lib/services/models/habit.dart`) is immutable; every mutation goes through `copyWith`, and the store mutates by rebuilding the list (`_mutate`). Logs are `Map<DateTime, num>` keyed by `DateUtils.dateOnly` — always normalise dates to midnight before keying. `frozenDays` are days where a freeze token was spent so a miss doesn't break the loop. `HabitType` decides the logging gesture: `binary` → swipe, `quantity`/`duration` → hold-to-fill.
 
-**Routing** (`lib/config/app_routes.dart`). go_router with a `StatefulShellRoute` of four branches (Today / History / Insights / Settings) rendered by `TideShell`. All four branches set `preload: true` — tabs are swipeable, so a lazily-built branch would appear blank under the finger. Milestones, the add/edit sheet and the upgrade sheet are pushed on the root navigator (`_rootKey`); the sheets are non-opaque `CustomTransitionPage`s so the screen behind stays visible. Use the `Routes` constants, never literal path strings. A real launch starts on `Routes.splash` (`SplashScreen`, `lib/screens/splash/`), which plays the logo entrance and then `go`es to onboarding or Today; the native launch windows (Android `values*/styles.xml`, iOS `LaunchScreen.storyboard`, web `index.html`) are painted Midnight's ground so there is no flash either side of it.
+**Routing** (`lib/config/app_routes.dart`). go_router with a `StatefulShellRoute` of four branches (Today / History / Insights / Settings) rendered by `TideShell`. All four branches set `preload: true` — tabs are swipeable, so a lazily-built branch would appear blank under the finger. Milestones, the add/edit sheet and the upgrade sheet are pushed on the root navigator (`_rootKey`); the sheets are non-opaque `CustomTransitionPage`s so the screen behind stays visible. Use the `Routes` constants, never literal path strings. A top-level `_guard` redirect (refreshed by `store.sessionChanges`) owns who may be where: signed-in users at onboarding/auth go to `Routes.welcome` (first name, then Today); signed-out users anywhere in the app go to auth, or onboarding if this device has never seen it; onboarding is unreachable once seen on an earlier launch. A real launch starts on `Routes.splash` (`SplashScreen`, `lib/screens/splash/`), which plays the logo entrance and then `go`es to Today (restored session), auth, or onboarding; the native launch windows (Android `values*/styles.xml`, iOS `LaunchScreen.storyboard`, web `index.html`) are painted Midnight's ground so there is no flash either side of it. The tour overlay (`TourHost`, above the router) only shows while the current path is Today.
 
 **Shell** (`lib/screens/shell/tide_shell.dart`). Owns the page ground, the tab bar and the FAB. `TideBackdrop` is mounted once here so all four tabs share one continuous background. Branch bodies stay alive in a stack. The FAB routes to `Routes.newHabit` or, when `store.canAddHabit` is false, to `Routes.upgrade` — the paywall is contextual, triggered by the free ceiling (`AppConstants.freeHabitLimit`), never a settings row.
 
-**Screen layout.** Each screen is `lib/screens/<name>/<name>_screen.dart` plus a private `widgets/` folder; anything used by more than one screen graduates to `lib/widgets/`. `Scaffold.extendBody` is true, so scrolling screens must pad the bottom with `TideTabBar.reservedHeight(context)` for the frosted bar to have something to blur.
+**Screen layout.** Each screen is `lib/screens/<name>/<name>_screen.dart` plus a private `widgets/` folder; anything used by more than one screen graduates to `lib/widgets/` (e.g. `AccountAvatar` — Google photo or initials — shared by Settings and the welcome). `Scaffold.extendBody` is true, so scrolling screens must pad the bottom with `TideTabBar.reservedHeight(context)` for the frosted bar to have something to blur.
 
 ## Design system — the constraints that actually bind
 
@@ -45,7 +49,7 @@ The theme layer is prescriptive, not advisory. Read the doc comments in `lib/the
   - Switch palettes only through `store.setPalette`, which calls `TideTheme.applyPalette` to rebuild and repaint the tree. A new palette must pass `test/palette_test.dart`'s contrast floors.
 - **`TideGradients` holds every ramp**, all running top-left→bottom-right or top→bottom: one light source for the whole app. A gradient is depth, never decoration.
 - **`TideMotion` holds every duration and curve.** Do not inline a `Duration` or `Curve` in a widget; add a named constant there so nine screens keep moving as one object.
-- **`PressScale` is the only press affordance.** Material ink is disabled in `TideTheme` (transparent splash/highlight, `NoSplash`), so an unwrapped tappable feels dead.
+- **`PressScale` is the only press affordance.** Material ink is disabled in `TideTheme` (transparent splash/highlight, `NoSplash`), so an unwrapped tappable feels dead. Destructive actions (and log out) use `HoldToConfirmButton` instead.
 - **`TideSurface` / `TideWell`** carry the elevation recipe (fill, radius, shadow set, 1px top inner highlight). Don't hand-roll a `Container` card.
 - **`GaugeNumber` / `GaugeCountUp`** render every number on screen, in JetBrains Mono with tabular figures. One glyph per column per frame — no two-drum odometer, no crossfade between digits; the motion is in the tweened *value*. `test/gauge_number_test.dart` enforces this.
 - **`TideType`**: Space Grotesk for display/headings, Manrope for body/UI, JetBrains Mono for numerics. Text scaling is clamped to 0.9–1.2 in `main.dart` because the gauges are fixed-width.
@@ -54,11 +58,12 @@ The theme layer is prescriptive, not advisory. Read the doc comments in `lib/the
 
 ## Testing
 
-`TideApp(startOnboarded: true)` skips onboarding and boots straight into the shell — that flag exists for tests and deep links. `showSplash` is off by default (only `main()` turns it on), so tests start where they ask to; `test/splash_test.dart` is the one place it is on. Use fixed `tester.pump(Duration(...))` rather than `pumpAndSettle`: several screens run deliberate ambient loops (breathing empty state, sync pulse, CTA glow, onboarding drift) that never settle. Time-dependent logic tests pass an explicit `asOf` so they don't drift with the wall clock (see `test/streak_calculator_test.dart`). `test/failures/` holds checked-in golden diff PNGs, not test code.
+`TideApp()` with no `auth`/`flags` runs on `DemoAuthService` and `DeviceFlags.memory()`, so no test touches the network or disk. `TideApp(startOnboarded: true)` marks onboarding seen and signs the demo account in, booting straight into the shell — that flag exists for tests and deep links; `TideApp(flags: DeviceFlags.memory(onboardingSeen: true))` opens on the account form. `showSplash` is off by default (only `main()` turns it on), so tests start where they ask to; `test/splash_test.dart` is the one place it is on. Use fixed `tester.pump(Duration(...))` rather than `pumpAndSettle`: several screens run deliberate ambient loops (breathing empty state, sync pulse, CTA glow, onboarding drift) that never settle. Shared helpers (`settle`, `pumpFor`, `pressAuthButton`, `crossWelcome`) live in `test/support/flow.dart`; the welcome chains animation → timer → route, so cross it with `pumpFor`'s small steps, not one long pump. Time-dependent logic tests pass an explicit `asOf` so they don't drift with the wall clock (see `test/streak_calculator_test.dart`). `test/failures/` holds checked-in golden diff PNGs, not test code.
 
 ## Conventions
 
-- Config-as-data lives in `lib/config/`: `AppConstants` (limits, copy, the tab manifest), `HabitTemplate.all`, `MilestoneCatalog`, `SeedData`. Tune numbers there rather than in screens.
+- Config-as-data lives in `lib/config/`: `AppConstants` (limits, copy, the tab manifest), `HabitTemplate.all`, `MilestoneCatalog`, `SeedData`, `SupabaseConfig`. Tune numbers there rather than in screens.
 - Seed data is real log history, not hardcoded display strings — its patterns are tuned so the computed figures land on the design's numbers (12-day water streak, ~82% week, four milestones unlocked). Changing it changes what every screen reports.
 - Prefer `abstract final class` for the token/constant holders, matching the existing files.
 - Comments in this codebase explain *why* a non-obvious choice was made (why branches preload, why no odometer, why the radial falloff has seven stops). Match that when touching those areas.
+- Only public values go in `.env` / the app (Supabase publishable key, Google client IDs). The Supabase secret/`service_role` key and the Google client secret belong only in the Supabase dashboard.

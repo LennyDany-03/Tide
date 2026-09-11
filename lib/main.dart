@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/app_constants.dart';
 import 'config/app_routes.dart';
+import 'config/supabase_config.dart';
+import 'services/auth/auth_service.dart';
+import 'services/auth/demo_auth_service.dart';
+import 'services/auth/supabase_auth_service.dart';
+import 'services/device_flags.dart';
 import 'services/tide_scope.dart';
 import 'services/tide_store.dart';
 import 'theme/tide_colors.dart';
@@ -13,10 +19,34 @@ import 'widgets/celebration/celebration_host.dart';
 import 'widgets/tour/tour_anchor.dart';
 import 'widgets/tour/tour_host.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(TideTheme.overlayStyle);
-  runApp(const TideApp(showSplash: true));
+
+  // Both are read before the first frame, while the native launch window is
+  // still up, so the app knows where it is going before it draws anything:
+  // a restored session opens Today, a device that has seen onboarding opens
+  // the account form. Supabase restores its session from local storage here
+  // and keeps refreshing it for as long as the refresh token is valid — which
+  // is until the person logs out.
+  final flags = await DeviceFlags.load();
+
+  final AuthService auth;
+  if (SupabaseConfig.isConfigured) {
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      publishableKey: SupabaseConfig.publishableKey,
+    );
+    auth = SupabaseAuthService(Supabase.instance.client);
+  } else {
+    debugPrint(
+      'Tide: SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY not set — run with '
+      '--dart-define-from-file=.env. Accounts are kept in memory for this run.',
+    );
+    auth = DemoAuthService();
+  }
+
+  runApp(TideApp(showSplash: true, auth: auth, flags: flags));
 }
 
 class TideApp extends StatefulWidget {
@@ -24,9 +54,12 @@ class TideApp extends StatefulWidget {
     super.key,
     this.startOnboarded = false,
     this.showSplash = false,
+    this.auth,
+    this.flags,
   });
 
-  /// Tests and deep links can skip straight into the shell.
+  /// Tests and deep links can skip straight into the shell: onboarding
+  /// counts as seen and the demo account is already signed in.
   final bool startOnboarded;
 
   /// Plays the animated splash before the first screen. On for a real
@@ -34,14 +67,27 @@ class TideApp extends StatefulWidget {
   /// to without sitting through three seconds of logo.
   final bool showSplash;
 
+  /// Who holds the accounts. `main` passes Supabase; left null, accounts are
+  /// kept in memory, which is what every widget test runs on.
+  final AuthService? auth;
+
+  /// What the device remembers between launches. Left null, nothing is.
+  final DeviceFlags? flags;
+
   @override
   State<TideApp> createState() => _TideAppState();
 }
 
 class _TideAppState extends State<TideApp> {
-  late final TideStore _store = TideStore();
+  late final TideStore _store = TideStore(
+    auth: widget.auth ?? DemoAuthService(signedIn: widget.startOnboarded),
+    flags:
+        widget.flags ??
+        DeviceFlags.memory(onboardingSeen: widget.startOnboarded),
+  );
+
   late final GoRouter _router = AppRoutes.build(
-    startOnboarded: widget.startOnboarded,
+    store: _store,
     showSplash: widget.showSplash,
   );
 
@@ -49,6 +95,14 @@ class _TideAppState extends State<TideApp> {
   /// with the store because its two ends — the anchors on Today and in the
   /// tab bar, and the overlay above the router — are in different subtrees.
   final TourAnchorRegistry _anchors = TourAnchorRegistry();
+
+  /// Whether Today is the page on screen.
+  ///
+  /// The tour lives above the router and points at Today's widgets. Now that
+  /// a tour can be owed by an account restored at launch, "a tour is
+  /// pending" is no longer the same as "Today is showing" — the splash or
+  /// the welcome can be up — so the overlay waits on both.
+  final ValueNotifier<bool> _onToday = ValueNotifier<bool>(false);
 
   /// The palette Material's theme was last built for.
   late TidePalette _palette;
@@ -62,6 +116,7 @@ class _TideAppState extends State<TideApp> {
     _palette = _store.palette;
     TideColors.use(_palette);
     _store.addListener(_onStore);
+    _router.routerDelegate.addListener(_trackRoute);
   }
 
   /// Rebuilds the MaterialApp only when the palette actually changed, not on
@@ -71,8 +126,15 @@ class _TideAppState extends State<TideApp> {
     setState(() => _palette = _store.palette);
   }
 
+  void _trackRoute() {
+    _onToday.value =
+        _router.routerDelegate.currentConfiguration.uri.path == Routes.today;
+  }
+
   @override
   void dispose() {
+    _router.routerDelegate.removeListener(_trackRoute);
+    _onToday.dispose();
     _store
       ..removeListener(_onStore)
       ..dispose();
@@ -115,6 +177,7 @@ class _TideAppState extends State<TideApp> {
                   // context — it lives below the app — so the one action the
                   // tour can take is handed in from out here.
                   onAddHabit: () => _router.push(Routes.newHabit),
+                  onToday: _onToday,
                   child: child ?? const SizedBox.shrink(),
                 ),
               ),

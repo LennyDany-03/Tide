@@ -220,4 +220,14 @@ abstract final class TideMotion {
   /// The splash leaving: everything fades and the mark pushes gently toward
   /// you, in the direction it was already moving.
   static const Duration splashExit = Duration(milliseconds: 420);
+
+  // --- Welcome ----------------------------------------------------------
+
+  /// The greeting after sign-in: the portrait settling, then the greeting
+  /// and the name rising in under it.
+  static const Duration welcomeIn = Duration(milliseconds: 700);
+
+  /// Long enough to read a first name and the line under it, short enough
+  /// that nobody is kept from the app they just signed into. A tap skips it.
+  static const Duration welcomeHold = Duration(milliseconds: 1300);
 }

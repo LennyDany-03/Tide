@@ -3,9 +3,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
 import '../../config/app_routes.dart';
+import '../../services/auth/auth_service.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_typography.dart';
+import '../../widgets/hold_to_fill.dart';
 import '../../widgets/stagger_list.dart';
 import '../../widgets/tide_mark.dart';
 import '../../widgets/tide_switch.dart';
@@ -36,8 +38,21 @@ import 'widgets/settings_row.dart';
 /// resets itself on every launch anyway. A settings screen that offers
 /// four controls over nothing is worse than a shorter one — it is the part
 /// of the app that is supposed to tell the truth about how it behaves.
+///
+/// Log out is last, and held rather than tapped. The session is kept until
+/// somebody asks for it to end, so ending it should never be something a
+/// thumb scrolling to the colophon does by accident.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  /// How this account can get back in, which is the useful thing to know
+  /// just before leaving it.
+  static String _waysIn(TideAccount? account) {
+    if (account == null) return '';
+    if (account.hasGoogle && account.hasPassword) return 'Google and email';
+    if (account.hasGoogle) return 'Google';
+    return 'Email and password';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +80,7 @@ class SettingsScreen extends StatelessWidget {
             AccountCard(
               name: store.accountName,
               email: store.accountEmail,
+              avatarUrl: store.account?.avatarUrl,
               isPro: store.isPro,
               habitCount: store.activeHabitCount,
               onUpgrade: () => context.push(Routes.upgrade),
@@ -132,6 +148,29 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.help_outline_rounded,
                   showChevron: true,
                   onTap: () {},
+                ),
+              ],
+            ),
+
+            SettingsGroup(
+              title: 'Account',
+              rows: [
+                SettingsRow(
+                  label: 'Signed in with',
+                  subtitle: _waysIn(store.account),
+                  icon: Icons.verified_user_outlined,
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(14),
+                  // The hold-to-confirm every destructive control in Tide
+                  // uses, in its coral. Leaving is destructive here in a
+                  // plain sense: habits are not stored, so whatever this
+                  // session logged does not come back with the account.
+                  child: HoldToConfirmButton(
+                    label: 'Hold to log out',
+                    holdingLabel: 'Keep holding to log out',
+                    onConfirm: () => TideScope.read(context).logOut(),
+                  ),
                 ),
               ],
             ),

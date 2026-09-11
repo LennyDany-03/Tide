@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../config/app_constants.dart';
@@ -5,6 +7,9 @@ import '../config/milestone_catalog.dart';
 import '../config/seed_data.dart';
 import '../theme/tide_palette.dart';
 import '../theme/tide_theme.dart';
+import 'auth/auth_service.dart';
+import 'auth/demo_auth_service.dart';
+import 'device_flags.dart';
 import 'models/celebration_cue.dart';
 import 'models/day_summary.dart';
 import 'models/habit.dart';
@@ -14,14 +19,36 @@ import 'tide_scope.dart';
 
 /// The single source of truth for the running app.
 ///
-/// State lives in memory only: the store opens on [SeedData] every launch
-/// and never writes anything back. Actions taken during a session are real —
+/// Habits live in memory only: the store opens on [SeedData] every launch
+/// and never writes them back. Actions taken during a session are real —
 /// logging a habit genuinely moves the streak, the hero stat and the
 /// heatmap — they simply do not outlive the process.
+///
+/// The account does outlive it. Who is signed in comes from [auth] and
+/// survives a restart until the person logs out; whether this device has
+/// seen onboarding, and whether an account has had its tour, come from
+/// [flags]. Those are the only things Tide keeps.
 class TideStore extends ChangeNotifier {
-  TideStore() : _habits = SeedData.habits() {
+  TideStore({AuthService? auth, DeviceFlags? flags})
+    : auth = auth ?? DemoAuthService(),
+      flags = flags ?? DeviceFlags.memory(),
+      _habits = SeedData.habits() {
     _acknowledgedMilestones = _unlockedIds().toSet();
+    firstRun = !this.flags.onboardingSeen;
+    _restore(this.auth.currentAccount);
+    _accountChanges = this.auth.accountChanges.listen(
+      _onAccountChanged,
+      onError: (Object error) => debugPrint('Auth state error: $error'),
+    );
   }
+
+  /// Who holds the accounts: Supabase in a real build, memory in tests.
+  final AuthService auth;
+
+  /// What this device remembers between launches.
+  final DeviceFlags flags;
+
+  late final StreamSubscription<TideAccount?> _accountChanges;
 
   List<Habit> _habits;
   late Set<String> _acknowledgedMilestones;
@@ -29,25 +56,61 @@ class TideStore extends ChangeNotifier {
   /// Bumped on every cue so the overlay has a fresh widget identity.
   int _cueNonce = 0;
 
-  // --- Profile / preferences -------------------------------------------
+  // --- Account ----------------------------------------------------------
 
-  String accountName = 'Jules Ramirez';
-  String accountEmail = 'jules@tide.app';
+  TideAccount? _account;
 
-  /// Whether an account has been created or signed into this session.
+  /// The signed-in account, or null.
+  TideAccount? get account => _account;
+
+  bool get signedIn => _account != null;
+
+  String get accountName => _account?.displayName ?? 'You';
+  String get accountEmail => _account?.email ?? '';
+
+  /// Changes only when somebody signs in or out — never on a habit logged.
+  /// The router listens to this rather than to the store, so it re-checks
+  /// its guards twice a session instead of on every tap.
+  Listenable get sessionChanges => _session;
+  final ValueNotifier<String?> _session = ValueNotifier<String?>(null);
+
+  /// The account that just arrived is a new one: the welcome says "Welcome"
+  /// rather than "Welcome back", and Today opens empty.
+  bool get welcomingNewAccount => _welcomingNew;
+  bool _welcomingNew = false;
+
+  /// Today should run the guided tour.
   ///
-  /// Front-end only — there is no service behind it, the same way there is
-  /// no persistence behind the habits. What it genuinely decides is which
-  /// history the app opens on: a new account throws the demo data away so
-  /// Today starts empty, a returning one keeps it.
-  bool signedIn = false;
+  /// Once per account, not once per sign-in: the account's profile remembers
+  /// it on the server and [flags] remembers it on this device, so neither a
+  /// second login nor a reinstall walks somebody round a screen twice.
+  bool get tourPending => _tourPending;
+  bool _tourPending = false;
 
-  /// Today should run the guided tour the next time it is built.
+  /// Onboarding had not been seen when this launch began.
   ///
-  /// Armed by [signUp] rather than by finishing onboarding, because the
-  /// tour points at a real screen and only makes sense once there is one to
-  /// point at.
-  bool tourPending = false;
+  /// Decides whether the account form offers a way back to the explanation.
+  /// It does on the launch that showed it; on every launch after, the form
+  /// is the front door and an arrow back into a tutorial would be the
+  /// tutorial repeating.
+  late final bool firstRun;
+
+  /// Onboarding has been read or skipped on this device, ever.
+  bool get onboardingComplete => flags.onboardingSeen;
+
+  /// Which half of the form the in-flight request came from. Consulted when
+  /// the profile cannot say whether an account is new, and cleared once the
+  /// account has arrived.
+  bool? _creating;
+
+  /// Arrivals in flight, by account id. An account can be announced twice —
+  /// by the call that signed it in and by the service's change stream — and
+  /// both must resolve to one arrival.
+  final Map<String, Future<void>> _arrivals = {};
+
+  static const Duration _profileTimeout = Duration(seconds: 6);
+
+  // --- Preferences --------------------------------------------------------
 
   /// The splash has drawn the mark this session, so the welcome step shows
   /// it already whole instead of drawing it a second time.
@@ -57,7 +120,7 @@ class TideStore extends ChangeNotifier {
 
   /// The palette the whole app is drawn in.
   ///
-  /// Session-only, like everything else in the store: the app opens on
+  /// Session-only, like the habits: the app opens on
   /// [TidePalettes.standard] (Midnight) every launch.
   TidePalette palette = TidePalettes.standard;
 
@@ -65,7 +128,6 @@ class TideStore extends ChangeNotifier {
   bool quietHours = false;
   bool weeklyRecap = false;
   bool haptics = true;
-  bool onboardingComplete = false;
   DateTime lastSync = DateTime.now().subtract(const Duration(minutes: 2));
 
   /// Added to the computed best streak by the milestones screen's
@@ -372,49 +434,201 @@ class TideStore extends ChangeNotifier {
   }
 
   /// The intro has been read, or skipped. Distinct from [signedIn]: this
-  /// only decides whether first run replays the explanation.
+  /// only decides whether a launch replays the explanation, and it is kept
+  /// on the device so no launch ever does twice.
   void completeOnboarding() {
-    if (onboardingComplete) return;
-    onboardingComplete = true;
+    if (flags.onboardingSeen) return;
+    flags.markOnboardingSeen();
     notifyListeners();
   }
 
-  /// A brand-new account.
-  ///
-  /// The seeded demo history is thrown away here rather than at launch, so
-  /// the store still opens on real data for anyone dropped straight into
-  /// the shell — tests, deep links, and the returning-user path through
-  /// [signIn]. Signing up is the one moment where an empty app is the
-  /// honest thing to show, and [tourPending] is what keeps that emptiness
-  /// from reading as a broken screen.
-  void signUp({required String name, required String email}) {
-    final trimmed = name.trim();
-    accountName = trimmed.isEmpty ? 'You' : trimmed;
-    accountEmail = email.trim();
-    signedIn = true;
-    onboardingComplete = true;
-    tourPending = true;
+  // --- Account actions ----------------------------------------------------
+  //
+  // None of these navigate. Each resolves once the account has *arrived* —
+  // history chosen, tour decided — and the router's guard, listening to
+  // [sessionChanges], moves the app on from wherever it is.
 
-    _habits = [];
-    _acknowledgedMilestones = {};
-    _simulatedBonus = 0;
-    _pendingHabitCue = null;
-    notifyListeners();
+  /// Throws [AuthFailure].
+  Future<void> logIn({required String email, required String password}) =>
+      _signingIn(
+        creating: false,
+        request: () => auth.logIn(email: email, password: password),
+      );
+
+  /// Resolves to [SignUpOutcome.confirmEmail] when the account is waiting on
+  /// its confirmation link; nothing has signed in then. Throws [AuthFailure].
+  Future<SignUpOutcome> createAccount({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    _creating = true;
+    try {
+      final outcome = await auth.createAccount(
+        name: name,
+        email: email,
+        password: password,
+      );
+      final account = auth.currentAccount;
+      if (outcome == SignUpOutcome.signedIn && account != null) {
+        await _adopt(account);
+      }
+      return outcome;
+    } finally {
+      _creating = null;
+    }
   }
 
-  /// A returning account, which arrives with the history it already had.
-  void signIn({required String email}) {
-    accountEmail = email.trim();
-    signedIn = true;
-    onboardingComplete = true;
-    notifyListeners();
+  /// Throws [AuthFailure].
+  Future<void> continueWithGoogle({required bool creating}) => _signingIn(
+    creating: creating,
+    request: () => auth.continueWithGoogle(creating: creating),
+  );
+
+  Future<void> _signingIn({
+    required bool creating,
+    required Future<TideAccount> Function() request,
+  }) async {
+    _creating = creating;
+    try {
+      await _adopt(await request());
+    } finally {
+      _creating = null;
+    }
+  }
+
+  /// Ends the session here whether or not the server hears about it: the
+  /// session is removed from the device before the network call is made,
+  /// so an offline log-out still logs out.
+  Future<void> logOut() async {
+    try {
+      await auth.logOut();
+    } catch (error) {
+      debugPrint('Log out did not reach the server: $error');
+    }
+    _release();
   }
 
   void finishTour() {
-    if (!tourPending) return;
-    tourPending = false;
+    if (!_tourPending) return;
+    _tourPending = false;
+    notifyListeners();
+
+    final account = _account;
+    if (account == null) return;
+    flags.markTourDone(account.id);
+    unawaited(_saveTour(account));
+  }
+
+  // --- Account arrival ----------------------------------------------------
+
+  /// A session that was already on the device at launch. Adopted at once,
+  /// so the first screen is chosen without waiting on the network; whether
+  /// a tour is still owed is checked behind it.
+  void _restore(TideAccount? account) {
+    if (account == null) return;
+    _account = account;
+    _session.value = account.id;
+    flags.markOnboardingSeen();
+    unawaited(_armTourIfOwed(account));
+  }
+
+  void _onAccountChanged(TideAccount? next) {
+    if (next == null) {
+      _release();
+    } else {
+      unawaited(_adopt(next));
+    }
+  }
+
+  Future<void> _adopt(TideAccount next) {
+    final current = _account;
+    if (current != null && current.id == next.id) {
+      // The same person with fresher details — a linked Google identity, a
+      // refreshed token. No arrival, no welcome.
+      if (current != next) {
+        _account = next;
+        notifyListeners();
+      }
+      return Future<void>.value();
+    }
+    // A block body on purpose: `remove` returns the future being completed,
+    // and `whenComplete` waits on whatever its callback returns — an arrow
+    // here makes the arrival wait on itself forever.
+    return _arrivals[next.id] ??= _arrive(next).whenComplete(() {
+      _arrivals.remove(next.id);
+    });
+  }
+
+  Future<void> _arrive(TideAccount next) async {
+    final creating = _creating;
+
+    bool? toured;
+    try {
+      toured = await auth.tourCompleted(next).timeout(_profileTimeout);
+    } catch (error) {
+      debugPrint('Could not read the profile for ${next.id}: $error');
+    }
+    // Signed out again, or replaced, while the profile was on its way.
+    if (auth.currentAccount?.id != next.id) return;
+
+    // The profile is the authority on whether an account is new. Without
+    // it, the button that was pressed is the best remaining evidence — and
+    // an account that arrived on its own, from an email link, is treated as
+    // returning rather than having its history cleared on a guess.
+    final seenHere = flags.tourDone(next.id);
+    final isNew = !(toured ?? !(creating ?? false)) && !seenHere;
+    if (seenHere && toured == false) unawaited(_saveTour(next));
+
+    _account = next;
+    _welcomingNew = isNew;
+    _tourPending = isNew;
+    flags.markOnboardingSeen();
+
+    // A new account opens genuinely empty — the one moment an empty app is
+    // the honest thing to show, and the tour is what keeps it from reading
+    // as broken. A returning one opens on the demo history, because habits
+    // are still not stored anywhere.
+    _habits = isNew ? [] : SeedData.habits();
+    _simulatedBonus = 0;
+    _pendingHabitCue = null;
+    _acknowledgedMilestones = isNew ? {} : _unlockedIds().toSet();
+
+    _session.value = next.id;
     notifyListeners();
   }
+
+  Future<void> _armTourIfOwed(TideAccount account) async {
+    if (flags.tourDone(account.id)) return;
+    try {
+      final toured = await auth.tourCompleted(account).timeout(_profileTimeout);
+      if (toured || _tourPending || _account?.id != account.id) return;
+      _tourPending = true;
+      notifyListeners();
+    } catch (error) {
+      debugPrint('Could not check the tour for ${account.id}: $error');
+    }
+  }
+
+  void _release() {
+    if (_account == null) return;
+    _account = null;
+    _tourPending = false;
+    _welcomingNew = false;
+    _pendingHabitCue = null;
+    _session.value = null;
+    notifyListeners();
+  }
+
+  Future<void> _saveTour(TideAccount account) async {
+    try {
+      await auth.markTourCompleted(account);
+    } catch (error) {
+      debugPrint('Tour not saved to the profile yet: $error');
+    }
+  }
+
+  // --- Settings -----------------------------------------------------------
 
   void sync() {
     lastSync = DateTime.now();
@@ -455,6 +669,13 @@ class TideStore extends ChangeNotifier {
         if (habit.id == habitId) transform(habit) else habit,
     ];
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_accountChanges.cancel());
+    _session.dispose();
+    super.dispose();
   }
 }
 

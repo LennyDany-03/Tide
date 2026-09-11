@@ -1,0 +1,5 @@
+{
+  // Every `flutter run` VS Code starts — F5, the Run/Debug links above
+  // main(), the device picker — gets the Supabase keys from .env.
+  "dart.flutterRunAdditionalArgs": ["--dart-define-from-file=.env"]
+}

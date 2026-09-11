@@ -14,6 +14,8 @@ import '../screens/settings/settings_screen.dart';
 import '../screens/shell/tide_shell.dart';
 import '../screens/splash/splash_screen.dart';
 import '../screens/upgrade/upgrade_sheet.dart';
+import '../screens/welcome/welcome_screen.dart';
+import '../services/tide_store.dart';
 import '../theme/tide_motion.dart';
 import '../widgets/tide_sheet.dart';
 
@@ -22,6 +24,7 @@ abstract final class Routes {
   static const splash = '/splash';
   static const onboarding = '/onboarding';
   static const auth = '/auth';
+  static const welcome = '/welcome';
   static const today = '/today';
   static const history = '/history';
   static const insights = '/insights';
@@ -40,15 +43,22 @@ abstract final class AppRoutes {
     debugLabel: 'root',
   );
 
-  static GoRouter build({
-    required bool startOnboarded,
-    bool showSplash = false,
-  }) {
-    final firstScreen = startOnboarded ? Routes.today : Routes.onboarding;
+  static GoRouter build({required TideStore store, bool showSplash = false}) {
+    // Chosen from what is already on the device, so a launch never shows the
+    // wrong screen first: a restored session opens Today, a device that has
+    // been through onboarding opens the account form, and only a first
+    // launch explains the app.
+    final firstScreen = store.signedIn
+        ? Routes.today
+        : store.onboardingComplete
+        ? Routes.auth
+        : Routes.onboarding;
 
     return GoRouter(
       navigatorKey: _rootKey,
       initialLocation: showSplash ? Routes.splash : firstScreen,
+      refreshListenable: store.sessionChanges,
+      redirect: (context, state) => _guard(store, state.uri.path),
       routes: [
         // The launch sequence. A fade in and a fade out, and the same ground
         // colour as the native launch window before it and the screen after
@@ -75,20 +85,7 @@ abstract final class AppRoutes {
         // reason the mark appeared to jump size on its way across.
         GoRoute(
           path: Routes.onboarding,
-          pageBuilder: (context, state) => CustomTransitionPage<void>(
-            key: state.pageKey,
-            transitionDuration: TideMotion.sheetIn,
-            reverseTransitionDuration: TideMotion.sheetOut,
-            transitionsBuilder: (context, animation, secondary, child) =>
-                FadeTransition(
-                  opacity: CurvedAnimation(
-                    parent: animation,
-                    curve: TideMotion.tabCurve,
-                  ),
-                  child: child,
-                ),
-            child: const OnboardingScreen(),
-          ),
+          pageBuilder: (context, state) => _fade(state, const OnboardingScreen()),
         ),
 
         // Sign-up and log-in. A `go` rather than a push in both directions:
@@ -122,6 +119,13 @@ abstract final class AppRoutes {
             },
             child: const AuthScreen(),
           ),
+        ),
+
+        // Between the account form and Today. Reached only through the
+        // guard below, never by a screen asking for it.
+        GoRoute(
+          path: Routes.welcome,
+          pageBuilder: (context, state) => _fade(state, const WelcomeScreen()),
         ),
 
         // The four tabs. A branch keeps its own navigator, so pushing habit
@@ -232,6 +236,49 @@ abstract final class AppRoutes {
               _sheet(state, const AppearanceSheet()),
         ),
       ],
+    );
+  }
+
+  /// Who may be where.
+  ///
+  /// One rule set instead of a `go` at the end of every account call,
+  /// because accounts arrive from places no screen is waiting on: the email
+  /// confirmation link opening the app, a restored session, a refresh token
+  /// revoked while the app was closed. Wherever the change comes from, the
+  /// router hears it through [TideStore.sessionChanges] and puts the person
+  /// on the right side of the door.
+  static String? _guard(TideStore store, String path) {
+    // The splash decides for itself when it is done.
+    if (path == Routes.splash) return null;
+
+    final atDoor = path == Routes.onboarding || path == Routes.auth;
+    if (store.signedIn) return atDoor ? Routes.welcome : null;
+
+    // Onboarding is once per device. The launch that showed it may still go
+    // back to it from the form; no later launch can reach it at all.
+    if (path == Routes.onboarding) {
+      return store.onboardingComplete && !store.firstRun ? Routes.auth : null;
+    }
+    if (path == Routes.auth) return null;
+
+    // Everything else is inside the app, and needs an account.
+    return store.onboardingComplete ? Routes.auth : Routes.onboarding;
+  }
+
+  static CustomTransitionPage<void> _fade(GoRouterState state, Widget child) {
+    return CustomTransitionPage<void>(
+      key: state.pageKey,
+      transitionDuration: TideMotion.sheetIn,
+      reverseTransitionDuration: TideMotion.sheetOut,
+      transitionsBuilder: (context, animation, secondary, child) =>
+          FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: TideMotion.tabCurve,
+            ),
+            child: child,
+          ),
+      child: child,
     );
   }
 

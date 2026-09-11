@@ -5,6 +5,7 @@ import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
+import '../../../widgets/account_avatar.dart';
 import '../../../widgets/press_scale.dart';
 import '../../../widgets/tide_surface.dart';
 
@@ -19,6 +20,10 @@ import '../../../widgets/tide_surface.dart';
 ///
 /// It is a panel now, with the allowance drawn as a meter that fills on
 /// arrival. Pro loses the meter entirely: there is no ceiling to draw.
+///
+/// The disc is the account's own: a Google photo when a Google identity is
+/// linked — including on an email account that later added Google — and
+/// initials otherwise.
 class AccountCard extends StatelessWidget {
   const AccountCard({
     super.key,
@@ -27,21 +32,15 @@ class AccountCard extends StatelessWidget {
     required this.isPro,
     required this.habitCount,
     required this.onUpgrade,
+    this.avatarUrl,
   });
 
   final String name;
   final String email;
+  final String? avatarUrl;
   final bool isPro;
   final int habitCount;
   final VoidCallback onUpgrade;
-
-  String get _initials {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return '?';
-    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-    return (parts.first.characters.first + parts.last.characters.first)
-        .toUpperCase();
-  }
 
   double get _used => habitCount / AppConstants.freeHabitLimit;
 
@@ -58,22 +57,7 @@ class AccountCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 50,
-                height: 50,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: TideColors.lantern.withValues(alpha: 0.14),
-                  border: Border.all(
-                    color: TideColors.lantern.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Text(
-                  _initials,
-                  style: TideType.gauge(16, color: TideColors.lantern),
-                ),
-              ),
+              AccountAvatar(name: name, avatarUrl: avatarUrl),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
