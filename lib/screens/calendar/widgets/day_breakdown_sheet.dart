@@ -223,14 +223,14 @@ class _Status extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (entry.frozen) {
-      return const _Mark(
+      return _Mark(
         icon: Icons.ac_unit_rounded,
         colour: TideColors.frost,
         filled: true,
       );
     }
     if (entry.complete) {
-      return const _Mark(
+      return _Mark(
         icon: Icons.check_rounded,
         colour: TideColors.lantern,
         filled: true,
@@ -280,7 +280,7 @@ class _Mark extends StatelessWidget {
       child: Icon(
         icon,
         size: 17,
-        color: filled ? TideColors.deepWater : colour,
+        color: filled ? TideColors.onLantern : colour,
       ),
     );
   }

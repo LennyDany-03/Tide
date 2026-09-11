@@ -130,7 +130,7 @@ class SwipeLogBackground extends StatelessWidget {
           // anything. The trench is the app's own recess colour, darker
           // than the page for exactly this reason, and the tint reads as
           // light falling into the cut instead of a panel behind it.
-          const Positioned.fill(
+          Positioned.fill(
             child: ColoredBox(color: TideColors.trench),
           ),
           Positioned.fill(

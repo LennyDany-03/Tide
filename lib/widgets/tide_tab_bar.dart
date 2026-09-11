@@ -98,7 +98,7 @@ class TideTabBar extends StatelessWidget {
       child: SizedBox(
         height: barHeight,
         child: DecoratedBox(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             borderRadius: _radius,
             boxShadow: TideElevation.floating,
           ),

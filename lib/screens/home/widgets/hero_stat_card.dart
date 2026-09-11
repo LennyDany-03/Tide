@@ -280,7 +280,7 @@ class _LiveStatusState extends State<_LiveStatus>
   @override
   Widget build(BuildContext context) {
     final still = MediaQuery.disableAnimationsOf(context);
-    const dot = SizedBox.square(
+    final dot = SizedBox.square(
       dimension: 6,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -748,7 +748,7 @@ class _NextTrack extends StatelessWidget {
         curve: TideMotion.overshoot,
         builder: (context, value, _) => Stack(
           children: [
-            const SizedBox(
+            SizedBox(
               height: _height,
               width: double.infinity,
               child: ColoredBox(color: TideColors.trench),

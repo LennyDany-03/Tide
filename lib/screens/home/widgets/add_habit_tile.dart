@@ -69,7 +69,7 @@ class AddHabitTile extends StatelessWidget {
                     color: TideColors.lantern.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.add_rounded,
                     size: 18,
                     color: TideColors.lantern,

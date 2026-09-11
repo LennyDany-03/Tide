@@ -106,7 +106,7 @@ class DayCell extends StatelessWidget {
                         // a warm fill is unreadable. Past that point it flips
                         // to the ground colour.
                         color: level > 0.55
-                            ? TideColors.deepWater
+                            ? TideColors.onLantern
                             : outsideMonth || isFuture
                             ? TideColors.silt
                             : TideColors.bone,

@@ -73,7 +73,7 @@ class _TideBackdropState extends State<TideBackdrop>
     // A still backdrop is one flat rect and is cached; only the drifting
     // one rebuilds per frame, and even then it is a single gradient.
     final ground = controller == null
-        ? const ColoredBox(color: TideColors.deepWater, child: SizedBox.expand())
+        ? ColoredBox(color: TideColors.deepWater, child: SizedBox.expand())
         : AnimatedBuilder(
             animation: controller,
             builder: (context, _) => _Ground(phase: controller.value),
@@ -139,7 +139,7 @@ class TideTopScrim extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final inset = MediaQuery.viewPaddingOf(context).top;
-    const ground = TideColors.deepWater;
+    final ground = TideColors.deepWater;
 
     return IgnorePointer(
       child: SizedBox(

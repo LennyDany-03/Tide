@@ -460,7 +460,7 @@ class _Glyph extends StatelessWidget {
     return Container(
       width: 40,
       height: 40,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: TideColors.trench,
         borderRadius: TideElevation.radius12,
       ),
@@ -646,7 +646,7 @@ class _HoldButton extends StatelessWidget {
                     // flanking it.
                     color: complete
                         ? TideColors.lantern
-                        : TideColors.deepWater,
+                        : TideColors.onLantern,
                   ),
                 ),
               ),
@@ -662,7 +662,7 @@ class _HoldButton extends StatelessWidget {
                     child: FractionallySizedBox(
                       widthFactor: complete ? 0 : progress,
                       child: ColoredBox(
-                        color: TideColors.deepWater.withValues(
+                        color: TideColors.onLantern.withValues(
                           alpha: banked ? 0.24 : 0.16,
                         ),
                         child: const SizedBox.expand(),

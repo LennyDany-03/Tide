@@ -22,14 +22,15 @@ class TideLevel extends StatefulWidget {
   const TideLevel({
     super.key,
     required this.level,
-    this.color = TideColors.lantern,
+    this.color,
     this.amplitude = 5,
   });
 
   /// 0..1 — how high the water stands.
   final double level;
 
-  final Color color;
+  /// The waterline. Defaults to the accent.
+  final Color? color;
 
   /// Crest height in logical pixels. Small on purpose: this is a tide, not
   /// surf, and a big wave would read as a loading animation.
@@ -75,7 +76,7 @@ class _TideLevelState extends State<TideLevel>
             painter: _TidePainter(
               level: level,
               phase: 0,
-              color: widget.color,
+              color: widget.color ?? TideColors.lantern,
               amplitude: 0,
             ),
             size: Size.infinite,
@@ -87,7 +88,7 @@ class _TideLevelState extends State<TideLevel>
             painter: _TidePainter(
               level: level,
               phase: _drift.value * 2 * math.pi,
-              color: widget.color,
+              color: widget.color ?? TideColors.lantern,
               amplitude: widget.amplitude,
             ),
             size: Size.infinite,

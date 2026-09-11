@@ -121,7 +121,7 @@ class _TideMarkState extends State<TideMark> with TickerProviderStateMixin {
                 child: Container(
                   width: widget.coreSize,
                   height: widget.coreSize,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: TideColors.lantern,
                     shape: BoxShape.circle,
                   ),

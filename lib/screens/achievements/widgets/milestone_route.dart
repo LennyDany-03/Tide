@@ -461,7 +461,7 @@ class _Disc extends StatelessWidget {
         alignment: Alignment.center,
         // Same opaque ground as the other badges, so the line stops at the
         // marker rather than crossing the ring that is measuring it.
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: TideColors.deepWater,
         ),

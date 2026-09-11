@@ -13,7 +13,7 @@ class TrendChart extends StatefulWidget {
   const TrendChart({
     super.key,
     required this.values,
-    this.color = TideColors.lantern,
+    this.color,
     this.height = 96,
     this.strokeWidth = 2,
     this.showEndDot = true,
@@ -26,7 +26,8 @@ class TrendChart extends StatefulWidget {
   /// 0..1, oldest first. Needs at least two points to draw a line.
   final List<double> values;
 
-  final Color color;
+  /// The line and its fill. Defaults to the accent.
+  final Color? color;
   final double height;
   final double strokeWidth;
 
@@ -94,7 +95,7 @@ class _TrendChartState extends State<TrendChart>
             painter: _TrendPainter(
               values: widget.values,
               progress: Curves.easeInOutCubic.transform(_controller.value),
-              color: widget.color,
+              color: widget.color ?? TideColors.lantern,
               strokeWidth: widget.strokeWidth,
               showEndDot: widget.showEndDot,
               showPoints: widget.showPoints,

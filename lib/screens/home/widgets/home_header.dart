@@ -68,7 +68,7 @@ class HomeHeader extends StatelessWidget {
             children: [
               Text(_dateLine, style: TideType.labelMuted),
               const SizedBox(height: 6),
-              const Text('Today', style: TideType.screenTitle),
+              Text('Today', style: TideType.screenTitle),
             ],
           ),
         ),
@@ -101,7 +101,7 @@ class _MilestonesChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const HabitGlyph(
+              HabitGlyph(
                 glyph: TideGlyph.sparkle,
                 size: 14,
                 color: TideColors.lantern,

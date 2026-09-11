@@ -304,7 +304,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
         children: [
           PressScale(
             onTap: _attemptLeave,
-            child: const SizedBox(
+            child: SizedBox(
               width: 40,
               height: 40,
               child: Icon(
@@ -328,14 +328,14 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
             width: 38,
             height: 38,
             alignment: Alignment.center,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: TideColors.lantern,
               shape: BoxShape.circle,
             ),
             child: HabitGlyph(
               glyph: _glyph,
               size: 18,
-              color: TideColors.deepWater,
+              color: TideColors.onLantern,
             ),
           ),
         ],

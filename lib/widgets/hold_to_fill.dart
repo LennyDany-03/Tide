@@ -322,7 +322,7 @@ class HoldToConfirmButton extends StatelessWidget {
     required this.label,
     required this.onConfirm,
     this.holdingLabel,
-    this.color = TideColors.coral,
+    this.color,
     this.expand = true,
   });
 
@@ -332,11 +332,15 @@ class HoldToConfirmButton extends StatelessWidget {
   final String? holdingLabel;
 
   final VoidCallback onConfirm;
-  final Color color;
+
+  /// Defaults to [TideColors.coral], which is what destruction wears.
+  final Color? color;
   final bool expand;
 
   @override
   Widget build(BuildContext context) {
+    final color = this.color ?? TideColors.coral;
+
     return HoldToFill(
       onCommit: (_) => onConfirm(),
       builder: (context, progress, holding) {

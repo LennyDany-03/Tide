@@ -32,7 +32,7 @@ class DetailHeader extends StatelessWidget {
         // on the screen and should not be the only filled shape in the row.
         PressScale(
           onTap: onBack,
-          child: const SizedBox(
+          child: SizedBox(
             width: 38,
             height: 38,
             child: Icon(

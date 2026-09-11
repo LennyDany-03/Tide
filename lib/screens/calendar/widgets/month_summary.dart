@@ -109,7 +109,7 @@ class _RateBar extends StatelessWidget {
         height: 6,
         child: Stack(
           children: [
-            const Positioned.fill(
+            Positioned.fill(
               child: ColoredBox(color: TideColors.trench),
             ),
             // Draws itself on arrival and re-draws when the month is paged,

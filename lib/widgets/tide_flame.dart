@@ -270,7 +270,7 @@ class _FlamePainter extends CustomPainter {
         box,
         Paint()
           ..shader = TideGradients.bloom(
-            color: TideColors.bone,
+            color: TideColors.glint,
             alpha: 0.14,
             center: const Alignment(-0.50, -0.20),
             radius: 0.50,

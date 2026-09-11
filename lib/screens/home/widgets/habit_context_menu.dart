@@ -137,7 +137,7 @@ class _Menu extends StatelessWidget {
               if (log != null) ...[
                 TideButton(
                   label: log.label,
-                  icon: Icon(log.icon, size: 19, color: TideColors.deepWater),
+                  icon: Icon(log.icon, size: 19, color: TideColors.onLantern),
                   onPressed: () => _run(context, log.act),
                 ),
                 const SizedBox(height: 8),

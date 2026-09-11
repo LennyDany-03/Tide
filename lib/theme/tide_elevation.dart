@@ -35,12 +35,13 @@ abstract final class TideElevation {
   static const List<BoxShadow> resting = <BoxShadow>[];
 
   /// Genuinely floating: sheets, the context menu, the FAB. Wide and soft,
-  /// so it reads as occlusion rather than as a dark halo.
-  static const List<BoxShadow> floating = [
+  /// so it reads as occlusion rather than as a dark halo. Its strength comes
+  /// from the palette — heavy on a dark ground, faint on a light one.
+  static List<BoxShadow> get floating => [
     BoxShadow(
-      color: Color(0xB3010507),
+      color: TideColors.shadow,
       blurRadius: 40,
-      offset: Offset(0, 16),
+      offset: const Offset(0, 16),
       spreadRadius: -8,
     ),
   ];

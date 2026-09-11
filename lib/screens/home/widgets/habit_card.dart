@@ -557,7 +557,7 @@ class _StatusMark extends StatelessWidget {
 
   Widget _face() {
     return switch (mark) {
-      _Mark.done => const DecoratedBox(
+      _Mark.done => DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: TideColors.lantern,
@@ -565,7 +565,7 @@ class _StatusMark extends StatelessWidget {
         child: Icon(
           Icons.check_rounded,
           size: 18,
-          color: TideColors.deepWater,
+          color: TideColors.onLantern,
         ),
       ),
       _Mark.frozen => DecoratedBox(
@@ -574,7 +574,7 @@ class _StatusMark extends StatelessWidget {
           color: TideColors.frost.withValues(alpha: 0.10),
           border: Border.all(color: TideColors.frost.withValues(alpha: 0.35)),
         ),
-        child: const Icon(
+        child: Icon(
           Icons.ac_unit_rounded,
           size: 14,
           color: TideColors.frost,

@@ -156,7 +156,7 @@ class _DevelopingCardState extends State<_DevelopingCard>
         child: Container(
           decoration: BoxDecoration(
             borderRadius: TideElevation.radius20,
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [TideColors.shelf, TideColors.deepWater],

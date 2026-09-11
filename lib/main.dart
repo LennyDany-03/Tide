@@ -6,6 +6,8 @@ import 'config/app_constants.dart';
 import 'config/app_routes.dart';
 import 'services/tide_scope.dart';
 import 'services/tide_store.dart';
+import 'theme/tide_colors.dart';
+import 'theme/tide_palette.dart';
 import 'theme/tide_theme.dart';
 import 'widgets/celebration/celebration_host.dart';
 import 'widgets/tour/tour_anchor.dart';
@@ -38,9 +40,32 @@ class _TideAppState extends State<TideApp> {
   /// tab bar, and the overlay above the router — are in different subtrees.
   final TourAnchorRegistry _anchors = TourAnchorRegistry();
 
+  /// The palette Material's theme was last built for.
+  late TidePalette _palette;
+
+  @override
+  void initState() {
+    super.initState();
+    // Tokens are global, so a fresh app — every widget test builds one —
+    // starts from its own store's palette rather than whatever the last
+    // app left behind.
+    _palette = _store.palette;
+    TideColors.use(_palette);
+    _store.addListener(_onStore);
+  }
+
+  /// Rebuilds the MaterialApp only when the palette actually changed, not on
+  /// every habit logged.
+  void _onStore() {
+    if (identical(_store.palette, _palette)) return;
+    setState(() => _palette = _store.palette);
+  }
+
   @override
   void dispose() {
-    _store.dispose();
+    _store
+      ..removeListener(_onStore)
+      ..dispose();
     super.dispose();
   }
 
@@ -55,7 +80,7 @@ class _TideAppState extends State<TideApp> {
         child: MaterialApp.router(
           title: AppConstants.appName,
           debugShowCheckedModeBanner: false,
-          theme: TideTheme.dark,
+          theme: TideTheme.current,
           routerConfig: _router,
           builder: (context, child) {
             // Lock text scaling to a sane band: the gauge readouts are a

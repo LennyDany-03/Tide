@@ -276,7 +276,7 @@ class _BackButton extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 14),
                 child: PressScale(
                   onTap: onTap,
-                  child: const SizedBox(
+                  child: SizedBox(
                     width: 34,
                     height: 34,
                     child: Icon(

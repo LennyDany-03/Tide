@@ -75,7 +75,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         TideTabBar.reservedHeight(context) + 28,
       ),
       children: [
-        const Text('History', style: TideType.screenTitle),
+        Text('History', style: TideType.screenTitle),
         const SizedBox(height: 6),
         Text(
           'Everything you have marked, at three distances.',

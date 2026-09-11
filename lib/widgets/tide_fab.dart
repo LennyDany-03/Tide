@@ -37,12 +37,12 @@ class TideFab extends StatelessWidget {
       child: Container(
         width: size,
         height: size,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: TideColors.lantern,
           shape: BoxShape.circle,
           boxShadow: TideElevation.floating,
         ),
-        child: Icon(icon, color: TideColors.deepWater, size: size * 0.42),
+        child: Icon(icon, color: TideColors.onLantern, size: size * 0.42),
       ),
     );
   }
@@ -64,7 +64,7 @@ class TideFabMorphTarget extends StatelessWidget {
       // Solid, because the FAB it grew out of is solid. A translucent
       // wash here meant the disc visibly changed material half way through
       // the morph, which is the one thing the morph exists to avoid.
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: TideColors.lantern,
         shape: BoxShape.circle,
       ),

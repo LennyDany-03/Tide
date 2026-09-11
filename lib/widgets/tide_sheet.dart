@@ -169,7 +169,7 @@ class SheetDismissButton extends StatelessWidget {
           color: TideColors.trench,
           borderRadius: TideElevation.radius12,
         ),
-        child: const Icon(
+        child: Icon(
           Icons.close_rounded,
           size: 18,
           color: TideColors.silt,

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../config/app_constants.dart';
 import '../config/milestone_catalog.dart';
 import '../config/seed_data.dart';
+import '../theme/tide_palette.dart';
+import '../theme/tide_theme.dart';
 import 'models/celebration_cue.dart';
 import 'models/day_summary.dart';
 import 'models/habit.dart';
@@ -48,6 +50,13 @@ class TideStore extends ChangeNotifier {
   bool tourPending = false;
 
   bool isPro = false;
+
+  /// The palette the whole app is drawn in.
+  ///
+  /// Session-only, like everything else in the store: the app opens on Deep
+  /// water every launch.
+  TidePalette palette = TidePalettes.deepWater;
+
   bool dailyReminders = true;
   bool quietHours = false;
   bool weeklyRecap = false;
@@ -420,6 +429,14 @@ class TideStore extends ChangeNotifier {
     this.weeklyRecap = weeklyRecap ?? this.weeklyRecap;
     this.haptics = haptics ?? this.haptics;
     this.isPro = isPro ?? this.isPro;
+    notifyListeners();
+  }
+
+  /// Switches the app to [next] and repaints what is on screen in it.
+  void setPalette(TidePalette next) {
+    if (identical(next, palette)) return;
+    palette = next;
+    TideTheme.applyPalette(next);
     notifyListeners();
   }
 

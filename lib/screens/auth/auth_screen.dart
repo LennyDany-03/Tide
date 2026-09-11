@@ -246,7 +246,7 @@ class _AuthScreenState extends State<AuthScreen> {
             // reached the form and wants to re-read what freezes are should
             // not have to reinstall to find out.
             onTap: () => context.go(Routes.onboarding),
-            child: const SizedBox(
+            child: SizedBox(
               width: 44,
               height: 44,
               child: Icon(

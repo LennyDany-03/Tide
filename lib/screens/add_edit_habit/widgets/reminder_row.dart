@@ -119,7 +119,7 @@ class _TimeChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.schedule_rounded,
                 size: 17,
                 color: TideColors.lantern,

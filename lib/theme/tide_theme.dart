@@ -3,30 +3,35 @@ import 'package:flutter/services.dart';
 
 import 'tide_colors.dart';
 import 'tide_elevation.dart';
+import 'tide_palette.dart';
 import 'tide_typography.dart';
 
-/// Assembles the Material theme from the Tide tokens.
+/// Assembles the Material theme from the Tide tokens, and switches palettes.
 ///
 /// Note the transparent splash and highlight: press feedback in this app is
 /// always `PressScale`, never a Material ink ripple. Leaving ink enabled
 /// would put two different press languages on screen at once.
 abstract final class TideTheme {
-  static ThemeData get dark {
-    const scheme = ColorScheme.dark(
+  /// Material's theme for whichever palette is active.
+  static ThemeData get current {
+    final palette = TideColors.palette;
+
+    final scheme = ColorScheme(
+      brightness: palette.brightness,
       primary: TideColors.lantern,
-      onPrimary: TideColors.deepWater,
+      onPrimary: TideColors.onLantern,
       secondary: TideColors.lantern,
-      onSecondary: TideColors.deepWater,
+      onSecondary: TideColors.onLantern,
       tertiary: TideColors.lantern,
       error: TideColors.coral,
-      onError: TideColors.bone,
+      onError: TideColors.shoal,
       surface: TideColors.shelf,
       onSurface: TideColors.bone,
     );
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: palette.brightness,
       colorScheme: scheme,
       scaffoldBackgroundColor: TideColors.deepWater,
       canvasColor: TideColors.deepWater,
@@ -91,16 +96,55 @@ abstract final class TideTheme {
     );
   }
 
-  /// Light status-bar icons on the deep-water ground, edge-to-edge.
+  /// Status-bar and navigation-bar icons that read on the active ground,
+  /// edge-to-edge: light icons on a dark palette, dark icons on a light one.
+  static SystemUiOverlayStyle get overlayStyle {
+    final light = TideColors.palette.isLight;
+    final icons = light ? Brightness.dark : Brightness.light;
+
+    return SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: icons,
+      // iOS names the *bar*, not the icons, so it is the other way round.
+      statusBarBrightness: light ? Brightness.light : Brightness.dark,
+      systemNavigationBarColor: TideColors.deepWater,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: icons,
+      systemNavigationBarContrastEnforced: false,
+    );
+  }
+
+  /// Makes [palette] the app's palette and repaints everything on screen in
+  /// it, in the next frame, without losing any state.
   ///
-  /// The ground is flat now, so the navigation bar simply takes the token.
-  static final SystemUiOverlayStyle overlayStyle = SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    statusBarBrightness: Brightness.dark,
-    systemNavigationBarColor: TideColors.deepWater,
-    systemNavigationBarDividerColor: Colors.transparent,
-    systemNavigationBarIconBrightness: Brightness.light,
-    systemNavigationBarContrastEnforced: false,
-  );
+  /// Every widget reads its colours from [TideColors] at build or paint
+  /// time, but nothing *subscribes* to them — there are hundreds of reads,
+  /// and threading a listener through every one would put theme plumbing in
+  /// every file in the app. A palette change is rare and deliberate, so it
+  /// pays for a single walk of the tree instead: every element is marked to
+  /// rebuild and every render object to repaint. Scroll positions, open
+  /// sheets, running animations and the tab you are on all survive, because
+  /// nothing is torn down — the tree is only asked to draw itself again.
+  ///
+  /// The repaint matters as much as the rebuild. A painter whose inputs have
+  /// not changed tells its render object nothing needs repainting, and it
+  /// would keep the old palette's pixels until something else moved.
+  static void applyPalette(TidePalette palette) {
+    if (identical(TideColors.palette, palette)) return;
+    TideColors.use(palette);
+    SystemChrome.setSystemUIOverlayStyle(overlayStyle);
+
+    final root = WidgetsBinding.instance.rootElement;
+    if (root == null) return;
+
+    void refresh(Element element) {
+      element.markNeedsBuild();
+      if (element is RenderObjectElement) {
+        element.renderObject.markNeedsPaint();
+      }
+      element.visitChildren(refresh);
+    }
+
+    root.visitChildren(refresh);
+  }
 }

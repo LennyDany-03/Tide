@@ -111,7 +111,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
         TideTabBar.reservedHeight(context) + 28,
       ),
       children: [
-        const Text('Insights', style: TideType.screenTitle),
+        Text('Insights', style: TideType.screenTitle),
         const SizedBox(height: 6),
         Text('Week $_weekNumber · $_range', style: TideType.labelMuted),
         const SizedBox(height: 26),
@@ -315,7 +315,7 @@ class _DayCard extends StatelessWidget {
               height: 5,
               child: Stack(
                 children: [
-                  const Positioned.fill(
+                  Positioned.fill(
                     child: ColoredBox(color: TideColors.trench),
                   ),
                   TweenAnimationBuilder<double>(
@@ -481,7 +481,7 @@ class _MilestonesRow extends StatelessWidget {
                     shape: BoxShape.circle,
                     color: TideColors.lantern.withValues(alpha: 0.12),
                   ),
-                  child: const HabitGlyph(
+                  child: HabitGlyph(
                     glyph: TideGlyph.sparkle,
                     size: 17,
                     color: TideColors.lantern,
@@ -503,7 +503,7 @@ class _MilestonesRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
                   size: 20,
                   color: TideColors.silt,

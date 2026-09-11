@@ -50,7 +50,7 @@ class SettingsScreen extends StatelessWidget {
         TideTabBar.reservedHeight(context) + 28,
       ),
       children: [
-        const Text('Settings', style: TideType.screenTitle),
+        Text('Settings', style: TideType.screenTitle),
         const SizedBox(height: 6),
         Text(
           'Your account, and how Tide behaves.',
@@ -121,10 +121,10 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 SettingsRow(
                   label: 'Appearance',
-                  subtitle: 'Deep water',
+                  subtitle: store.palette.name,
                   icon: Icons.palette_outlined,
                   showChevron: true,
-                  onTap: () {},
+                  onTap: () => context.push(Routes.appearance),
                 ),
                 SettingsRow(
                   label: 'Help and feedback',
@@ -170,7 +170,7 @@ class _Colophon extends StatelessWidget {
             child: Container(
               width: 6,
               height: 6,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: TideColors.lantern,
               ),

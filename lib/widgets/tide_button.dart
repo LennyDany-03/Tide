@@ -63,7 +63,7 @@ class TideButton extends StatelessWidget {
   };
 
   Color get _foreground => switch (variant) {
-    TideButtonVariant.primary => TideColors.deepWater,
+    TideButtonVariant.primary => TideColors.onLantern,
     TideButtonVariant.secondary => TideColors.bone,
     TideButtonVariant.ghost => TideColors.silt,
   };
@@ -183,7 +183,7 @@ class _TideSpinnerState extends State<TideSpinner>
         strokeWidth: widget.strokeWidth,
         animate: false,
         showTrack: false,
-        color: widget.color ?? TideColors.deepWater,
+        color: widget.color ?? TideColors.onLantern,
       ),
     );
   }

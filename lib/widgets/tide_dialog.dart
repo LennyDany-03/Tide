@@ -79,7 +79,7 @@ class TideDialogAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (background, foreground) = switch (tone) {
-      TideDialogTone.primary => (TideColors.lantern, TideColors.deepWater),
+      TideDialogTone.primary => (TideColors.lantern, TideColors.onLantern),
       TideDialogTone.neutral => (TideColors.shelf, TideColors.bone),
       TideDialogTone.destructive => (
         TideColors.coral.withValues(alpha: 0.12),

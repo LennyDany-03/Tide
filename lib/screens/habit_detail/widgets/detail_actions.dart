@@ -72,7 +72,7 @@ class _ActionRow extends StatelessWidget {
         child: Row(
           children: [
             Expanded(child: Text(label, style: TideType.heading)),
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
               size: 20,
               color: TideColors.silt,

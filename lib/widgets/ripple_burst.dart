@@ -20,8 +20,8 @@ class RippleBurst extends StatefulWidget {
     super.key,
     required this.child,
     required this.trigger,
-    this.color = TideColors.lantern,
-    this.accent = TideColors.lantern,
+    this.color,
+    this.accent,
     this.particles = false,
     this.intensity = 1,
     this.origin = Alignment.center,
@@ -35,8 +35,11 @@ class RippleBurst extends StatefulWidget {
   /// Increment to fire. A change of value is the event.
   final int trigger;
 
-  final Color color;
-  final Color accent;
+  /// The rings and the wash. Defaults to the accent.
+  final Color? color;
+
+  /// The trailing ring and half the particles. Defaults to the accent.
+  final Color? accent;
 
   /// The milestone celebration adds a brief particle flourish on top.
   final bool particles;
@@ -127,8 +130,8 @@ class _RippleBurstState extends State<RippleBurst>
                 return CustomPaint(
                   painter: _RipplePainter(
                     t: _controller.value,
-                    color: widget.color,
-                    accent: widget.accent,
+                    color: widget.color ?? TideColors.lantern,
+                    accent: widget.accent ?? TideColors.lantern,
                     intensity: widget.intensity,
                     origin: widget.origin,
                     particles: widget.particles ? _particles : const [],
@@ -263,5 +266,9 @@ class _RipplePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RipplePainter old) =>
-      old.t != t || old.clip != clip || old.borderRadius != borderRadius;
+      old.t != t ||
+      old.color != color ||
+      old.accent != accent ||
+      old.clip != clip ||
+      old.borderRadius != borderRadius;
 }

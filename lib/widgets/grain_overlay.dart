@@ -3,11 +3,14 @@ import 'dart:ui' show PointMode;
 
 import 'package:flutter/material.dart';
 
+import '../theme/tide_colors.dart';
+
 /// A 1–2% noise wash over the page background.
 ///
-/// Barely visible on its own, but it stops the large flat deep-water ground
-/// from banding on OLED panels and gives the dark surfaces a slight
-/// materiality. Painted once and never repainted.
+/// Barely visible on its own, but it stops the large flat ground from
+/// banding on OLED panels and gives the dark surfaces a slight materiality.
+/// Painted in the palette's [TideColors.glint], so on a light palette — where
+/// there is no banding to hide — it simply disappears into the page.
 class GrainOverlay extends StatelessWidget {
   const GrainOverlay({super.key, this.opacity = 0.018, this.density = 2600});
 
@@ -18,7 +21,11 @@ class GrainOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: CustomPaint(
-        painter: _GrainPainter(opacity: opacity, density: density),
+        painter: _GrainPainter(
+          opacity: opacity,
+          density: density,
+          color: TideColors.glint,
+        ),
         size: Size.infinite,
       ),
     );
@@ -26,10 +33,15 @@ class GrainOverlay extends StatelessWidget {
 }
 
 class _GrainPainter extends CustomPainter {
-  _GrainPainter({required this.opacity, required this.density});
+  _GrainPainter({
+    required this.opacity,
+    required this.density,
+    required this.color,
+  });
 
   final double opacity;
   final int density;
+  final Color color;
 
   /// Fixed seed: the grain must be stable, not crawl between frames.
   static final math.Random _random = math.Random(1401);
@@ -47,7 +59,7 @@ class _GrainPainter extends CustomPainter {
     );
 
     final paint = Paint()
-      ..color = Colors.white.withValues(alpha: opacity)
+      ..color = color.withValues(alpha: opacity)
       ..strokeWidth = 1
       ..strokeCap = StrokeCap.square;
 
@@ -58,5 +70,6 @@ class _GrainPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_GrainPainter old) => old.opacity != opacity;
+  bool shouldRepaint(_GrainPainter old) =>
+      old.opacity != opacity || old.color != color;
 }

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../screens/achievements/achievements_screen.dart';
 import '../screens/add_edit_habit/add_edit_habit_screen.dart';
+import '../screens/appearance/appearance_sheet.dart';
 import '../screens/auth/auth_screen.dart';
 import '../screens/calendar/calendar_screen.dart';
 import '../screens/habit_detail/habit_detail_screen.dart';
@@ -26,6 +27,7 @@ abstract final class Routes {
   static const milestones = '/milestones';
   static const newHabit = '/habit/new';
   static const upgrade = '/upgrade';
+  static const appearance = '/appearance';
 
   static String habit(String id) => '/today/habit/$id';
   static String editHabit(String id) => '/habit/$id/edit';
@@ -196,6 +198,16 @@ abstract final class AppRoutes {
           path: Routes.upgrade,
           parentNavigatorKey: _rootKey,
           pageBuilder: (context, state) => _sheet(state, const UpgradeSheet()),
+        ),
+
+        // The palette picker. A sheet over Settings rather than a page, so
+        // the screen behind it repaints in the palette you tap — the preview
+        // is the app itself.
+        GoRoute(
+          path: Routes.appearance,
+          parentNavigatorKey: _rootKey,
+          pageBuilder: (context, state) =>
+              _sheet(state, const AppearanceSheet()),
         ),
       ],
     );

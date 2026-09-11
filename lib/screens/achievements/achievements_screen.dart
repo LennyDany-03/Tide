@@ -78,7 +78,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                   // only filled shape in its row.
                   PressScale(
                     onTap: () => context.pop(),
-                    child: const SizedBox(
+                    child: SizedBox(
                       width: 38,
                       height: 38,
                       child: Icon(
@@ -89,7 +89,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  const Expanded(
+                  Expanded(
                     child: Text('Milestones', style: TideType.screenTitle),
                   ),
                 ],

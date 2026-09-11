@@ -19,6 +19,10 @@ import 'tide_colors.dart';
 /// The scale is 12 / 14 / 16 / 22 / 34 / 56. The previous one ran
 /// 11 / 12.5 / 13.5 / 14.5 / 17 — five sizes inside six pixels, which is
 /// why every screen read as one flat plane. Hierarchy needs real distance.
+///
+/// The styles are getters rather than constants because their ink comes
+/// from the active palette: a style built once at start-up would keep the
+/// first palette's colour for the life of the app.
 abstract final class TideType {
   static const displayFamily = 'Space Grotesk';
   static const bodyFamily = 'Manrope';
@@ -31,7 +35,7 @@ abstract final class TideType {
 
   /// Screen titles. Large and *medium* weight, not bold — at 34px the size
   /// already carries the emphasis, and bold on top of it reads shouty.
-  static const screenTitle = TextStyle(
+  static TextStyle get screenTitle => TextStyle(
     fontFamily: displayFamily,
     fontWeight: FontWeight.w500,
     fontSize: 34,
@@ -41,7 +45,7 @@ abstract final class TideType {
   );
 
   /// Sheet and card headlines, the onboarding hero.
-  static const hero = TextStyle(
+  static TextStyle get hero => TextStyle(
     fontFamily: displayFamily,
     fontWeight: FontWeight.w500,
     fontSize: 22,
@@ -53,7 +57,7 @@ abstract final class TideType {
   // --- Text (Manrope) ---------------------------------------------------
 
   /// Row titles and habit names.
-  static const heading = TextStyle(
+  static TextStyle get heading => TextStyle(
     fontFamily: bodyFamily,
     fontWeight: FontWeight.w500,
     fontSize: 16,
@@ -62,7 +66,7 @@ abstract final class TideType {
     color: TideColors.bone,
   );
 
-  static const body = TextStyle(
+  static TextStyle get body => TextStyle(
     fontFamily: bodyFamily,
     fontWeight: FontWeight.w400,
     fontSize: 14.5,
@@ -70,7 +74,7 @@ abstract final class TideType {
     color: TideColors.bone,
   );
 
-  static const bodyMuted = TextStyle(
+  static TextStyle get bodyMuted => TextStyle(
     fontFamily: bodyFamily,
     fontWeight: FontWeight.w400,
     fontSize: 14.5,
@@ -78,7 +82,7 @@ abstract final class TideType {
     color: TideColors.silt,
   );
 
-  static const label = TextStyle(
+  static TextStyle get label => TextStyle(
     fontFamily: bodyFamily,
     fontWeight: FontWeight.w500,
     fontSize: 14,
@@ -86,7 +90,7 @@ abstract final class TideType {
     color: TideColors.bone,
   );
 
-  static const labelMuted = TextStyle(
+  static TextStyle get labelMuted => TextStyle(
     fontFamily: bodyFamily,
     fontWeight: FontWeight.w400,
     fontSize: 13,
@@ -99,7 +103,7 @@ abstract final class TideType {
   /// Sentence case, no tracking. Tracked-out capitals above every block are
   /// the loudest piece of template chrome an interface can wear; a group
   /// label is a quiet signpost, and it should look like one.
-  static const sectionHeader = TextStyle(
+  static TextStyle get sectionHeader => TextStyle(
     fontFamily: bodyFamily,
     fontWeight: FontWeight.w500,
     fontSize: 13,
@@ -108,7 +112,7 @@ abstract final class TideType {
     color: TideColors.silt,
   );
 
-  static const button = TextStyle(
+  static TextStyle get button => TextStyle(
     fontFamily: bodyFamily,
     fontWeight: FontWeight.w700,
     fontSize: 15,
@@ -119,10 +123,11 @@ abstract final class TideType {
 
   // --- Figures (Space Grotesk, tabular) ---------------------------------
 
-  /// Every streak, percentage and count goes through here.
+  /// Every streak, percentage and count goes through here. [color] defaults
+  /// to primary ink.
   static TextStyle gauge(
     double size, {
-    Color color = TideColors.bone,
+    Color? color,
     FontWeight weight = FontWeight.w500,
     double? height,
     double letterSpacing = -0.4,
@@ -133,25 +138,26 @@ abstract final class TideType {
       fontSize: size,
       height: height ?? 1.0,
       letterSpacing: letterSpacing,
-      color: color,
+      color: color ?? TideColors.bone,
       fontFeatures: _tabular,
     );
   }
 
   /// The one enormous figure on a screen. Nothing else comes close to it,
   /// which is the entire point.
-  static TextStyle gaugeHero({Color color = TideColors.bone}) =>
+  static TextStyle gaugeHero({Color? color}) =>
       gauge(56, color: color, letterSpacing: -3);
 
   /// Stat figures on habit detail and insights.
-  static TextStyle gaugeStat({Color color = TideColors.bone}) =>
+  static TextStyle gaugeStat({Color? color}) =>
       gauge(22, color: color, letterSpacing: -0.9);
 
-  /// Small inline counters — streak numbers, "5/8", freeze counts.
-  static TextStyle gaugeSmall({Color color = TideColors.lantern}) =>
-      gauge(13, color: color, letterSpacing: -0.2);
+  /// Small inline counters — streak numbers, "5/8", freeze counts. Accent
+  /// by default.
+  static TextStyle gaugeSmall({Color? color}) =>
+      gauge(13, color: color ?? TideColors.lantern, letterSpacing: -0.2);
 
-  static TextTheme get textTheme => const TextTheme(
+  static TextTheme get textTheme => TextTheme(
     displayLarge: screenTitle,
     displayMedium: hero,
     titleLarge: heading,

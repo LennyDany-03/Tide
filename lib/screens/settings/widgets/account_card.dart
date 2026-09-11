@@ -121,7 +121,7 @@ class AccountCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.workspace_premium_rounded,
                       size: 17,
                       color: TideColors.lantern,
@@ -188,7 +188,7 @@ class _Allowance extends StatelessWidget {
             height: 5,
             child: Stack(
               children: [
-                const Positioned.fill(
+                Positioned.fill(
                   child: ColoredBox(color: TideColors.trench),
                 ),
                 TweenAnimationBuilder<double>(

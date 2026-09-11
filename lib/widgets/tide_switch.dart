@@ -67,7 +67,7 @@ class TideSwitch extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Color.lerp(
                         TideColors.silt,
-                        TideColors.deepWater,
+                        TideColors.onLantern,
                         colorT,
                       ),
                       shape: BoxShape.circle,
