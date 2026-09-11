@@ -32,6 +32,10 @@ import '../../../widgets/tide_sheet.dart';
 /// is fiddly, so the figure in the middle opens a keypad. The keypad lives in
 /// the sheet rather than raising the system keyboard, which would cover the
 /// very button that writes the time.
+///
+/// There were quick amounts under the dial too (+5, +15, +30, Full). They
+/// were a third way to do what the other two already did, and Full repeated
+/// the button's own untouched answer, so they went.
 class DurationLogSheet extends StatefulWidget {
   const DurationLogSheet({
     super.key,
@@ -64,14 +68,6 @@ class DurationLogSheet extends StatefulWidget {
       : target <= 120
       ? 5
       : 15;
-
-  /// The quick amounts, scaled to the habit so "+30 min" is never offered on
-  /// a ten-minute stretch.
-  static List<int> quickAmountsFor(num target) => target <= 20
-      ? const [1, 5, 10]
-      : target <= 60
-      ? const [5, 10, 15]
-      : const [5, 15, 30];
 
   /// Digits typed on the keypad, read the way a kitchen timer reads them: the
   /// last two are minutes, anything before them is hours. "45" is 45 minutes
@@ -134,13 +130,6 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
     final next = minutes.clamp(0, _target);
     if (next == _minutes) return;
     setState(() => _minutes = next);
-  }
-
-  /// A quick amount or Full: one deliberate tap, one click.
-  void _jump(num minutes) {
-    if (minutes.clamp(0, _target) == _minutes) return;
-    HapticFeedback.selectionClick();
-    _set(minutes);
   }
 
   void _onDragging(bool dragging) {
@@ -281,7 +270,6 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
   Widget build(BuildContext context) {
     final habit = widget.habit;
     final complete = habit.isCompleteOn(DateTime.now());
-    final canAdd = _minutes < _target;
     // The dial gives up some of its size to the keypad while one is open, so
     // the two fit the sheet together without a scroll.
     final dial = _typing ? 176.0 : 228.0;
@@ -320,7 +308,8 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
               ),
               const SizedBox(height: 16),
               _Status(text: _status(complete), lit: _minutes >= _target),
-              const SizedBox(height: 14),
+              // The keypad opens under the status line. Closed, nothing waits
+              // there: the sheet grows for it and gives the room back after.
               AnimatedSize(
                 duration: TideMotion.sheetIn,
                 curve: TideMotion.sheetCurve,
@@ -328,32 +317,19 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
                 child: AnimatedSwitcher(
                   duration: TideMotion.tabSwitch,
                   child: _typing
-                      ? _Keypad(
+                      ? Padding(
                           key: const ValueKey('keypad'),
-                          canDelete: _entry?.isNotEmpty ?? false,
-                          onDigit: _typeDigit,
-                          onDelete: _deleteDigit,
-                          onDone: _doneTyping,
+                          padding: const EdgeInsets.only(top: 14),
+                          child: _Keypad(
+                            canDelete: _entry?.isNotEmpty ?? false,
+                            onDigit: _typeDigit,
+                            onDelete: _deleteDigit,
+                            onDone: _doneTyping,
+                          ),
                         )
-                      : Wrap(
-                          key: const ValueKey('amounts'),
-                          alignment: WrapAlignment.center,
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final amount
-                                in DurationLogSheet.quickAmountsFor(_target))
-                              _QuickChip(
-                                label: '+${Minutes.label(amount)}',
-                                enabled: canAdd,
-                                onTap: () => _jump(_minutes + amount),
-                              ),
-                            _QuickChip(
-                              label: 'Full',
-                              enabled: canAdd,
-                              onTap: () => _jump(_target),
-                            ),
-                          ],
+                      : const SizedBox(
+                          key: ValueKey('closed'),
+                          width: double.infinity,
                         ),
                 ),
               ),
@@ -523,7 +499,7 @@ class _TimeDialState extends State<_TimeDial> {
             // One animation for every way the dial moves, so it never jumps
             // between them. Under the thumb it trails by a frame or two —
             // enough to smooth a jittery touch, too little to feel like drag.
-            // Released, typed, or set by a chip, it eases the rest of the way.
+            // Released, or typed, it eases the rest of the way.
             TweenAnimationBuilder<double>(
               tween: Tween<double>(end: _dragging ? 1 : 0),
               duration: TideMotion.press,
@@ -826,7 +802,6 @@ class _DialPainter extends CustomPainter {
 /// puts delete, so a thumb that knows one pad already knows this one.
 class _Keypad extends StatelessWidget {
   const _Keypad({
-    super.key,
     required this.canDelete,
     required this.onDigit,
     required this.onDelete,
@@ -911,8 +886,8 @@ class _Keypad extends StatelessWidget {
   }
 }
 
-/// One key. Recessed like the quick amounts, so the pad reads as part of the
-/// sheet rather than a keyboard that slid over it.
+/// One key. Recessed like every well in the sheet, so the pad reads as part
+/// of it rather than a keyboard that slid over it.
 class _Key extends StatelessWidget {
   const _Key({
     super.key,
@@ -981,43 +956,6 @@ class _Status extends StatelessWidget {
           color: lit ? TideColors.lantern : TideColors.silt,
         ),
         textAlign: TextAlign.center,
-      ),
-    );
-  }
-}
-
-/// A quick amount. Moves the dial; writes nothing.
-class _QuickChip extends StatelessWidget {
-  const _QuickChip({
-    required this.label,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressScale(
-      enabled: enabled,
-      onTap: onTap,
-      child: AnimatedOpacity(
-        opacity: enabled ? 1 : 0.4,
-        duration: TideMotion.tabSwitch,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            color: TideColors.trench,
-            borderRadius: TideElevation.radius12,
-            border: Border.all(color: TideColors.hairline),
-          ),
-          child: Text(
-            label,
-            style: TideType.label.copyWith(color: TideColors.bone),
-          ),
-        ),
       ),
     );
   }

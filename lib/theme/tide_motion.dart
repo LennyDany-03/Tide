@@ -65,8 +65,9 @@ abstract final class TideMotion {
   static const Duration dialFollow = Duration(milliseconds: 70);
   static const Curve dialFollowCurve = Curves.easeOut;
 
-  /// The duration dial easing onto a value it was not dragged to — a quick
-  /// amount, Full, or the last fraction of a minute after the thumb lifts.
+  /// The duration dial easing onto a value it was not dragged to — a time
+  /// typed on its keypad, or the last fraction of a minute after the thumb
+  /// lifts.
   static const Duration dialSettle = Duration(milliseconds: 320);
   static const Curve dialSettleCurve = Curves.easeOutCubic;
 

@@ -56,6 +56,9 @@ void main() {
     expect(find.text('Hold to mark'), findsNothing);
     expect(find.text('Mark all 30 min'), findsOneWidget);
     expect(find.text('30 min to go'), findsOneWidget);
+    // No preset amounts under the dial: drag, type, or mark it all.
+    expect(find.text('+5 min'), findsNothing);
+    expect(find.text('Full'), findsNothing);
   });
 
   testWidgets('one tap marks the whole session', (tester) async {
@@ -67,24 +70,6 @@ void main() {
 
     expect(minutesToday(store), 30);
     expect(find.byType(DurationLogSheet), findsNothing);
-  });
-
-  testWidgets('a quick amount says what it will write before writing it', (
-    tester,
-  ) async {
-    final store = await openShell(tester);
-    await openSheet(tester);
-
-    await tester.tap(find.text('+15 min'));
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(minutesToday(store), 0, reason: 'a chip moves the dial only');
-    expect(find.text('Adds 15 min'), findsOneWidget);
-
-    await tester.tap(find.text('Mark 15 min'));
-    await afterMarking(tester);
-
-    expect(minutesToday(store), 15);
   });
 
   testWidgets('dragging round the dial sets the time', (tester) async {
@@ -105,6 +90,8 @@ void main() {
     await gesture.up();
     await tester.pump(const Duration(milliseconds: 400));
 
+    expect(minutesToday(store), 0, reason: 'the dial moves; nothing is written');
+    expect(find.text('Adds 15 min'), findsOneWidget);
     expect(find.text('Mark 15 min'), findsOneWidget);
 
     await tester.tap(find.text('Mark 15 min'));
@@ -193,7 +180,6 @@ void main() {
       expect(find.byKey(const ValueKey('keypad-4')), findsNothing);
       await openKeypad(tester);
       expect(find.byKey(const ValueKey('keypad-4')), findsOneWidget);
-      expect(find.text('+5 min'), findsNothing, reason: 'the pad replaces them');
 
       await press(tester, '2');
       await press(tester, '7');
@@ -246,7 +232,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.byKey(const ValueKey('keypad-8')), findsNothing);
-      expect(find.text('+5 min'), findsOneWidget);
       expect(find.text('Mark 8 min'), findsOneWidget);
 
       semantics.dispose();
@@ -262,11 +247,9 @@ void main() {
     });
   });
 
-  test('the marks and quick amounts scale with the target', () {
+  test('the marks scale with the target', () {
     expect(DurationLogSheet.tickEveryFor(10), 1);
     expect(DurationLogSheet.tickEveryFor(90), 5);
     expect(DurationLogSheet.tickEveryFor(240), 15);
-    expect(DurationLogSheet.quickAmountsFor(10), [1, 5, 10]);
-    expect(DurationLogSheet.quickAmountsFor(90), [5, 15, 30]);
   });
 }
