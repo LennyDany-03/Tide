@@ -49,6 +49,10 @@ class TideStore extends ChangeNotifier {
   /// point at.
   bool tourPending = false;
 
+  /// The splash has drawn the mark this session, so the welcome step shows
+  /// it already whole instead of drawing it a second time.
+  bool splashPlayed = false;
+
   bool isPro = false;
 
   /// The palette the whole app is drawn in.

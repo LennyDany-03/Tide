@@ -8,6 +8,7 @@ import '../../../theme/tide_typography.dart';
 import '../../../widgets/gauge_number.dart';
 import '../../../widgets/habit_glyph.dart';
 import '../../../widgets/press_scale.dart';
+import '../../../widgets/tide_mark.dart';
 import '../../../widgets/tide_surface.dart';
 
 /// Date line, screen title, and the way through to milestones.
@@ -25,6 +26,14 @@ import '../../../widgets/tide_surface.dart';
 /// hairline, the lit top edge every raised thing in the app carries, and the
 /// number of milestones already surfaced: now it is plainly a button, and it
 /// gives a reason to press it.
+///
+/// The logo leads the date line, small and alive. Today is the screen the
+/// app is opened into every day, and until now it never showed the mark at
+/// all — the splash drew it, and then the product it belongs to carried no
+/// trace of it. At this size it reads as the ring with its lit point still
+/// going round, which is the part of the logo that means something on a
+/// daily screen: the loop is running. It sits in the eyebrow rather than
+/// beside the title so it signs the page without competing with "Today".
 ///
 /// The add control used to sit here too, four pixels from the milestones
 /// glyph: two small marks in the same corner going to two entirely
@@ -66,8 +75,33 @@ class HomeHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_dateLine, style: TideType.labelMuted),
-              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Semantics(
+                    label: AppConstants.appName,
+                    image: true,
+                    excludeSemantics: true,
+                    // Whole on arrival: the splash has just drawn it, and a
+                    // header that redraws its logo every time Today is built
+                    // would be performing at the one screen used daily.
+                    child: const TideMark(
+                      size: 26,
+                      strokeWidth: 1.8,
+                      drawIn: false,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Flexible(
+                    child: Text(
+                      _dateLine,
+                      style: TideType.labelMuted,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               Text('Today', style: TideType.screenTitle),
             ],
           ),

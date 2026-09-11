@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/tide_scope.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/stagger_list.dart';
@@ -24,7 +25,13 @@ class WelcomeStep extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Spacer(flex: 2),
-        const TideMark(size: 164, strokeWidth: 4),
+        // Whole on arrival when the splash has just drawn it — the same
+        // mark handed on, not a second one starting over.
+        TideMark(
+          size: 164,
+          strokeWidth: 4,
+          drawIn: !TideScope.read(context).splashPlayed,
+        ),
         const SizedBox(height: 46),
         StaggerColumn(
           // Behind the ring rather than with it: the mark takes a full

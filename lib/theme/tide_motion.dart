@@ -193,4 +193,31 @@ abstract final class TideMotion {
   /// rate, which puts its fastest term around five per second, in the range
   /// a real flame actually moves at.
   static const Duration flameCycle = Duration(milliseconds: 2200);
+
+  // --- The mark and the splash ------------------------------------------
+
+  /// The mark drawing itself in: ring, then tide, then moon.
+  static const Duration markDraw = Duration(milliseconds: 1600);
+
+  /// One lap of the point round the mark. Slow enough to read as a loop
+  /// going on, not a spinner waiting on something.
+  static const Duration orbit = Duration(milliseconds: 5200);
+
+  /// One cycle of the water surface drifting inside the mark.
+  static const Duration swell = Duration(milliseconds: 9000);
+
+  /// The splash's full entrance: glow, ring, tide, moon, name, tagline.
+  ///
+  /// Long enough for each part to be seen arriving in order, short enough
+  /// that it is over before anyone wonders whether the app is loading. It
+  /// can always be tapped through.
+  static const Duration splashIntro = Duration(milliseconds: 2200);
+
+  /// The finished mark held still before the app takes over, so the logo is
+  /// seen *complete* at least once rather than only ever in motion.
+  static const Duration splashHold = Duration(milliseconds: 520);
+
+  /// The splash leaving: everything fades and the mark pushes gently toward
+  /// you, in the direction it was already moving.
+  static const Duration splashExit = Duration(milliseconds: 420);
 }

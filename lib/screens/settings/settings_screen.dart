@@ -7,6 +7,7 @@ import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/stagger_list.dart';
+import '../../widgets/tide_mark.dart';
 import '../../widgets/tide_switch.dart';
 import '../../widgets/tide_tab_bar.dart';
 import 'widgets/account_card.dart';
@@ -149,6 +150,11 @@ class SettingsScreen extends StatelessWidget {
 /// A bare "Tide 1.0.0" centred under a settings screen is a string. The
 /// mark makes it a sign-off, which is what the end of the last screen in an
 /// app should be.
+///
+/// It is the real logo, not a sketch of it. This used to be a hand-drawn
+/// ring and dot standing in for the mark — which, once the logo gained its
+/// tide and moon, made the last screen of the app sign off with a different
+/// logo from the one on the splash and the icon.
 class _Colophon extends StatelessWidget {
   const _Colophon();
 
@@ -156,32 +162,13 @@ class _Colophon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: TideColors.lantern.withValues(alpha: 0.4),
-              width: 1.5,
-            ),
-          ),
-          child: Center(
-            child: Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: TideColors.lantern,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
+        // Already whole: this is a signature, not an entrance.
+        const TideMark(size: 52, strokeWidth: 2.8, drawIn: false),
+        const SizedBox(height: 14),
         Text('${AppConstants.appName} 1.0.0', style: TideType.labelMuted),
         const SizedBox(height: 4),
         Text(
-          'Habits that move like water',
+          AppConstants.tagline,
           style: TideType.labelMuted.copyWith(
             fontSize: 12,
             color: TideColors.silt.withValues(alpha: 0.6),

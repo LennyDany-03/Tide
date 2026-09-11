@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 abstract final class AppConstants {
   static const String appName = 'Tide';
 
+  /// The line under the name on the splash and in Settings.
+  static const String tagline = 'Habits that move like water';
+
   /// Free plan ceiling. Hitting it is what triggers the contextual paywall —
   /// the upgrade sheet is never a buried settings row.
   static const int freeHabitLimit = 5;

@@ -16,14 +16,23 @@ import 'widgets/tour/tour_host.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(TideTheme.overlayStyle);
-  runApp(const TideApp());
+  runApp(const TideApp(showSplash: true));
 }
 
 class TideApp extends StatefulWidget {
-  const TideApp({super.key, this.startOnboarded = false});
+  const TideApp({
+    super.key,
+    this.startOnboarded = false,
+    this.showSplash = false,
+  });
 
   /// Tests and deep links can skip straight into the shell.
   final bool startOnboarded;
+
+  /// Plays the animated splash before the first screen. On for a real
+  /// launch, off by default so tests and deep links land where they asked
+  /// to without sitting through three seconds of logo.
+  final bool showSplash;
 
   @override
   State<TideApp> createState() => _TideAppState();
@@ -33,6 +42,7 @@ class _TideAppState extends State<TideApp> {
   late final TideStore _store = TideStore();
   late final GoRouter _router = AppRoutes.build(
     startOnboarded: widget.startOnboarded,
+    showSplash: widget.showSplash,
   );
 
   /// Where the guided tour finds the things it points at. Lives up here

@@ -12,12 +12,14 @@ import '../screens/insights/insights_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/shell/tide_shell.dart';
+import '../screens/splash/splash_screen.dart';
 import '../screens/upgrade/upgrade_sheet.dart';
 import '../theme/tide_motion.dart';
 import '../widgets/tide_sheet.dart';
 
 /// Route names, so no screen has to hardcode a path string.
 abstract final class Routes {
+  static const splash = '/splash';
   static const onboarding = '/onboarding';
   static const auth = '/auth';
   static const today = '/today';
@@ -38,11 +40,31 @@ abstract final class AppRoutes {
     debugLabel: 'root',
   );
 
-  static GoRouter build({required bool startOnboarded}) {
+  static GoRouter build({
+    required bool startOnboarded,
+    bool showSplash = false,
+  }) {
+    final firstScreen = startOnboarded ? Routes.today : Routes.onboarding;
+
     return GoRouter(
       navigatorKey: _rootKey,
-      initialLocation: startOnboarded ? Routes.today : Routes.onboarding,
+      initialLocation: showSplash ? Routes.splash : firstScreen,
       routes: [
+        // The launch sequence. A fade in and a fade out, and the same ground
+        // colour as the native launch window before it and the screen after
+        // it, so the only thing that visibly changes is the mark.
+        GoRoute(
+          path: Routes.splash,
+          pageBuilder: (context, state) => CustomTransitionPage<void>(
+            key: state.pageKey,
+            transitionDuration: TideMotion.sheetIn,
+            reverseTransitionDuration: TideMotion.sheetOut,
+            transitionsBuilder: (context, animation, secondary, child) =>
+                FadeTransition(opacity: animation, child: child),
+            child: SplashScreen(next: firstScreen),
+          ),
+        ),
+
         // A plain fade, explicitly.
         //
         // Left as a default page, this route wore the platform's own

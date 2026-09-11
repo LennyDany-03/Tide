@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'tide_colors.dart';
+import 'tide_palette.dart';
 
 /// The few ramps the app is allowed.
 ///
@@ -120,6 +121,38 @@ abstract final class TideGradients {
     end: Alignment.bottomRight,
     colors: [TideColors.flare, TideColors.lantern, TideColors.ember],
     stops: const [0, 0.42, 1],
+  );
+
+  // --- The mark ---------------------------------------------------------
+  //
+  // These take a palette rather than reading the active tokens: the same
+  // logo is drawn in the live palette inside the app and in Midnight on the
+  // app icon, which is rendered once and does not change with the theme.
+
+  /// The logo's ring: pale where the light falls on it, deep away from it.
+  static LinearGradient markRing(TidePalette palette) => LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [palette.flare, palette.lantern, palette.ember],
+    stops: const [0, 0.45, 1],
+  );
+
+  /// The water inside the ring: bright at the surface, deepening to ember
+  /// and thinning out toward the floor.
+  static LinearGradient markWater(TidePalette palette) => LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      palette.lantern.withValues(alpha: 0.9),
+      palette.ember.withValues(alpha: 0.5),
+    ],
+  );
+
+  /// The moon, lit from the top left like everything else.
+  static RadialGradient markMoon(TidePalette palette) => RadialGradient(
+    center: const Alignment(-0.35, -0.4),
+    radius: 0.9,
+    colors: [palette.flare, palette.lantern],
   );
 
   // --- Hairlines --------------------------------------------------------
