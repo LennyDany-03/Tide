@@ -24,24 +24,27 @@ import '../../../widgets/tide_sheet.dart';
 ///
 /// So the question changes from "one more?" to "how long?", and the
 /// instrument changes with it — a clock face is what people already read time
-/// off. The dial shows the day's *total*, not an amount to add, so the same
-/// drag that sets a session also corrects an overshoot. Nothing is written
-/// until the button has said, in words, what will be written.
+/// off. The dial shows the day's *total*, and nothing is written until the
+/// button has said, in words, what will be written.
+///
+/// **The dial only turns forward.** Its floor is what is already logged, and
+/// a finished day is locked. It used to wind back too, which made time that
+/// had been marked as done a thing a thumb could quietly take away by sliding
+/// the wrong way — and on a streak, "done" has to stay done. Taking time back
+/// is still possible, but only as its own named act: [onUndo], behind a
+/// control that says what it will remove.
 ///
 /// When the answer is exact — the run app said 47 minutes — dragging to it
 /// is fiddly, so the figure in the middle opens a keypad. The keypad lives in
 /// the sheet rather than raising the system keyboard, which would cover the
 /// very button that writes the time.
-///
-/// There were quick amounts under the dial too (+5, +15, +30, Full). They
-/// were a third way to do what the other two already did, and Full repeated
-/// the button's own untouched answer, so they went.
 class DurationLogSheet extends StatefulWidget {
   const DurationLogSheet({
     super.key,
     required this.habit,
     required this.leading,
     required this.onLog,
+    required this.onUndo,
     required this.onDismiss,
   });
 
@@ -53,6 +56,9 @@ class DurationLogSheet extends StatefulWidget {
   /// The total the day should now stand at. Routed out to Home, like the
   /// counted sheet, so finishing the day from here still lands its moment.
   final ValueChanged<num> onLog;
+
+  /// Clears today's log for the habit — the one way time comes back off.
+  final VoidCallback onUndo;
 
   final VoidCallback onDismiss;
 
@@ -99,8 +105,8 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
   String? _entry;
 
   /// Where the dial stood when the keypad opened. An entry deleted back to
-  /// nothing returns here, rather than to zero — opening the keypad and
-  /// closing it again should not have changed anything.
+  /// nothing returns here — opening the keypad and closing it again should
+  /// not have changed anything.
   num _beforeEntry = 0;
 
   /// So digits typed on a hardware keyboard reach the keypad too.
@@ -108,16 +114,29 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
 
   num get _logged => widget.habit.amountOn(DateTime.now());
   num get _target => widget.habit.target;
+
+  /// The lowest the dial may be set: what is already written for today.
+  num get _floor => math.min(_logged, _target);
+
+  /// Today's target is met, so there is nothing left for the dial to add.
+  bool get _locked => _logged >= _target;
+
   bool get _changed => _minutes != _logged;
   bool get _typing => _entry != null;
 
   @override
   void didUpdateWidget(DurationLogSheet old) {
     super.didUpdateWidget(old);
-    // Logged somewhere else while the sheet was open — another device. An
-    // untouched dial follows it; one the person is setting keeps their answer.
     final before = old.habit.amountOn(DateTime.now());
-    if (!_dragging && !_typing && _minutes == before) _minutes = _logged;
+    if (_logged == before) return;
+    // Logged somewhere else while the sheet was open — another device, or
+    // the undo below. An untouched dial follows it; one the person is setting
+    // keeps their answer, raised to the new floor if it now sits under it.
+    if (!_dragging && !_typing && _minutes == before) {
+      _minutes = _logged;
+    } else if (_minutes < _floor) {
+      _minutes = _floor;
+    }
   }
 
   @override
@@ -127,7 +146,7 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
   }
 
   void _set(num minutes) {
-    final next = minutes.clamp(0, _target);
+    final next = minutes.clamp(_floor, _target);
     if (next == _minutes) return;
     setState(() => _minutes = next);
   }
@@ -141,9 +160,21 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
     });
   }
 
+  void _undo() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      _minutes = 0;
+      if (_typing) _closeEntry();
+    });
+    // The sheet stays open on an empty dial: undoing is usually the first
+    // half of "that was wrong", and the second half is setting it right.
+    widget.onUndo();
+  }
+
   // --- Keypad -----------------------------------------------------------
 
   void _toggleKeypad() {
+    if (_locked) return;
     HapticFeedback.selectionClick();
     setState(() {
       if (_typing) {
@@ -182,9 +213,11 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
   void _applyEntry(String entry) {
     setState(() {
       _entry = entry;
+      // A typed time under the floor holds at the floor, the way the dial
+      // does. Typing "1" on the way to "130" must not read as taking time off.
       _minutes = entry.isEmpty
           ? _beforeEntry
-          : DurationLogSheet.minutesOf(entry).clamp(0, _target);
+          : DurationLogSheet.minutesOf(entry).clamp(_floor, _target);
     });
   }
 
@@ -218,16 +251,21 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
 
   // --- Writing ----------------------------------------------------------
 
+  /// Typed digits that land at or under what is already logged add nothing.
+  /// The button says so rather than offering to mark the whole target in
+  /// their place.
+  bool get _typedNothing => !_changed && (_entry?.isNotEmpty ?? false);
+
   void _confirm() {
-    final complete = widget.habit.isCompleteOn(DateTime.now());
-    if (!_changed && complete) {
+    if (_typedNothing) return;
+    if (!_changed && _locked) {
       widget.onDismiss();
       return;
     }
     // Untouched, the one-tap answer is the whole session: the common case is
     // "I did it", and it should not cost a drag.
     final total = _changed ? _minutes : _target;
-    if (total >= _target && !complete) {
+    if (total >= _target) {
       HapticFeedback.heavyImpact();
     } else {
       HapticFeedback.mediumImpact();
@@ -239,37 +277,29 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
     widget.onDismiss();
   }
 
-  String _action(bool complete) {
-    if (!_changed) {
-      return complete ? 'Done' : 'Mark all ${Minutes.label(_target)}';
-    }
-    if (_minutes == 0) return 'Clear today';
-    if (_minutes < _logged) return 'Change to ${Minutes.label(_minutes)}';
-    return 'Mark ${Minutes.label(_minutes)}';
+  String get _action {
+    if (_changed) return 'Mark ${Minutes.label(_minutes)}';
+    if (_locked) return 'Done';
+    if (_typedNothing) return 'Nothing to add';
+    return 'Mark all ${Minutes.label(_target)}';
   }
 
-  String _status(bool complete) {
+  String get _status {
     final entry = _entry;
     if (entry != null) {
       if (entry.isEmpty) return 'Type minutes, or hours then minutes';
-      if (DurationLogSheet.minutesOf(entry) > _target) {
-        return 'Capped at ${Minutes.label(_target)}';
-      }
+      final typed = DurationLogSheet.minutesOf(entry);
+      if (typed > _target) return 'Capped at ${Minutes.label(_target)}';
+      if (typed < _logged) return '${Minutes.label(_logged)} already logged';
     }
-    if (_changed) {
-      final delta = _minutes - _logged;
-      return delta > 0
-          ? 'Adds ${Minutes.label(delta)}'
-          : 'Takes off ${Minutes.label(-delta)}';
-    }
-    if (complete) return 'Target reached for today.';
+    if (_changed) return 'Adds ${Minutes.label(_minutes - _logged)}';
+    if (_locked) return 'Target reached for today.';
     return '${Minutes.label(_target - _logged)} to go';
   }
 
   @override
   Widget build(BuildContext context) {
     final habit = widget.habit;
-    final complete = habit.isCompleteOn(DateTime.now());
     // The dial gives up some of its size to the keypad while one is open, so
     // the two fit the sheet together without a scroll.
     final dial = _typing ? 176.0 : 228.0;
@@ -280,7 +310,11 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
       leading: widget.leading,
       onDismiss: widget.onDismiss,
       maxHeightFactor: 0.86,
-      footer: TideButton(label: _action(complete), onPressed: _confirm),
+      footer: TideButton(
+        label: _action,
+        enabled: !_typedNothing,
+        onPressed: _confirm,
+      ),
       child: Focus(
         focusNode: _keys,
         onKeyEvent: _onKey,
@@ -302,12 +336,20 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
                     entry: _entry,
                     onChanged: _set,
                     onDragging: _onDragging,
-                    onReadoutTap: _toggleKeypad,
+                    onReadoutTap: _locked ? null : _toggleKeypad,
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              _Status(text: _status(complete), lit: _minutes >= _target),
+              _Status(text: _status, lit: _minutes >= _target),
+              if (_logged > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: _UndoLink(
+                    label: 'Undo ${Minutes.label(_logged)}',
+                    onTap: _undo,
+                  ),
+                ),
               // The keypad opens under the status line. Closed, nothing waits
               // there: the sheet grows for it and gives the room back after.
               AnimatedSize(
@@ -354,7 +396,10 @@ class _TimeDial extends StatefulWidget {
   });
 
   final num minutes;
+
+  /// Already written for today, and so the lowest the dial turns to.
   final num logged;
+
   final num target;
 
   /// The keypad's digits, or null while it is closed.
@@ -362,7 +407,9 @@ class _TimeDial extends StatefulWidget {
 
   final ValueChanged<num> onChanged;
   final ValueChanged<bool> onDragging;
-  final VoidCallback onReadoutTap;
+
+  /// Null while the day is finished: there is nothing to type.
+  final VoidCallback? onReadoutTap;
 
   @override
   State<_TimeDial> createState() => _TimeDialState();
@@ -380,6 +427,10 @@ class _TimeDialState extends State<_TimeDial> {
 
   bool get _dragging => _thumb != null;
 
+  num get _floor => math.min(widget.logged, widget.target);
+
+  bool get _locked => widget.logged >= widget.target;
+
   double _fractionOf(num minutes) => widget.target <= 0
       ? 0
       : (minutes / widget.target).clamp(0.0, 1.0).toDouble();
@@ -389,7 +440,9 @@ class _TimeDialState extends State<_TimeDial> {
   /// sooner — so a drag down the right side of the dial scrolled the sheet
   /// instead of turning the dial.
   Drag? _start(Offset position) {
-    if (_dragging) return null;
+    // A finished day does not turn at all. Letting the handle move only to
+    // spring back to full would be offering a change it will not make.
+    if (_dragging || _locked) return null;
     final box = context.findRenderObject();
     if (box is! RenderBox) return null;
     final offset = box.globalToLocal(position) - box.size.center(Offset.zero);
@@ -427,17 +480,26 @@ class _TimeDialState extends State<_TimeDial> {
     if (current < 0.25 && fraction > 0.75) fraction = 0;
 
     final target = widget.target;
+    final floor = _floor;
     final raw = fraction * target;
     // To the minute — and full is always reachable, whatever the target.
-    final minutes = raw >= target - 0.5 ? target : raw.round();
+    num minutes = raw >= target - 0.5 ? target : raw.round();
 
-    // A click at every mark on the ring, not at every minute: sixty clicks
-    // through an hour is a buzz, not a scale.
+    // The floor. A thumb that goes on sliding back past what is logged finds
+    // the handle stopped there, not following it.
+    final floored = minutes < floor;
+    if (floored) {
+      minutes = floor;
+      fraction = _fractionOf(floor);
+    }
+
+    // A click at every mark on the ring, not at every minute — sixty clicks
+    // through an hour is a buzz, not a scale — and one where the dial stops.
     final every = DurationLogSheet.tickEveryFor(target);
     final before = widget.minutes;
     if (minutes != before &&
         (minutes ~/ every != before ~/ every ||
-            minutes == 0 ||
+            minutes == floor ||
             minutes == target)) {
       HapticFeedback.selectionClick();
     }
@@ -470,18 +532,33 @@ class _TimeDialState extends State<_TimeDial> {
     final full = widget.minutes >= widget.target;
     final ticks = _ticks();
     final every = DurationLogSheet.tickEveryFor(widget.target);
+    final locked = _locked;
+    final canRaise = !locked && widget.minutes < widget.target;
+    final canLower = !locked && widget.minutes > _floor;
     final up = math.min(widget.target, widget.minutes + every);
-    final down = math.max(0, widget.minutes - every);
+    final down = math.max(_floor, widget.minutes - every);
     final typing = widget.entry != null;
+    final onReadoutTap = widget.onReadoutTap;
+
+    final readout = FittedBox(
+      fit: BoxFit.scaleDown,
+      child: _DialReadout(
+        minutes: widget.minutes,
+        target: widget.target,
+        full: full,
+        entry: widget.entry,
+        editable: onReadoutTap != null,
+      ),
+    );
 
     return Semantics(
       slider: true,
       label: 'Time spent today',
       value: Minutes.label(widget.minutes),
-      increasedValue: Minutes.label(up),
-      decreasedValue: Minutes.label(down),
-      onIncrease: () => widget.onChanged(up),
-      onDecrease: () => widget.onChanged(down),
+      increasedValue: canRaise ? Minutes.label(up) : null,
+      decreasedValue: canLower ? Minutes.label(down) : null,
+      onIncrease: canRaise ? () => widget.onChanged(up) : null,
+      onDecrease: canLower ? () => widget.onChanged(down) : null,
       child: RawGestureDetector(
         behavior: HitTestBehavior.opaque,
         gestures: {
@@ -499,7 +576,7 @@ class _TimeDialState extends State<_TimeDial> {
             // One animation for every way the dial moves, so it never jumps
             // between them. Under the thumb it trails by a frame or two —
             // enough to smooth a jittery touch, too little to feel like drag.
-            // Released, or typed, it eases the rest of the way.
+            // Released, typed, or undone, it eases the rest of the way.
             TweenAnimationBuilder<double>(
               tween: Tween<double>(end: _dragging ? 1 : 0),
               duration: TideMotion.press,
@@ -521,6 +598,7 @@ class _TimeDialState extends State<_TimeDial> {
                     ticks: ticks,
                     full: full,
                     grip: grip,
+                    locked: locked,
                   ),
                 ),
               ),
@@ -530,29 +608,23 @@ class _TimeDialState extends State<_TimeDial> {
               // down rather than clipped when the dial shrinks for the keypad.
               child: FractionallySizedBox(
                 widthFactor: 0.6,
-                // Its own node: a button inside the slider, not more words
-                // merged onto the slider's name. The figure itself is left
-                // out — the slider's value already says the time.
-                child: Semantics(
-                  container: true,
-                  button: true,
-                  label: typing ? 'Close keypad' : 'Type a time',
-                  onTap: widget.onReadoutTap,
-                  child: ExcludeSemantics(
-                    child: PressScale(
-                      onTap: widget.onReadoutTap,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: _DialReadout(
-                          minutes: widget.minutes,
-                          target: widget.target,
-                          full: full,
-                          entry: widget.entry,
+                child: onReadoutTap == null
+                    ? ExcludeSemantics(child: readout)
+                    // Its own node: a button inside the slider, not more
+                    // words merged onto the slider's name. The figure itself
+                    // is left out — the slider's value already says the time.
+                    : Semantics(
+                        container: true,
+                        button: true,
+                        label: typing ? 'Close keypad' : 'Type a time',
+                        onTap: onReadoutTap,
+                        child: ExcludeSemantics(
+                          child: PressScale(
+                            onTap: onReadoutTap,
+                            child: readout,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
               ),
             ),
           ],
@@ -585,12 +657,16 @@ class _DialReadout extends StatelessWidget {
     required this.target,
     required this.full,
     required this.entry,
+    required this.editable,
   });
 
   final num minutes;
   final num target;
   final bool full;
   final String? entry;
+
+  /// Whether tapping the figure opens the keypad — false on a finished day.
+  final bool editable;
 
   /// The figure and its unit. Typed digits are shown as typed — "90 min",
   /// "1:30 hr" — so each key visibly lands where it was pressed; the settled
@@ -654,7 +730,7 @@ class _DialReadout extends StatelessWidget {
           ],
         ),
         // The line under the figure: a quiet sign that it can be typed into,
-        // lit while it is.
+        // lit while it is, and gone when it cannot be.
         AnimatedContainer(
           duration: TideMotion.tabSwitch,
           curve: TideMotion.tabCurve,
@@ -664,7 +740,7 @@ class _DialReadout extends StatelessWidget {
           decoration: BoxDecoration(
             color: typing
                 ? TideColors.lantern
-                : TideColors.bone.withValues(alpha: 0.18),
+                : TideColors.bone.withValues(alpha: editable ? 0.18 : 0),
             borderRadius: BorderRadius.circular(1),
           ),
         ),
@@ -681,6 +757,7 @@ class _DialPainter extends CustomPainter {
     required this.ticks,
     required this.full,
     required this.grip,
+    required this.locked,
   });
 
   /// 0..1 of the target, where the dial is drawn — continuous under a thumb.
@@ -696,6 +773,10 @@ class _DialPainter extends CustomPainter {
 
   /// 0..1, how far the handle has grown under a thumb that holds it.
   final double grip;
+
+  /// A finished day: the ring is drawn without a handle, because there is
+  /// nothing left to turn.
+  final bool locked;
 
   static const double _stroke = 16;
   static const double _knob = 12;
@@ -732,7 +813,8 @@ class _DialPainter extends CustomPainter {
       );
     }
 
-    // Already written and staying: solid, the way a logged day is.
+    // Already written: solid, the way a logged day is. Measured against the
+    // drawn fraction too, so an undo's arc recedes rather than blinking out.
     final kept = math.min(fraction, logged);
     if (kept > 0) {
       canvas.drawArc(ring, top, turn * kept, false, band(TideColors.lantern));
@@ -747,17 +829,6 @@ class _DialPainter extends CustomPainter {
         band(TideColors.lantern.withValues(alpha: 0.4)),
       );
     }
-    // About to be taken off: left as a ghost, so the loss is visible before
-    // it is written rather than after.
-    if (fraction < logged) {
-      canvas.drawArc(
-        ring,
-        top + turn * fraction,
-        turn * (logged - fraction),
-        false,
-        band(TideColors.bone.withValues(alpha: 0.12)),
-      );
-    }
 
     if (full) {
       canvas.drawCircle(
@@ -769,6 +840,8 @@ class _DialPainter extends CustomPainter {
           ..color = TideColors.lantern.withValues(alpha: 0.35),
       );
     }
+
+    if (locked) return;
 
     // The handle. It grows under a thumb that has it, so the thing being
     // moved is never hidden by the thing moving it.
@@ -793,7 +866,49 @@ class _DialPainter extends CustomPainter {
       old.logged != logged ||
       old.full != full ||
       old.grip != grip ||
+      old.locked != locked ||
       old.ticks.length != ticks.length;
+}
+
+/// The one way back.
+///
+/// The dial only turns forward from what is logged, so taking time off is its
+/// own act, named with the amount it removes. Quiet on purpose: it sits under
+/// the status rather than beside the primary button, where a thumb reaching
+/// for "Mark" could find it instead.
+class _UndoLink extends StatelessWidget {
+  const _UndoLink({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressScale(
+      onTap: onTap,
+      child: Semantics(
+        button: true,
+        label: label,
+        excludeSemantics: true,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.undo_rounded, size: 16, color: TideColors.silt),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TideType.labelMuted.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// The number pad: three rows of digits, then Done, 0 and delete.

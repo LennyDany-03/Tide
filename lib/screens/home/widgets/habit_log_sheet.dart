@@ -52,6 +52,7 @@ Future<void> showHabitLogSheet(
   BuildContext context, {
   required String habitId,
   required ValueChanged<num> onLog,
+  VoidCallback? onUndo,
 }) {
   return showGeneralDialog<void>(
     context: context,
@@ -78,7 +79,7 @@ Future<void> showHabitLogSheet(
               begin: const Offset(0, 1),
               end: Offset.zero,
             ).animate(curved),
-            child: _LogSheet(habitId: habitId, onLog: onLog),
+            child: _LogSheet(habitId: habitId, onLog: onLog, onUndo: onUndo),
           ),
         ],
       );
@@ -87,7 +88,7 @@ Future<void> showHabitLogSheet(
 }
 
 class _LogSheet extends StatefulWidget {
-  const _LogSheet({required this.habitId, required this.onLog});
+  const _LogSheet({required this.habitId, required this.onLog, this.onUndo});
 
   final String habitId;
 
@@ -95,6 +96,11 @@ class _LogSheet extends StatefulWidget {
   /// than written straight to the store, so logging the last habit from in
   /// here still fires the day-complete moment out there.
   final ValueChanged<num> onLog;
+
+  /// Clears today's log. Only the duration dial offers it: that dial turns
+  /// forward only, so undo is its one way back. The counted sheet's minus
+  /// nudge already walks a count down.
+  final VoidCallback? onUndo;
 
   @override
   State<_LogSheet> createState() => _LogSheetState();
@@ -168,6 +174,7 @@ class _LogSheetState extends State<_LogSheet>
         habit: habit,
         leading: _Glyph(habit: habit),
         onLog: widget.onLog,
+        onUndo: widget.onUndo ?? () {},
         onDismiss: () => Navigator.of(context).pop(),
       );
     }

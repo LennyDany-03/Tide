@@ -46,6 +46,19 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   }
 
+  /// Presses and lifts on the ring at [degrees] clockwise from twelve.
+  Future<void> touchRing(WidgetTester tester, double degrees) async {
+    final dial = tester.getRect(find.bySemanticsLabel('Time spent today'));
+    final radius = dial.width / 2 - 16;
+    final angle = degrees * math.pi / 180;
+    final gesture = await tester.startGesture(
+      dial.center + Offset(math.sin(angle), -math.cos(angle)) * radius,
+    );
+    await tester.pump();
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 400));
+  }
+
   testWidgets('a duration habit opens a dial, not the one-unit hold', (
     tester,
   ) async {
@@ -59,6 +72,11 @@ void main() {
     // No preset amounts under the dial: drag, type, or mark it all.
     expect(find.text('+5 min'), findsNothing);
     expect(find.text('Full'), findsNothing);
+    expect(
+      find.textContaining('Undo'),
+      findsNothing,
+      reason: 'nothing is logged yet, so there is nothing to take back',
+    );
   });
 
   testWidgets('one tap marks the whole session', (tester) async {
@@ -101,35 +119,6 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('winding a finished day back says so, and writes the change', (
-    tester,
-  ) async {
-    final semantics = tester.ensureSemantics();
-    final store = await openShell(tester, logged: 30);
-    await openSheet(tester);
-
-    expect(find.text('Done'), findsOneWidget);
-    expect(find.text('Target reached for today.'), findsOneWidget);
-
-    final dial = tester.getRect(find.bySemanticsLabel('Time spent today'));
-    final radius = dial.width / 2 - 16;
-    final gesture = await tester.startGesture(
-      dial.center + Offset(0, radius),
-    );
-    await tester.pump();
-    await gesture.up();
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(find.text('Change to 15 min'), findsOneWidget);
-    expect(find.text('Takes off 15 min'), findsOneWidget);
-
-    await tester.tap(find.text('Change to 15 min'));
-    await afterMarking(tester);
-    expect(minutesToday(store), 15);
-
-    semantics.dispose();
-  });
-
   testWidgets('the dial stops on any minute, not only on its marks', (
     tester,
   ) async {
@@ -137,17 +126,9 @@ void main() {
     final store = await openShell(tester);
     await openSheet(tester);
 
-    final dial = tester.getRect(find.bySemanticsLabel('Time spent today'));
-    final radius = dial.width / 2 - 16;
     // 84° round from twelve is 7 of 30 minutes — between the 5 and 10 marks,
     // where the dial used to refuse to stop.
-    final angle = 84 * math.pi / 180;
-    final gesture = await tester.startGesture(
-      dial.center + Offset(math.sin(angle), -math.cos(angle)) * radius,
-    );
-    await tester.pump();
-    await gesture.up();
-    await tester.pump(const Duration(milliseconds: 400));
+    await touchRing(tester, 84);
 
     expect(find.text('Mark 7 min'), findsOneWidget);
 
@@ -156,6 +137,79 @@ void main() {
     expect(minutesToday(store), 7);
 
     semantics.dispose();
+  });
+
+  group('logged time is not wound back', () {
+    testWidgets('a finished day is locked: the dial does not turn it down', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      final store = await openShell(tester, logged: 30);
+      await openSheet(tester);
+
+      expect(find.text('Done'), findsOneWidget);
+      expect(find.text('Target reached for today.'), findsOneWidget);
+
+      await touchRing(tester, 180);
+
+      expect(find.textContaining('Change to'), findsNothing);
+      expect(find.textContaining('Takes off'), findsNothing);
+      expect(find.text('Done'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Type a time'),
+        findsNothing,
+        reason: 'no keypad on a finished day either',
+      );
+
+      await tester.tap(find.text('Done'));
+      await afterMarking(tester);
+      expect(minutesToday(store), 30);
+
+      semantics.dispose();
+    });
+
+    testWidgets('a part-logged day stops at what is logged', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final store = await openShell(tester, logged: 15);
+      await openSheet(tester);
+
+      // Three o'clock is 7 or 8 minutes — under the 15 already logged.
+      await touchRing(tester, 90);
+
+      expect(find.text('Mark all 30 min'), findsOneWidget, reason: 'untouched');
+      expect(find.text('15 min to go'), findsOneWidget);
+      expect(minutesToday(store), 15);
+
+      // Forward still works.
+      await touchRing(tester, 270);
+      expect(find.text('Mark 23 min'), findsOneWidget);
+
+      semantics.dispose();
+    });
+
+    testWidgets('undo is the way back, and leaves the dial ready to reset', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      final store = await openShell(tester, logged: 30);
+      await openSheet(tester);
+
+      await tester.tap(find.text('Undo 30 min'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(minutesToday(store), 0);
+      expect(find.byType(DurationLogSheet), findsOneWidget, reason: 'stays open');
+      expect(find.text('Mark all 30 min'), findsOneWidget);
+      expect(find.textContaining('Undo'), findsNothing);
+
+      await touchRing(tester, 180);
+      await tester.tap(find.text('Mark 15 min'));
+      await afterMarking(tester);
+      expect(minutesToday(store), 15);
+
+      semantics.dispose();
+    });
   });
 
   group('the keypad', () {
@@ -217,6 +271,27 @@ void main() {
         findsOneWidget,
         reason: 'back to the untouched 10 minutes, not forced to zero',
       );
+
+      semantics.dispose();
+    });
+
+    testWidgets('a time typed under what is logged adds nothing', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      final store = await openShell(tester, logged: 20);
+      await openSheet(tester);
+      await openKeypad(tester);
+
+      await press(tester, '5');
+
+      expect(find.text('20 min already logged'), findsOneWidget);
+      expect(find.text('Nothing to add'), findsOneWidget);
+
+      await tester.tap(find.text('Nothing to add'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(minutesToday(store), 20);
+      expect(find.byType(DurationLogSheet), findsOneWidget);
 
       semantics.dispose();
     });

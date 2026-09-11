@@ -98,6 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       habitId: habit.id,
       onLog: (amount) => _log(habit, amount),
+      onUndo: () => _undo(habit),
     );
   }
 
