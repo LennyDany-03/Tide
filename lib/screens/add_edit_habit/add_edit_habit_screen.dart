@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -56,15 +58,29 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
   HabitType _type = HabitType.binary;
   num _target = 1;
   String _unit = '';
-  Set<int> _days = {1, 2, 3, 4, 5, 6, 7};
+
+  /// Empty on a new habit: which days it runs is the person's decision, not a
+  /// default they have to notice and undo. See [DaySelector].
+  Set<int> _days = {};
+
   bool _reminderEnabled = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 8, minute: 0);
   int _freezes = AppConstants.defaultFreezeAllowance;
 
   TideButtonPhase _phase = TideButtonPhase.idle;
-  int _errorTick = 0;
+
+  /// One pulse per field, so a missing schedule does not shake a name that
+  /// was filled in perfectly well.
+  int _nameErrorTick = 0;
+  int _daysErrorTick = 0;
+
   int _savedTick = 0;
   bool _dirty = false;
+
+  /// Where a failed save scrolls to. The save button is pinned below the
+  /// form, so the field it is complaining about may be well out of view.
+  final GlobalKey _nameKey = GlobalKey();
+  final GlobalKey _daysKey = GlobalKey();
 
   /// True from the moment leaving has been decided, so a save that pops and
   /// a back gesture cannot both drive the route at once.
@@ -165,11 +181,33 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
     return draft.reminderPreview(streak);
   }
 
-  Future<void> _save() async {
-    if (_name.text.trim().isEmpty || _days.isEmpty) {
-      setState(() => _errorTick++);
-      return;
+  /// Pulses every field that is missing, and brings the first of them into
+  /// view. Returns whether the form can be saved.
+  bool _validate() {
+    final missingName = _name.text.trim().isEmpty;
+    final missingDays = _days.isEmpty;
+    if (!missingName && !missingDays) return true;
+
+    setState(() {
+      if (missingName) _nameErrorTick++;
+      if (missingDays) _daysErrorTick++;
+    });
+    final target = (missingName ? _nameKey : _daysKey).currentContext;
+    if (target != null) {
+      unawaited(
+        Scrollable.ensureVisible(
+          target,
+          alignment: 0.2,
+          duration: TideMotion.sheetIn,
+          curve: TideMotion.sheetCurve,
+        ),
+      );
     }
+    return false;
+  }
+
+  Future<void> _save() async {
+    if (!_validate()) return;
 
     FocusScope.of(context).unfocus();
     setState(() => _phase = TideButtonPhase.busy);
@@ -359,77 +397,84 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
   }
 
   Widget _form() {
-    return ListView(
+    // A scroll view over a column rather than a ListView: a lazy list does
+    // not build the fields scrolled far out of view, and a failed save has to
+    // be able to scroll to any of them.
+    return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-      children: [
-        LiveHabitPreview(
-          name: _name.text,
-          glyph: _glyph,
-          type: _type,
-          days: _days,
-        ),
-        const SizedBox(height: 22),
-
-        _label('Name'),
-        NameField(
-          controller: _name,
-          errorTick: _errorTick,
-          onSubmitted: (_) => _save(),
-        ),
-        const SizedBox(height: 20),
-
-        _label('Icon'),
-        IconPicker(
-          selected: _glyph,
-          onChanged: (glyph) => _edit(() => _glyph = glyph),
-        ),
-        const SizedBox(height: 20),
-
-        _label('Type'),
-        SegmentedPill(
-          labels: [for (final type in HabitType.values) type.label],
-          selectedIndex: HabitType.values.indexOf(_type),
-          onChanged: _setType,
-        ),
-        TargetFields(
-          type: _type,
-          target: _target,
-          unit: _unit,
-          onTargetChanged: (value) => _edit(() => _target = value),
-          onUnitChanged: (value) => _edit(() => _unit = value),
-        ),
-        const SizedBox(height: 20),
-
-        _label('Days'),
-        DaySelector(
-          days: _days,
-          onChanged: (days) => _edit(() => _days = days),
-        ),
-        const SizedBox(height: 20),
-
-        ReminderRow(
-          enabled: _reminderEnabled,
-          time: _reminderTime,
-          preview: _reminderPreview,
-          onToggled: (value) => _edit(() => _reminderEnabled = value),
-          onTimeTapped: _pickTime,
-        ),
-        const SizedBox(height: 12),
-
-        FreezeStepper(
-          value: _freezes,
-          onChanged: (value) => _edit(() => _freezes = value),
-        ),
-
-        if (_isEditing) ...[
-          const SizedBox(height: 24),
-          HoldToConfirmButton(
-            label: 'Hold to delete habit',
-            holdingLabel: 'Keep holding…',
-            onConfirm: _delete,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LiveHabitPreview(
+            name: _name.text,
+            glyph: _glyph,
+            type: _type,
+            days: _days,
           ),
+          const SizedBox(height: 22),
+
+          _label('Name', key: _nameKey),
+          NameField(
+            controller: _name,
+            errorTick: _nameErrorTick,
+            onSubmitted: (_) => _save(),
+          ),
+          const SizedBox(height: 20),
+
+          _label('Icon'),
+          IconPicker(
+            selected: _glyph,
+            onChanged: (glyph) => _edit(() => _glyph = glyph),
+          ),
+          const SizedBox(height: 20),
+
+          _label('Type'),
+          SegmentedPill(
+            labels: [for (final type in HabitType.values) type.label],
+            selectedIndex: HabitType.values.indexOf(_type),
+            onChanged: _setType,
+          ),
+          TargetFields(
+            type: _type,
+            target: _target,
+            unit: _unit,
+            onTargetChanged: (value) => _edit(() => _target = value),
+            onUnitChanged: (value) => _edit(() => _unit = value),
+          ),
+          const SizedBox(height: 20),
+
+          _label('Days', key: _daysKey),
+          DaySelector(
+            days: _days,
+            errorTick: _daysErrorTick,
+            onChanged: (days) => _edit(() => _days = days),
+          ),
+          const SizedBox(height: 20),
+
+          ReminderRow(
+            enabled: _reminderEnabled,
+            time: _reminderTime,
+            preview: _reminderPreview,
+            onToggled: (value) => _edit(() => _reminderEnabled = value),
+            onTimeTapped: _pickTime,
+          ),
+          const SizedBox(height: 12),
+
+          FreezeStepper(
+            value: _freezes,
+            onChanged: (value) => _edit(() => _freezes = value),
+          ),
+
+          if (_isEditing) ...[
+            const SizedBox(height: 24),
+            HoldToConfirmButton(
+              label: 'Hold to delete habit',
+              holdingLabel: 'Keep holding…',
+              onConfirm: _delete,
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -438,8 +483,9 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
   /// Sentence case. These were tracked-out capitals — NAME, ICON, TYPE,
   /// DAYS — which is the loudest possible way to label a text box, and put
   /// four shouting labels above the four quietest controls in the app.
-  Widget _label(String text) {
+  Widget _label(String text, {Key? key}) {
     return Padding(
+      key: key,
       padding: const EdgeInsets.only(bottom: 10),
       child: Text(text, style: TideType.sectionHeader),
     );

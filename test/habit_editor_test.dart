@@ -5,6 +5,7 @@ import 'package:tide/main.dart';
 import 'package:tide/screens/add_edit_habit/add_edit_habit_screen.dart';
 import 'package:tide/screens/add_edit_habit/widgets/target_fields.dart';
 import 'package:tide/screens/home/widgets/add_habit_tile.dart';
+import 'package:tide/services/tide_scope.dart';
 import 'package:tide/widgets/tide_dialog.dart';
 import 'package:tide/widgets/tide_sheet.dart';
 import 'package:tide/widgets/tide_tab_bar.dart';
@@ -152,6 +153,52 @@ void main() {
       await settle(tester);
 
       expect(find.textContaining('laps'), findsWidgets);
+    });
+
+    testWidgets('a new habit starts with no days chosen', (tester) async {
+      await openEditor(tester);
+      await tester.ensureVisible(find.text('Pick at least one day'));
+      await settle(tester, 200);
+
+      expect(find.text('Pick at least one day'), findsOneWidget);
+      expect(find.textContaining('no days yet'), findsOneWidget);
+    });
+
+    testWidgets('saving with no days holds the form until some are picked', (
+      tester,
+    ) async {
+      await openEditor(tester);
+      final store = TideScope.read(
+        tester.element(find.byType(AddEditHabitScreen)),
+      );
+      final before = store.allHabits.length;
+
+      await tester.enterText(find.byType(TextField).first, 'Evening walk');
+      await settle(tester);
+      await tester.tap(find.text('Create habit'));
+      await settle(tester);
+
+      expect(find.byType(AddEditHabitScreen), findsOneWidget);
+      expect(store.allHabits, hasLength(before), reason: 'nothing was saved');
+
+      await tapInForm(tester, find.text('Weekdays'));
+      expect(find.textContaining('weekdays,'), findsOneWidget);
+
+      await tester.tap(find.text('Create habit'));
+      await settle(tester, 1200);
+
+      expect(find.byType(AddEditHabitScreen), findsNothing);
+      expect(store.allHabits.last.days, {1, 2, 3, 4, 5});
+    });
+
+    testWidgets('a preset tapped again clears the days', (tester) async {
+      await openEditor(tester);
+
+      await tapInForm(tester, find.text('Every day'));
+      expect(find.text('Every day'), findsNWidgets(2), reason: 'chip + line');
+
+      await tapInForm(tester, find.text('Every day').first);
+      expect(find.text('Pick at least one day'), findsOneWidget);
     });
 
     testWidgets('a duration target reads as time, not a bare number', (

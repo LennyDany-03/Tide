@@ -7,6 +7,7 @@ import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/habit_glyph.dart';
 import '../../../widgets/tide_surface.dart';
+import 'day_selector.dart';
 
 /// A miniature of the real habit card, updating as the form is filled in.
 ///
@@ -28,11 +29,10 @@ class LiveHabitPreview extends StatelessWidget {
   final Set<int> days;
 
   String get _schedule {
+    if (days.isEmpty) return 'no days yet';
     if (days.length == 7) return 'daily';
-    if (days.isEmpty) return 'no days set';
-    if (days.length == 5 && !days.contains(6) && !days.contains(7)) {
-      return 'weekdays';
-    }
+    final named = DaySchedule.nameOf(days);
+    if (named != null) return named.toLowerCase();
     return '${days.length}x a week';
   }
 
