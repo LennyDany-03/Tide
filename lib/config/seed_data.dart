@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/models/habit.dart';
 import '../services/models/tide_glyph.dart';
 
-/// The demo history the app opens with.
+/// The demo history: what the demo account opens on when no Supabase project
+/// is configured, and what the tests measure. A real account never sees it —
+/// its habits come from the server.
 ///
 /// Nothing here is hardcoded display text — these are real logs, and every
 /// streak, percentage and heatmap cell on screen is computed from them by

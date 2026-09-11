@@ -1,15 +1,17 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
 import '../config/app_constants.dart';
 import '../config/milestone_catalog.dart';
-import '../config/seed_data.dart';
 import '../theme/tide_palette.dart';
 import '../theme/tide_theme.dart';
 import 'auth/auth_service.dart';
 import 'auth/demo_auth_service.dart';
 import 'device_flags.dart';
+import 'habits/demo_habit_repository.dart';
+import 'habits/habit_repository.dart';
 import 'models/celebration_cue.dart';
 import 'models/day_summary.dart';
 import 'models/habit.dart';
@@ -19,23 +21,29 @@ import 'tide_scope.dart';
 
 /// The single source of truth for the running app.
 ///
-/// Habits live in memory only: the store opens on [SeedData] every launch
-/// and never writes them back. Actions taken during a session are real —
-/// logging a habit genuinely moves the streak, the hero stat and the
-/// heatmap — they simply do not outlive the process.
+/// Habits belong to the signed-in account. The store changes its own list
+/// first, so a log lands under the finger rather than after a round trip,
+/// then hands the change to [repository], which keeps a copy on the device,
+/// gets the write to the server when it can, and reports what changed on the
+/// account's other devices. Those reports come back through [_applyRemote]
+/// and move the same streaks, stats and heatmaps a tap here does.
 ///
-/// The account does outlive it. Who is signed in comes from [auth] and
-/// survives a restart until the person logs out; whether this device has
-/// seen onboarding, whether an account has had its tour, and whether a
-/// sign-up is waiting on its emailed code come from [flags]. Those are the
-/// only things Tide keeps.
+/// Who is signed in comes from [auth] and survives a restart until the
+/// person logs out; whether this device has seen onboarding, whether an
+/// account has had its tour, and whether a sign-up is waiting on its emailed
+/// code come from [flags]. Preferences and the palette are still per session.
 class TideStore extends ChangeNotifier {
-  TideStore({AuthService? auth, DeviceFlags? flags})
-    : auth = auth ?? DemoAuthService(),
-      flags = flags ?? DeviceFlags.memory(),
-      _habits = SeedData.habits() {
+  TideStore({
+    AuthService? auth,
+    DeviceFlags? flags,
+    HabitRepository? repository,
+  }) : auth = auth ?? DemoAuthService(),
+       flags = flags ?? DeviceFlags.memory(),
+       repository = repository ?? DemoHabitRepository() {
+    _habits = this.repository.cached(this.auth.currentAccount?.id);
     _acknowledgedMilestones = _unlockedIds().toSet();
     firstRun = !this.flags.onboardingSeen;
+    _remoteChanges = this.repository.changes.listen(_applyRemote);
     _restore(this.auth.currentAccount);
     _accountChanges = this.auth.accountChanges.listen(
       _onAccountChanged,
@@ -49,9 +57,13 @@ class TideStore extends ChangeNotifier {
   /// What this device remembers between launches.
   final DeviceFlags flags;
 
-  late final StreamSubscription<TideAccount?> _accountChanges;
+  /// Where habits are kept: Supabase in a real build, memory in tests.
+  final HabitRepository repository;
 
-  List<Habit> _habits;
+  late final StreamSubscription<TideAccount?> _accountChanges;
+  late final StreamSubscription<HabitChange> _remoteChanges;
+
+  List<Habit> _habits = const [];
   late Set<String> _acknowledgedMilestones;
 
   /// Bumped on every cue so the overlay has a fresh widget identity.
@@ -116,6 +128,9 @@ class TideStore extends ChangeNotifier {
 
   static const Duration _profileTimeout = Duration(seconds: 6);
 
+  /// How long log out waits for queued habit writes before letting them go.
+  static const Duration _flushTimeout = Duration(seconds: 4);
+
   // --- Preferences --------------------------------------------------------
 
   /// The splash has drawn the mark this session, so the welcome step shows
@@ -126,15 +141,14 @@ class TideStore extends ChangeNotifier {
 
   /// The palette the whole app is drawn in.
   ///
-  /// Session-only, like the habits: the app opens on
-  /// [TidePalettes.standard] (Midnight) every launch.
+  /// Session-only: the app opens on [TidePalettes.standard] (Midnight) every
+  /// launch.
   TidePalette palette = TidePalettes.standard;
 
   bool dailyReminders = true;
   bool quietHours = false;
   bool weeklyRecap = false;
   bool haptics = true;
-  DateTime lastSync = DateTime.now().subtract(const Duration(minutes: 2));
 
   /// Added to the computed best streak by the milestones screen's
   /// "simulate next unlock" control, so the celebration can be seen without
@@ -294,6 +308,10 @@ class TideStore extends ChangeNotifier {
   }
 
   // --- Mutations --------------------------------------------------------
+  //
+  // Each one changes the list, then hands [repository] the rows it touched.
+  // The repository ignores writes while nobody is signed in, so none of these
+  // need to check.
 
   /// Logs [amount] against [habitId] for [date], replacing whatever was
   /// there. Passing null logs the habit's full target.
@@ -308,6 +326,7 @@ class TideStore extends ChangeNotifier {
       final frozen = Set<DateTime>.from(habit.frozenDays)..remove(day);
       return habit.copyWith(logs: logs, frozenDays: frozen);
     });
+    _saveEntry(habitId, day);
 
     _raiseCue(habitId, day: day, wasComplete: wasComplete);
   }
@@ -348,11 +367,12 @@ class TideStore extends ChangeNotifier {
   /// Clears a day's log — used by the context menu and by tapping an
   /// already-logged day.
   void unlog(String habitId, {DateTime? date}) {
+    final day = DateUtils.dateOnly(date ?? DateTime.now());
     _mutate(habitId, (habit) {
-      final day = DateUtils.dateOnly(date ?? DateTime.now());
       final logs = Map<DateTime, num>.from(habit.logs)..remove(day);
       return habit.copyWith(logs: logs);
     });
+    _saveEntry(habitId, day);
   }
 
   /// Spends one freeze token so a missed day does not break the loop.
@@ -369,6 +389,8 @@ class TideStore extends ChangeNotifier {
         freezesRemaining: h.freezesRemaining - 1,
       );
     });
+    _saveHabit(habitId);
+    _saveEntry(habitId, day);
     _pendingHabitCue = CelebrationCue(
       habitId: habit.id,
       habitName: habit.name,
@@ -396,12 +418,18 @@ class TideStore extends ChangeNotifier {
             (h.freezesRemaining + 1).clamp(0, h.freezeAllowance).toInt(),
       );
     });
+    _saveHabit(habitId);
+    _saveEntry(habitId, day);
     return true;
   }
 
   void addHabit(Habit habit) {
     _habits = [..._habits, habit];
-    notifyListeners();
+    repository.saveHabit(habit);
+    for (final day in {...habit.logs.keys, ...habit.frozenDays}) {
+      repository.saveEntry(habit, day);
+    }
+    _changed();
   }
 
   void updateHabit(Habit habit) {
@@ -409,34 +437,19 @@ class TideStore extends ChangeNotifier {
       for (final existing in _habits)
         if (existing.id == habit.id) habit else existing,
     ];
-    notifyListeners();
+    repository.saveHabit(habit);
+    _changed();
   }
 
   void deleteHabit(String habitId) {
     _habits = _habits.where((h) => h.id != habitId).toList();
-    notifyListeners();
+    repository.removeHabit(habitId);
+    _changed();
   }
 
   void togglePause(String habitId) {
     _mutate(habitId, (habit) => habit.copyWith(paused: !habit.paused));
-  }
-
-  void deleteAllData() {
-    _habits = [];
-    _acknowledgedMilestones = {};
-    _simulatedBonus = 0;
-    _pendingHabitCue = null;
-    notifyListeners();
-  }
-
-  /// Restores the demo history — the counterpart to [deleteAllData], so a
-  /// curious tap on a destructive row is not a dead end.
-  void restoreSeed() {
-    _habits = SeedData.habits();
-    _simulatedBonus = 0;
-    _pendingHabitCue = null;
-    _acknowledgedMilestones = _unlockedIds().toSet();
-    notifyListeners();
+    _saveHabit(habitId);
   }
 
   /// The intro has been read, or skipped. Distinct from [signedIn]: this
@@ -446,6 +459,54 @@ class TideStore extends ChangeNotifier {
     if (flags.onboardingSeen) return;
     flags.markOnboardingSeen();
     notifyListeners();
+  }
+
+  // --- Changes from elsewhere ---------------------------------------------
+
+  /// A change that did not start in this app: the server's copy arriving, or
+  /// a tap on another of the account's devices.
+  ///
+  /// Nothing is written back — it is already on the server — and nothing is
+  /// celebrated. The reward belongs to the moment somebody finishes a habit,
+  /// and that moment happened on the other phone.
+  void _applyRemote(HabitChange change) {
+    if (change.accountId != _account?.id) return;
+
+    switch (change) {
+      case HabitsReplaced(:final habits):
+        _habits = habits;
+        // Badges this history already earned were earned some other day,
+        // perhaps somewhere else. Opening Milestones should not burst each
+        // of them open as though it had just happened.
+        _acknowledgedMilestones.addAll(_unlockedIds());
+      case HabitSaved(:final habit):
+        final existing = habitById(habit.id);
+        _habits = existing == null
+            ? [..._habits, habit]
+            : [
+                for (final other in _habits)
+                  if (other.id == habit.id)
+                    habit.copyWith(
+                      logs: existing.logs,
+                      frozenDays: existing.frozenDays,
+                    )
+                  else
+                    other,
+              ];
+      case HabitRemoved(:final habitId):
+        if (habitById(habitId) == null) return;
+        _habits = _habits.where((h) => h.id != habitId).toList();
+        if (_pendingHabitCue?.habitId == habitId) _pendingHabitCue = null;
+      case HabitEntrySaved(:final entry):
+        // An entry for a habit this list does not have yet means the habit's
+        // own announcement was missed; the next snapshot brings both.
+        if (habitById(entry.habitId) == null) return;
+        _habits = [
+          for (final habit in _habits)
+            if (habit.id == entry.habitId) entry.applyTo(habit) else habit,
+        ];
+    }
+    _changed();
   }
 
   // --- Account actions ----------------------------------------------------
@@ -552,7 +613,15 @@ class TideStore extends ChangeNotifier {
   /// Ends the session here whether or not the server hears about it: the
   /// session is removed from the device before the network call is made,
   /// so an offline log-out still logs out.
+  ///
+  /// Habit writes still queued get a few seconds to reach the server first,
+  /// while there is still a session allowed to make them. Whatever has not
+  /// gone by then is let go with the rest of the account's copy on this
+  /// device.
   Future<void> logOut() async {
+    if (repository.hasPendingWrites) {
+      await repository.flush().timeout(_flushTimeout, onTimeout: () {});
+    }
     try {
       await auth.logOut();
     } catch (error) {
@@ -610,6 +679,10 @@ class TideStore extends ChangeNotifier {
   /// A session that was already on the device at launch. Adopted at once,
   /// so the first screen is chosen without waiting on the network; whether
   /// a tour is still owed is checked behind it.
+  ///
+  /// Its habits were read from the device's copy in the constructor, so
+  /// Today draws them on the first frame; the server's copy replaces them
+  /// once it arrives.
   void _restore(TideAccount? account) {
     if (account == null) return;
     _account = account;
@@ -617,6 +690,7 @@ class TideStore extends ChangeNotifier {
     flags
       ..markOnboardingSeen()
       ..setPendingVerification(null);
+    repository.open(account.id);
     unawaited(_armTourIfOwed(account));
   }
 
@@ -676,12 +750,14 @@ class TideStore extends ChangeNotifier {
 
     // A new account opens genuinely empty — the one moment an empty app is
     // the honest thing to show, and the tour is what keeps it from reading
-    // as broken. A returning one opens on the demo history, because habits
-    // are still not stored anywhere.
-    _habits = isNew ? [] : SeedData.habits();
+    // as broken. A returning one opens on whatever this device kept of it,
+    // and the server's copy replaces that as soon as it arrives.
+    repository.open(next.id);
+    _habits = isNew ? const [] : repository.cached(next.id);
     _simulatedBonus = 0;
     _pendingHabitCue = null;
     _acknowledgedMilestones = isNew ? {} : _unlockedIds().toSet();
+    repository.remember(_habits);
 
     _session.value = next.id;
     notifyListeners();
@@ -705,6 +781,9 @@ class TideStore extends ChangeNotifier {
     _tourPending = false;
     _welcomingNew = false;
     _pendingHabitCue = null;
+    // The list itself stays until the next account arrives, so the screen on
+    // its way out does not flash empty. The device's copy goes now.
+    unawaited(repository.close(forget: true));
     _session.value = null;
     notifyListeners();
   }
@@ -717,12 +796,20 @@ class TideStore extends ChangeNotifier {
     }
   }
 
-  // --- Settings -----------------------------------------------------------
+  // --- Sync ---------------------------------------------------------------
 
-  void sync() {
-    lastSync = DateTime.now();
-    notifyListeners();
-  }
+  /// Where the account's habits stand with the server.
+  SyncStatus get syncStatus => repository.status.value;
+
+  /// When the server last confirmed this device's habits. Null until it has,
+  /// and always null with no project behind the app.
+  DateTime? get lastSynced => repository.lastSynced;
+
+  /// Pull to refresh: sends whatever is still queued and reads the account
+  /// back. Resolves once both are done or have failed; never throws.
+  Future<void> sync() => repository.refresh();
+
+  // --- Settings -----------------------------------------------------------
 
   void setPreference({
     bool? dailyReminders,
@@ -747,22 +834,55 @@ class TideStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Ids are only ever generated here, so a habit created in the add sheet
-  /// and one restored from seed can never collide.
-  String newHabitId() =>
-      'habit-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
+  /// A fresh habit id: a version 4 UUID, because `habits.id` on the server is
+  /// a uuid the app chooses. A habit made offline needs its id before the
+  /// server has seen it, so its first logged day can be queued against it.
+  ///
+  /// Ids are only ever generated here, so no two habits can collide.
+  String newHabitId() {
+    final bytes = List<int>.generate(16, (_) => _ids.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = [
+      for (final byte in bytes) byte.toRadixString(16).padLeft(2, '0'),
+    ].join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
+        '${hex.substring(20)}';
+  }
+
+  static final Random _ids = Random.secure();
 
   void _mutate(String habitId, Habit Function(Habit) transform) {
     _habits = [
       for (final habit in _habits)
         if (habit.id == habitId) transform(habit) else habit,
     ];
+    _changed();
+  }
+
+  /// The list has changed: the device's copy is refreshed and the screens
+  /// redrawn.
+  void _changed() {
+    repository.remember(_habits);
     notifyListeners();
+  }
+
+  void _saveHabit(String habitId) {
+    final habit = habitById(habitId);
+    if (habit != null) repository.saveHabit(habit);
+  }
+
+  void _saveEntry(String habitId, DateTime day) {
+    final habit = habitById(habitId);
+    if (habit != null) repository.saveEntry(habit, day);
   }
 
   @override
   void dispose() {
     unawaited(_accountChanges.cancel());
+    unawaited(_remoteChanges.cancel());
+    unawaited(repository.close());
     _session.dispose();
     super.dispose();
   }

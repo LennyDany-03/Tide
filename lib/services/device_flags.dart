@@ -4,8 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// The few things this device remembers about itself between launches.
 ///
-/// Habits still live only in memory — see `TideStore`. But once sign-in was
-/// real, a few facts could no longer be forgotten on every launch without
+/// Habits are the account's and are kept by `HabitRepository`. But once
+/// sign-in was real, a few facts could no longer be forgotten on every launch without
 /// the app visibly repeating itself or losing somebody's place: that the
 /// explanation has been read, that an account has already been walked round
 /// Today, and that a sign-up is waiting on the code emailed to it. All of

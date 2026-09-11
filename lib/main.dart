@@ -10,6 +10,9 @@ import 'services/auth/auth_service.dart';
 import 'services/auth/demo_auth_service.dart';
 import 'services/auth/supabase_auth_service.dart';
 import 'services/device_flags.dart';
+import 'services/habits/demo_habit_repository.dart';
+import 'services/habits/habit_repository.dart';
+import 'services/habits/supabase_habit_repository.dart';
 import 'services/tide_scope.dart';
 import 'services/tide_store.dart';
 import 'theme/tide_colors.dart';
@@ -23,30 +26,35 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(TideTheme.overlayStyle);
 
-  // Both are read before the first frame, while the native launch window is
-  // still up, so the app knows where it is going before it draws anything:
-  // a restored session opens Today, a device that has seen onboarding opens
-  // the account form. Supabase restores its session from local storage here
-  // and keeps refreshing it for as long as the refresh token is valid — which
-  // is until the person logs out.
+  // All of this is read before the first frame, while the native launch
+  // window is still up, so the app knows where it is going before it draws
+  // anything: a restored session opens Today on the habits this device kept
+  // for it, a device that has seen onboarding opens the account form.
+  // Supabase restores its session from local storage here and keeps
+  // refreshing it for as long as the refresh token is valid — which is until
+  // the person logs out.
   final flags = await DeviceFlags.load();
 
   final AuthService auth;
+  final HabitRepository habits;
   if (SupabaseConfig.isConfigured) {
     await Supabase.initialize(
       url: SupabaseConfig.url,
       publishableKey: SupabaseConfig.publishableKey,
     );
     auth = SupabaseAuthService(Supabase.instance.client);
+    habits = await SupabaseHabitRepository.load(Supabase.instance.client);
   } else {
     debugPrint(
       'Tide: SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY not set — run with '
-      '--dart-define-from-file=.env. Accounts are kept in memory for this run.',
+      '--dart-define-from-file=.env. Accounts and habits are kept in memory '
+      'for this run.',
     );
     auth = DemoAuthService();
+    habits = DemoHabitRepository();
   }
 
-  runApp(TideApp(showSplash: true, auth: auth, flags: flags));
+  runApp(TideApp(showSplash: true, auth: auth, flags: flags, habits: habits));
 }
 
 class TideApp extends StatefulWidget {
@@ -56,6 +64,7 @@ class TideApp extends StatefulWidget {
     this.showSplash = false,
     this.auth,
     this.flags,
+    this.habits,
   });
 
   /// Tests and deep links can skip straight into the shell: onboarding
@@ -74,6 +83,10 @@ class TideApp extends StatefulWidget {
   /// What the device remembers between launches. Left null, nothing is.
   final DeviceFlags? flags;
 
+  /// Where habits are kept. `main` passes Supabase; left null, they are kept
+  /// in memory and a returning account opens on the demo history.
+  final HabitRepository? habits;
+
   @override
   State<TideApp> createState() => _TideAppState();
 }
@@ -84,6 +97,7 @@ class _TideAppState extends State<TideApp> {
     flags:
         widget.flags ??
         DeviceFlags.memory(onboardingSeen: widget.startOnboarded),
+    repository: widget.habits,
   );
 
   late final GoRouter _router = AppRoutes.build(

@@ -120,10 +120,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Sends anything still queued and reads the account back. The wave holds
+  /// for a beat even when the server answers at once, so a refresh still
+  /// reads as one; it waits on the real sync when that takes longer.
   Future<void> _refresh() async {
     final store = TideScope.read(context);
-    await Future<void>.delayed(const Duration(milliseconds: 700));
-    if (mounted) store.sync();
+    await Future.wait([
+      Future<void>.delayed(const Duration(milliseconds: 700)),
+      store.sync(),
+    ]);
   }
 
   @override
