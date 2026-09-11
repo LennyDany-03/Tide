@@ -171,6 +171,97 @@ void main() {
     semantics.dispose();
   });
 
+  group('the keypad', () {
+    Future<void> press(WidgetTester tester, String key) async {
+      await tester.tap(find.byKey(ValueKey('keypad-$key')));
+      await tester.pump(const Duration(milliseconds: 120));
+    }
+
+    Future<void> openKeypad(WidgetTester tester) async {
+      await tester.tap(find.bySemanticsLabel('Type a time'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    testWidgets('tapping the figure opens it, and typed minutes are exact', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      final store = await openShell(tester);
+      await openSheet(tester);
+
+      expect(find.byKey(const ValueKey('keypad-4')), findsNothing);
+      await openKeypad(tester);
+      expect(find.byKey(const ValueKey('keypad-4')), findsOneWidget);
+      expect(find.text('+5 min'), findsNothing, reason: 'the pad replaces them');
+
+      await press(tester, '2');
+      await press(tester, '7');
+
+      expect(find.text('Mark 27 min'), findsOneWidget);
+      expect(find.text('Adds 27 min'), findsOneWidget);
+
+      await tester.tap(find.text('Mark 27 min'));
+      await afterMarking(tester);
+      expect(minutesToday(store), 27);
+
+      semantics.dispose();
+    });
+
+    testWidgets('an entry past the target is capped, and deleting it all '
+        'puts the dial back', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await openShell(tester, logged: 10);
+      await openSheet(tester);
+      await openKeypad(tester);
+
+      // 1, 3, 0 is an hour and a half — well past a 30-minute habit.
+      await press(tester, '1');
+      await press(tester, '3');
+      await press(tester, '0');
+
+      expect(find.text('Capped at 30 min'), findsOneWidget);
+      expect(find.text('Mark 30 min'), findsOneWidget);
+
+      for (var i = 0; i < 3; i++) {
+        await press(tester, 'delete');
+      }
+      expect(
+        find.text('Mark all 30 min'),
+        findsOneWidget,
+        reason: 'back to the untouched 10 minutes, not forced to zero',
+      );
+
+      semantics.dispose();
+    });
+
+    testWidgets('Done closes it and keeps what was typed', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await openShell(tester);
+      await openSheet(tester);
+      await openKeypad(tester);
+
+      await press(tester, '8');
+      await press(tester, 'done');
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.byKey(const ValueKey('keypad-8')), findsNothing);
+      expect(find.text('+5 min'), findsOneWidget);
+      expect(find.text('Mark 8 min'), findsOneWidget);
+
+      semantics.dispose();
+    });
+
+    test('reads digits the way a kitchen timer does', () {
+      expect(DurationLogSheet.minutesOf(''), 0);
+      expect(DurationLogSheet.minutesOf('7'), 7);
+      expect(DurationLogSheet.minutesOf('45'), 45);
+      expect(DurationLogSheet.minutesOf('90'), 90);
+      expect(DurationLogSheet.minutesOf('130'), 90);
+      expect(DurationLogSheet.minutesOf('1000'), 600);
+    });
+  });
+
   test('the marks and quick amounts scale with the target', () {
     expect(DurationLogSheet.tickEveryFor(10), 1);
     expect(DurationLogSheet.tickEveryFor(90), 5);

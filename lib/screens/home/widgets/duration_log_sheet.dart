@@ -27,6 +27,11 @@ import '../../../widgets/tide_sheet.dart';
 /// off. The dial shows the day's *total*, not an amount to add, so the same
 /// drag that sets a session also corrects an overshoot. Nothing is written
 /// until the button has said, in words, what will be written.
+///
+/// When the answer is exact — the run app said 47 minutes — dragging to it
+/// is fiddly, so the figure in the middle opens a keypad. The keypad lives in
+/// the sheet rather than raising the system keyboard, which would cover the
+/// very button that writes the time.
 class DurationLogSheet extends StatefulWidget {
   const DurationLogSheet({
     super.key,
@@ -68,6 +73,22 @@ class DurationLogSheet extends StatefulWidget {
       ? const [5, 10, 15]
       : const [5, 15, 30];
 
+  /// Digits typed on the keypad, read the way a kitchen timer reads them: the
+  /// last two are minutes, anything before them is hours. "45" is 45 minutes
+  /// and "130" is an hour and a half — and "90" is 90 minutes too, because
+  /// nobody should have to know the format to get the right answer.
+  static int minutesOf(String digits) {
+    if (digits.isEmpty) return 0;
+    if (digits.length <= 2) return int.parse(digits);
+    final cut = digits.length - 2;
+    return int.parse(digits.substring(0, cut)) * 60 +
+        int.parse(digits.substring(cut));
+  }
+
+  /// Four digits reach 99 hours, far past the ten-hour target the editor
+  /// allows. A fifth could only ever be a slip.
+  static const int maxDigits = 4;
+
   @override
   State<DurationLogSheet> createState() => _DurationLogSheetState();
 }
@@ -78,18 +99,35 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
 
   bool _dragging = false;
 
+  /// The digits typed so far, or null while the keypad is closed.
+  String? _entry;
+
+  /// Where the dial stood when the keypad opened. An entry deleted back to
+  /// nothing returns here, rather than to zero — opening the keypad and
+  /// closing it again should not have changed anything.
+  num _beforeEntry = 0;
+
+  /// So digits typed on a hardware keyboard reach the keypad too.
+  final FocusNode _keys = FocusNode(debugLabel: 'Duration keypad');
+
   num get _logged => widget.habit.amountOn(DateTime.now());
   num get _target => widget.habit.target;
   bool get _changed => _minutes != _logged;
+  bool get _typing => _entry != null;
 
   @override
   void didUpdateWidget(DurationLogSheet old) {
     super.didUpdateWidget(old);
     // Logged somewhere else while the sheet was open — another device. An
-    // untouched dial follows it; one the person has already set keeps their
-    // answer.
+    // untouched dial follows it; one the person is setting keeps their answer.
     final before = old.habit.amountOn(DateTime.now());
-    if (!_dragging && _minutes == before) _minutes = _logged;
+    if (!_dragging && !_typing && _minutes == before) _minutes = _logged;
+  }
+
+  @override
+  void dispose() {
+    _keys.dispose();
+    super.dispose();
   }
 
   void _set(num minutes) {
@@ -104,6 +142,92 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
     HapticFeedback.selectionClick();
     _set(minutes);
   }
+
+  void _onDragging(bool dragging) {
+    setState(() {
+      _dragging = dragging;
+      // Turning the dial is the other way to set the time, and the keypad
+      // steps aside for it. The dial keeps whatever was typed.
+      if (dragging && _typing) _closeEntry();
+    });
+  }
+
+  // --- Keypad -----------------------------------------------------------
+
+  void _toggleKeypad() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (_typing) {
+        _closeEntry();
+      } else {
+        _entry = '';
+        _beforeEntry = _minutes;
+        _keys.requestFocus();
+      }
+    });
+  }
+
+  /// Closes the keypad. Only ever called inside a `setState`.
+  void _closeEntry() {
+    _entry = null;
+    _keys.unfocus();
+  }
+
+  void _typeDigit(String digit) {
+    final entry = _entry;
+    if (entry == null) return;
+    // A leading zero changes nothing, and would eat one of the four digits.
+    if (entry.isEmpty && digit == '0') return;
+    if (entry.length >= DurationLogSheet.maxDigits) return;
+    HapticFeedback.selectionClick();
+    _applyEntry(entry + digit);
+  }
+
+  void _deleteDigit() {
+    final entry = _entry;
+    if (entry == null || entry.isEmpty) return;
+    HapticFeedback.selectionClick();
+    _applyEntry(entry.substring(0, entry.length - 1));
+  }
+
+  void _applyEntry(String entry) {
+    setState(() {
+      _entry = entry;
+      _minutes = entry.isEmpty
+          ? _beforeEntry
+          : DurationLogSheet.minutesOf(entry).clamp(0, _target);
+    });
+  }
+
+  void _doneTyping() {
+    if (!_typing) return;
+    setState(_closeEntry);
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (!_typing || event is KeyUpEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.backspace) {
+      _deleteDigit();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter ||
+        key == LogicalKeyboardKey.escape) {
+      _doneTyping();
+      return KeyEventResult.handled;
+    }
+    final character = event.character;
+    if (character != null &&
+        character.length == 1 &&
+        '0123456789'.contains(character)) {
+      _typeDigit(character);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  // --- Writing ----------------------------------------------------------
 
   void _confirm() {
     final complete = widget.habit.isCompleteOn(DateTime.now());
@@ -136,6 +260,13 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
   }
 
   String _status(bool complete) {
+    final entry = _entry;
+    if (entry != null) {
+      if (entry.isEmpty) return 'Type minutes, or hours then minutes';
+      if (DurationLogSheet.minutesOf(entry) > _target) {
+        return 'Capped at ${Minutes.label(_target)}';
+      }
+    }
     if (_changed) {
       final delta = _minutes - _logged;
       return delta > 0
@@ -151,53 +282,83 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
     final habit = widget.habit;
     final complete = habit.isCompleteOn(DateTime.now());
     final canAdd = _minutes < _target;
+    // The dial gives up some of its size to the keypad while one is open, so
+    // the two fit the sheet together without a scroll.
+    final dial = _typing ? 176.0 : 228.0;
 
     return TideSheet(
       eyebrow: '${habit.targetLabel} a day',
       title: habit.name,
       leading: widget.leading,
       onDismiss: widget.onDismiss,
-      maxHeightFactor: 0.8,
+      maxHeightFactor: 0.86,
       footer: TideButton(label: _action(complete), onPressed: _confirm),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: SizedBox.square(
-                dimension: 228,
-                child: _TimeDial(
-                  minutes: _minutes,
-                  logged: _logged,
-                  target: _target,
-                  onChanged: _set,
-                  onDragging: (value) => setState(() => _dragging = value),
+      child: Focus(
+        focusNode: _keys,
+        onKeyEvent: _onKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: AnimatedContainer(
+                  duration: TideMotion.sheetIn,
+                  curve: TideMotion.sheetCurve,
+                  width: dial,
+                  height: dial,
+                  child: _TimeDial(
+                    minutes: _minutes,
+                    logged: _logged,
+                    target: _target,
+                    entry: _entry,
+                    onChanged: _set,
+                    onDragging: _onDragging,
+                    onReadoutTap: _toggleKeypad,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            _Status(text: _status(complete), lit: _minutes >= _target),
-            const SizedBox(height: 14),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final amount in DurationLogSheet.quickAmountsFor(_target))
-                  _QuickChip(
-                    label: '+${Minutes.label(amount)}',
-                    enabled: canAdd,
-                    onTap: () => _jump(_minutes + amount),
-                  ),
-                _QuickChip(
-                  label: 'Full',
-                  enabled: canAdd,
-                  onTap: () => _jump(_target),
+              const SizedBox(height: 16),
+              _Status(text: _status(complete), lit: _minutes >= _target),
+              const SizedBox(height: 14),
+              AnimatedSize(
+                duration: TideMotion.sheetIn,
+                curve: TideMotion.sheetCurve,
+                alignment: Alignment.topCenter,
+                child: AnimatedSwitcher(
+                  duration: TideMotion.tabSwitch,
+                  child: _typing
+                      ? _Keypad(
+                          key: const ValueKey('keypad'),
+                          canDelete: _entry?.isNotEmpty ?? false,
+                          onDigit: _typeDigit,
+                          onDelete: _deleteDigit,
+                          onDone: _doneTyping,
+                        )
+                      : Wrap(
+                          key: const ValueKey('amounts'),
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final amount
+                                in DurationLogSheet.quickAmountsFor(_target))
+                              _QuickChip(
+                                label: '+${Minutes.label(amount)}',
+                                enabled: canAdd,
+                                onTap: () => _jump(_minutes + amount),
+                              ),
+                            _QuickChip(
+                              label: 'Full',
+                              enabled: canAdd,
+                              onTap: () => _jump(_target),
+                            ),
+                          ],
+                        ),
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -210,15 +371,22 @@ class _TimeDial extends StatefulWidget {
     required this.minutes,
     required this.logged,
     required this.target,
+    required this.entry,
     required this.onChanged,
     required this.onDragging,
+    required this.onReadoutTap,
   });
 
   final num minutes;
   final num logged;
   final num target;
+
+  /// The keypad's digits, or null while it is closed.
+  final String? entry;
+
   final ValueChanged<num> onChanged;
   final ValueChanged<bool> onDragging;
+  final VoidCallback onReadoutTap;
 
   @override
   State<_TimeDial> createState() => _TimeDialState();
@@ -249,9 +417,9 @@ class _TimeDialState extends State<_TimeDial> {
     final box = context.findRenderObject();
     if (box is! RenderBox) return null;
     final offset = box.globalToLocal(position) - box.size.center(Offset.zero);
-    // The figure in the middle is for reading. A touch on it should not throw
-    // the dial to wherever the thumb happened to land.
-    if (offset.distance < box.size.shortestSide * 0.24) return null;
+    // The middle belongs to the figure, which opens the keypad. A touch
+    // there must not also throw the dial to wherever the thumb landed.
+    if (offset.distance < box.size.shortestSide * 0.3) return null;
     widget.onDragging(true);
     _seek(position);
     return _DialDrag(onUpdate: _seek, onEnd: _release);
@@ -328,6 +496,7 @@ class _TimeDialState extends State<_TimeDial> {
     final every = DurationLogSheet.tickEveryFor(widget.target);
     final up = math.min(widget.target, widget.minutes + every);
     final down = math.max(0, widget.minutes - every);
+    final typing = widget.entry != null;
 
     return Semantics(
       slider: true,
@@ -354,7 +523,7 @@ class _TimeDialState extends State<_TimeDial> {
             // One animation for every way the dial moves, so it never jumps
             // between them. Under the thumb it trails by a frame or two —
             // enough to smooth a jittery touch, too little to feel like drag.
-            // Released, or set by a chip, it eases the rest of the way.
+            // Released, typed, or set by a chip, it eases the rest of the way.
             TweenAnimationBuilder<double>(
               tween: Tween<double>(end: _dragging ? 1 : 0),
               duration: TideMotion.press,
@@ -380,15 +549,33 @@ class _TimeDialState extends State<_TimeDial> {
                 ),
               ),
             ),
-            // The slider's own value already says the time. Left in, the
-            // figure merges into the slider's label and a screen reader says
-            // it twice, as "0, min, of 30 min" tacked onto the name.
             Center(
-              child: ExcludeSemantics(
-                child: _DialReadout(
-                  minutes: widget.minutes,
-                  target: widget.target,
-                  full: full,
+              // As wide as the dead zone the dial leaves for it, and scaled
+              // down rather than clipped when the dial shrinks for the keypad.
+              child: FractionallySizedBox(
+                widthFactor: 0.6,
+                // Its own node: a button inside the slider, not more words
+                // merged onto the slider's name. The figure itself is left
+                // out — the slider's value already says the time.
+                child: Semantics(
+                  container: true,
+                  button: true,
+                  label: typing ? 'Close keypad' : 'Type a time',
+                  onTap: widget.onReadoutTap,
+                  child: ExcludeSemantics(
+                    child: PressScale(
+                      onTap: widget.onReadoutTap,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: _DialReadout(
+                          minutes: widget.minutes,
+                          target: widget.target,
+                          full: full,
+                          entry: widget.entry,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -415,27 +602,44 @@ class _DialDrag implements Drag {
   void cancel() => onEnd();
 }
 
-/// The figure in the middle of the dial.
+/// The figure in the middle of the dial, and the field it becomes.
 class _DialReadout extends StatelessWidget {
   const _DialReadout({
     required this.minutes,
     required this.target,
     required this.full,
+    required this.entry,
   });
 
   final num minutes;
   final num target;
   final bool full;
+  final String? entry;
+
+  /// The figure and its unit. Typed digits are shown as typed — "90 min",
+  /// "1:30 hr" — so each key visibly lands where it was pressed; the settled
+  /// value shows minutes under the hour and a clock's own form past it.
+  (String, String) get _figure {
+    final typed = entry;
+    if (typed != null && typed.isNotEmpty) {
+      if (typed.length <= 2) return (typed, 'min');
+      final cut = typed.length - 2;
+      return ('${typed.substring(0, cut)}:${typed.substring(cut)}', 'hr');
+    }
+    final whole = minutes.round();
+    final hours = whole ~/ 60;
+    return hours == 0
+        ? ('$whole', 'min')
+        : ('$hours:${(whole % 60).toString().padLeft(2, '0')}', 'hr');
+  }
 
   @override
   Widget build(BuildContext context) {
-    final whole = minutes.round();
-    final hours = whole ~/ 60;
-    // Minutes under the hour; past it, a clock's own form — "1:30", never
-    // "90", which is a number of minutes nobody reads a day in.
-    final figure = hours == 0
-        ? '$whole'
-        : '$hours:${(whole % 60).toString().padLeft(2, '0')}';
+    final typing = entry != null;
+    // An open keypad with nothing typed shows where the dial stands, dimmed,
+    // as the value that stays if nothing is typed.
+    final placeholder = typing && entry!.isEmpty;
+    final (figure, unit) = _figure;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -450,14 +654,44 @@ class _DialReadout extends StatelessWidget {
               style: TideType.gauge(
                 50,
                 letterSpacing: -2.6,
-                color: full ? TideColors.lantern : TideColors.bone,
+                color: placeholder
+                    ? TideColors.silt
+                    : full
+                    ? TideColors.lantern
+                    : TideColors.bone,
               ),
             ),
+            // A caret, held still. The app's motion answers what somebody
+            // did; a blinking bar is motion for its own sake.
+            if (typing)
+              Container(
+                width: 2.5,
+                height: 38,
+                margin: const EdgeInsets.only(left: 3),
+                decoration: BoxDecoration(
+                  color: TideColors.lantern,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
             const SizedBox(width: 4),
-            Text(hours == 0 ? 'min' : 'hr', style: TideType.labelMuted),
+            Text(unit, style: TideType.labelMuted),
           ],
         ),
-        const SizedBox(height: 2),
+        // The line under the figure: a quiet sign that it can be typed into,
+        // lit while it is.
+        AnimatedContainer(
+          duration: TideMotion.tabSwitch,
+          curve: TideMotion.tabCurve,
+          margin: const EdgeInsets.only(top: 2, bottom: 5),
+          width: typing ? 64 : 28,
+          height: 2,
+          decoration: BoxDecoration(
+            color: typing
+                ? TideColors.lantern
+                : TideColors.bone.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(1),
+          ),
+        ),
         Text('of ${Minutes.label(target)}', style: TideType.labelMuted),
       ],
     );
@@ -584,6 +818,142 @@ class _DialPainter extends CustomPainter {
       old.full != full ||
       old.grip != grip ||
       old.ticks.length != ticks.length;
+}
+
+/// The number pad: three rows of digits, then Done, 0 and delete.
+///
+/// Done sits where a phone's own pad leaves a blank key, and delete where it
+/// puts delete, so a thumb that knows one pad already knows this one.
+class _Keypad extends StatelessWidget {
+  const _Keypad({
+    super.key,
+    required this.canDelete,
+    required this.onDigit,
+    required this.onDelete,
+    required this.onDone,
+  });
+
+  final bool canDelete;
+  final ValueChanged<String> onDigit;
+  final VoidCallback onDelete;
+  final VoidCallback onDone;
+
+  static const List<List<String>> _rows = [
+    ['1', '2', '3'],
+    ['4', '5', '6'],
+    ['7', '8', '9'],
+  ];
+
+  Widget _row(List<Widget> keys) {
+    return Row(
+      children: [
+        for (var i = 0; i < keys.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(child: keys[i]),
+        ],
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final row in _rows) ...[
+          _row([
+            for (final digit in row)
+              _Key(
+                key: ValueKey('keypad-$digit'),
+                semanticLabel: digit,
+                onTap: () => onDigit(digit),
+                child: Text(
+                  digit,
+                  style: TideType.gauge(22, color: TideColors.bone),
+                ),
+              ),
+          ]),
+          const SizedBox(height: 8),
+        ],
+        _row([
+          _Key(
+            key: const ValueKey('keypad-done'),
+            semanticLabel: 'Done',
+            onTap: onDone,
+            child: Text(
+              'Done',
+              style: TideType.label.copyWith(
+                color: TideColors.lantern,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          _Key(
+            key: const ValueKey('keypad-0'),
+            semanticLabel: '0',
+            onTap: () => onDigit('0'),
+            child: Text('0', style: TideType.gauge(22, color: TideColors.bone)),
+          ),
+          _Key(
+            key: const ValueKey('keypad-delete'),
+            semanticLabel: 'Delete',
+            enabled: canDelete,
+            onTap: onDelete,
+            child: Icon(
+              Icons.backspace_outlined,
+              size: 20,
+              color: TideColors.silt,
+            ),
+          ),
+        ]),
+      ],
+    );
+  }
+}
+
+/// One key. Recessed like the quick amounts, so the pad reads as part of the
+/// sheet rather than a keyboard that slid over it.
+class _Key extends StatelessWidget {
+  const _Key({
+    super.key,
+    required this.semanticLabel,
+    required this.onTap,
+    required this.child,
+    this.enabled = true,
+  });
+
+  final String semanticLabel;
+  final VoidCallback onTap;
+  final Widget child;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressScale(
+      enabled: enabled,
+      onTap: onTap,
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: semanticLabel,
+        excludeSemantics: true,
+        child: AnimatedOpacity(
+          opacity: enabled ? 1 : 0.4,
+          duration: TideMotion.tabSwitch,
+          child: Container(
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: TideColors.trench,
+              borderRadius: TideElevation.radius12,
+              border: Border.all(color: TideColors.hairline),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// What the dial's setting means for today, in words.
