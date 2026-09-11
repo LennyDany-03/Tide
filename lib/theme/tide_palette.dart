@@ -124,6 +124,14 @@ abstract final class TidePalettes {
 
   /// Near-black with a sky-blue accent. Frost goes pale grey here rather
   /// than icy blue, so a frozen day cannot be mistaken for a finished one.
+  ///
+  /// The accent is a fully saturated, bright electric sky rather than a
+  /// soft one. The first cut (#62C6F0) was pleasant on a swatch and too
+  /// quiet on the phone: most of what lantern draws is small — 6px week
+  /// cells, a 2px sparkline, a 1.5px waterline, a tab-bar tint at 13% — and
+  /// a pastel blue at those sizes on near-black reads as grey. Amber gets
+  /// away with less saturation because warm light carries further on a dark
+  /// ground; blue has to be pushed to be seen.
   static const midnight = TidePalette(
     id: 'midnight',
     name: 'Midnight',
@@ -135,12 +143,12 @@ abstract final class TidePalettes {
     trench: Color(0xFF020406),
     bone: Color(0xFFE8F1F6),
     silt: Color(0xFF7F8E99),
-    lantern: Color(0xFF62C6F0),
-    onLantern: Color(0xFF03131B),
+    lantern: Color(0xFF45D0FF),
+    onLantern: Color(0xFF02121A),
     coral: Color(0xFFE0675E),
     frost: Color(0xFFE0E7EE),
-    flare: Color(0xFFB9ECFF),
-    ember: Color(0xFF1F86C9),
+    flare: Color(0xFFC8F3FF),
+    ember: Color(0xFF1A9BF0),
     glint: Color(0xFFE8F1F6),
     innerHighlight: Color(0x0FE8F1F6),
     scrim: Color(0xB8010305),
