@@ -13,43 +13,40 @@ import '../theme/tide_motion.dart';
 /// far through a leg you are; a streak's entire emotional content is that it
 /// is *still alight* and that letting it go out would cost something.
 ///
-/// **This is light, not a shape.** The first version of it was three opaque
-/// teardrops drawn at three sizes, and it read exactly as what it was:
-/// concentric outlines stacked into an onion, with a near-white core sitting
-/// in the middle like a bulb. Everything about that was wrong, and all of it
-/// for the same reason — fire has no edges. Nothing here is drawn without a
-/// blur, no layer goes past 0.38 alpha, and the whole thing sits on a
-/// seven-stop bloom whose falloff never terminates anywhere the eye can find
-/// it. What you should be able to see is a warm glow with a brighter heart
-/// moving inside it; what you should never be able to see is where any one
-/// of those pieces begins.
+/// **A mark, lit — not a glow.** The version before this was built entirely
+/// out of blurred light: three soft tongues at low alpha over a bloom, on
+/// the principle that fire has no edges. True to fire, and wrong for the
+/// card. At this size on a dark shelf a shape with no silhouette reads as a
+/// candle smudge, and nothing about it looked designed. This is one crisp
+/// emblem instead: an outer teardrop with a second, smaller flame cut out of
+/// its heart as negative space, filled with a flare-to-ember ramp. The light
+/// did not go away — it moved *behind* the mark, as a bloom and a soft
+/// halo, where softness adds depth instead of dissolving the thing you are
+/// meant to be looking at.
 ///
-/// Three things make the motion read as combustion rather than as a
-/// flame-shaped icon breathing:
+/// It still moves, with restraint, because a flame that holds still is a
+/// logo:
 ///
-/// * **Nothing moves as one object.** Each tongue runs on its own flicker
-///   phase, so the core darts while the outer body is still leaning the
-///   other way. A single path scaled up and down is a logo pulsing.
+/// * **The two flames move separately.** The outer body sways from its tip
+///   while the cut-out's tongues rise and lean on their own phases, so the
+///   negative space appears to burn inside the shape.
 /// * **The flicker is three sines, not one.** A single sine is a heartbeat
 ///   and the eye finds its period within two cycles. Summed at 3, 7 and 11
 ///   times the base rate there is no findable beat — but the multipliers are
 ///   whole numbers, so the loop still closes seamlessly.
-/// * **The base stays put.** Real fire is anchored where it meets its fuel
-///   and loose at the tip. The seat is a soft hot ellipse that barely moves;
-///   everything above it does.
+/// * **The foot stays put.** Sway and stretch are weighted by the square of
+///   the height above the foot, so the base is anchored and only the tip
+///   travels. Amplitudes are a pixel or two: on a crisp edge that reads,
+///   where the blurred version needed ten.
 ///
-/// The palette rule holds and costs nothing here: this is
-/// [TideColors.lantern] lerped a little toward [TideColors.bone] for the
-/// heart, which is the one thing the app's single warm accent was always
-/// going to be able to draw. It is deliberately *not* pushed far toward
-/// bone — a white-hot centre is what made the first version look like a
-/// lightbulb, and amber light on a near-black card is already the whole
-/// effect. Coral is not available: it means destruction and nothing else.
+/// The fill is [TideGradients.flame], whose two ends are derived from
+/// lantern in the theme layer. Coral is not available: it means destruction
+/// and nothing else.
 class TideFlame extends StatefulWidget {
   const TideFlame({super.key, this.intensity = 1});
 
-  /// 0..1. Scales the height, the brightness and how many embers come off
-  /// the top, so a two-day run is an ember and a hundred-day run is a fire
+  /// 0..1. Scales the height, the glow and how many embers come off the
+  /// tip, so a two-day run is a small flame and a hundred-day run a tall one
   /// without either needing a different widget.
   final double intensity;
 
@@ -89,16 +86,6 @@ class _TideFlameState extends State<TideFlame>
   }
 }
 
-/// One soft body of light in the flame: how big, how bright, how warm, and
-/// how far it is blurred past its own outline.
-typedef _Layer = ({
-  double scale,
-  double phase,
-  double alpha,
-  double hot,
-  double blur,
-});
-
 class _FlamePainter extends CustomPainter {
   const _FlamePainter({required this.t, required this.intensity});
 
@@ -107,24 +94,45 @@ class _FlamePainter extends CustomPainter {
 
   final double intensity;
 
-  /// Outer body, middle, heart.
+  /// Width over height of the emblem.
+  static const double _aspect = 0.78;
+
+  /// The outer body, in the emblem's unit square: x across, y down, the foot
+  /// at y = 1. A start point, then cubic segments of six.
   ///
-  /// The alphas are low and the blurs are wide, and the two are tied: the
-  /// bigger a layer is, the less of it you should be able to locate. The
-  /// heart is smallest, brightest and warmest — the hot part of a fire is
-  /// the middle, and painting the outside brightest is what makes a drawn
-  /// flame read as plastic.
-  /// The blurs fall off fast — 0.30 of the flame's width on the outer haze,
-  /// 0.04 on the heart. Blurring all three heavily was the correction that
-  /// overshot: with every layer soft there is no silhouette left, and a
-  /// flame with no silhouette is a cone of light. The outer body is
-  /// atmosphere and should have no locatable edge; the heart is the thing
-  /// you are actually looking at and has to keep its shape, including the
-  /// neck where it pinches on its way to the tip.
-  static const List<_Layer> _layers = [
-    (scale: 1.00, phase: 0.00, alpha: 0.10, hot: 0.00, blur: 0.30),
-    (scale: 0.66, phase: 0.37, alpha: 0.24, hot: 0.14, blur: 0.11),
-    (scale: 0.36, phase: 0.71, alpha: 0.55, hot: 0.26, blur: 0.04),
+  /// The tip sits right of centre and the right shoulder is concave just
+  /// under it, so the flame has a direction — a symmetric teardrop is a
+  /// water drop, and on this app's cards that is exactly the wrong reading.
+  static const List<double> _outer = [
+    0.50, 1.00,
+    // Round the foot and out to the bulge, low on the left.
+    0.20, 1.00, 0.04, 0.80, 0.05, 0.60,
+    // Up the long left side to the tip.
+    0.07, 0.38, 0.28, 0.20, 0.60, 0.00,
+    // Off the tip, in under it, and out to the right shoulder.
+    0.58, 0.20, 0.95, 0.36, 0.95, 0.64,
+    // And back round to the foot.
+    0.95, 0.86, 0.78, 1.00, 0.50, 1.00,
+  ];
+
+  /// The negative flame cut out of the body: a main tongue and a smaller one
+  /// to its left, open through the foot.
+  ///
+  /// Open rather than enclosed on purpose. A hole fully inside the body is a
+  /// shape with a window in it; letting the cut-out run out of the base
+  /// splits the foot into two points, and that is what makes it read as a
+  /// second flame rising inside the first.
+  static const List<double> _inner = [
+    0.40, 1.08,
+    // Up the left edge to the small tongue.
+    0.27, 0.97, 0.25, 0.80, 0.35, 0.66,
+    // Down into the notch between the two.
+    0.38, 0.73, 0.42, 0.77, 0.47, 0.79,
+    // Up to the main tongue's tip.
+    0.44, 0.66, 0.50, 0.52, 0.62, 0.42,
+    // Down the right side and out through the foot.
+    0.62, 0.55, 0.76, 0.66, 0.75, 0.84,
+    0.74, 0.96, 0.66, 1.00, 0.60, 1.08,
   ];
 
   /// Three sines at 3, 7 and 11 times the cycle rate, summed.
@@ -138,155 +146,148 @@ class _FlamePainter extends CustomPainter {
       math.sin((t * 7 + phase * 1.7) * math.pi * 2) * 0.30 +
       math.sin((t * 11 + phase * 2.9) * math.pi * 2) * 0.20;
 
-  /// One tongue.
+  /// [points] from the unit square into [box].
   ///
-  /// Not a teardrop, which is what this was and which rendered as a paper
-  /// cone: straight sides running from a wide flat foot to a point. A flame
-  /// is the other shape entirely — it is *pinched at the fuel*, bulges to
-  /// its widest about a third of the way up, then necks in and runs out to
-  /// a thin tip. The foot here is half the body width and the bulge is the
-  /// full width, which is the whole difference between fire and a triangle.
-  ///
-  /// [lean] is applied as the square of the height fraction, so the foot
-  /// barely moves and the tip swings. That is the same reason a real flame
-  /// is legible as fire from across a room: it is anchored where it burns
-  /// and loose everywhere else.
-  static Path _tongue({
-    required Offset base,
-    required double halfWidth,
-    required double height,
+  /// [lean] is in widths and [stretch] in heights, and both are weighted by
+  /// the square of the rise above the foot — the base holds still, the tip
+  /// moves most.
+  static Path _trace(
+    Rect box,
+    List<double> points, {
     required double lean,
+    required double stretch,
   }) {
-    // Horizontal position at height fraction [f], offset sideways by [dx].
-    double x(double f, double dx) => base.dx + lean * f * f + dx;
-    double y(double f) => base.dy - height * f;
+    Offset at(int i) {
+      final rise = 1 - points[i + 1];
+      return Offset(
+        box.left + (points[i] + lean * rise * rise) * box.width,
+        box.bottom - rise * (1 + stretch * rise) * box.height,
+      );
+    }
 
-    return Path()
-      ..moveTo(x(0, -halfWidth * 0.50), base.dy)
-      // Out to the widest point, low down.
-      ..cubicTo(
-        x(0.08, -halfWidth * 0.98), y(0.08),
-        x(0.30, -halfWidth * 1.00), y(0.30),
-        x(0.55, -halfWidth * 0.62), y(0.55),
-      )
-      // Neck in, and run out to the tip.
-      ..cubicTo(
-        x(0.76, -halfWidth * 0.34), y(0.76),
-        x(0.92, -halfWidth * 0.12), y(0.92),
-        x(1, 0), y(1),
-      )
-      // And back down the other side.
-      ..cubicTo(
-        x(0.92, halfWidth * 0.12), y(0.92),
-        x(0.76, halfWidth * 0.34), y(0.76),
-        x(0.55, halfWidth * 0.62), y(0.55),
-      )
-      ..cubicTo(
-        x(0.30, halfWidth * 1.00), y(0.30),
-        x(0.08, halfWidth * 0.98), y(0.08),
-        x(0, halfWidth * 0.50), base.dy,
-      )
-      // The foot is rounded *below* the baseline rather than closed flat. A
-      // flat bottom edge is a straight line, and a straight line is the one
-      // thing fire never has.
-      ..quadraticBezierTo(
-        base.dx, base.dy + halfWidth * 0.42,
-        x(0, -halfWidth * 0.50), base.dy,
-      )
-      ..close();
+    final start = at(0);
+    final path = Path()..moveTo(start.dx, start.dy);
+    for (var i = 2; i + 5 < points.length; i += 6) {
+      final a = at(i), b = at(i + 2), c = at(i + 4);
+      path.cubicTo(a.dx, a.dy, b.dx, b.dy, c.dx, c.dy);
+    }
+    return path..close();
   }
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
 
-    final base = Offset(size.width / 2, size.height * 0.92);
-    final reach = size.height * (0.50 + 0.42 * intensity);
-    final width = size.width * (0.26 + 0.12 * intensity);
+    // Standing on the bottom centre and growing upward, so a hotter run is a
+    // taller fire on the same spot rather than a bigger icon. The headroom
+    // left above it at full size is where the embers go.
+    final height =
+        math.min(size.height, size.width / _aspect) * (0.72 + 0.18 * intensity);
+    final box = Rect.fromLTWH(
+      (size.width - height * _aspect) / 2,
+      size.height - height,
+      height * _aspect,
+      height,
+    );
 
-    _paintBloom(canvas, base, reach);
+    final sway = 0.05 * _flicker(t, 0.5);
+    final reach = 0.03 * _flicker(t, 0);
+    final outer = _trace(box, _outer, lean: sway, stretch: reach);
+    // The cut-out rides the body's sway and adds its own on top: the two
+    // move together as one fire and apart as two tongues.
+    final inner = _trace(
+      box,
+      _inner,
+      lean: sway + 0.10 * _flicker(t, 0.71),
+      stretch: reach + 0.16 * _flicker(t, 0.19),
+    );
+    final body = Path.combine(PathOperation.difference, outer, inner);
 
-    for (final layer in _layers) {
-      final flick = _flicker(t, layer.phase);
-      canvas.drawPath(
-        _tongue(
-          base: base,
-          // Taller and narrower on the same beat, so a tongue necks as it
-          // reaches rather than inflating like a balloon.
-          halfWidth: width * layer.scale * (1 - 0.10 * flick),
-          height: reach * layer.scale * (1 + 0.13 * flick),
-          lean: width * 0.46 * _flicker(t, layer.phase + 0.5),
-        ),
-        Paint()
-          ..maskFilter = MaskFilter.blur(
-            BlurStyle.normal,
-            width * layer.blur + 0.6,
-          )
-          ..color = Color.lerp(
-            TideColors.lantern,
-            TideColors.bone,
-            layer.hot,
-          )!.withValues(alpha: layer.alpha),
-      );
-    }
-
-    _paintSeat(canvas, base, reach, width);
-    _paintEmbers(canvas, base, reach, width);
+    _paintBloom(canvas, box);
+    _paintHalo(canvas, body, box);
+    canvas.drawPath(
+      body,
+      Paint()..shader = TideGradients.flame.createShader(box),
+    );
+    _paintSheen(canvas, body, box);
+    _paintEmbers(canvas, box);
   }
 
-  /// The light the fire throws, before the fire itself.
+  /// The light the fire throws onto the card.
   ///
-  /// A plain two-stop radial fades its alpha linearly and the eye finds the
-  /// exact circle where the ramp hits zero — a disc pasted on the card
-  /// rather than light coming off something. This is the same seven-stop
-  /// falloff the page blooms use, for the same reason.
-  ///
-  /// Painted as a circle sized to the ramp rather than as a rect filling the
-  /// widget, which is not a detail. The seven stops reach zero alpha exactly
-  /// at the rim, so a circle has no edge anywhere — but a rect crops that
-  /// ramp wherever the box happens to be, and the box is square. Filling the
-  /// bounds drew a visible rectangle of warm haze around the fire, which is
-  /// the single most expensive-looking mistake available here.
-  void _paintBloom(Canvas canvas, Offset base, double reach) {
-    final heart = Offset(base.dx, base.dy - reach * 0.30);
-    final radius = reach * 0.95;
-    final bounds = Rect.fromCircle(center: heart, radius: radius);
+  /// Drawn as a circle sized to the seven-stop ramp rather than as a rect
+  /// filling the widget: the stops reach zero exactly at the rim, so a
+  /// circle has no edge anywhere, where a rect would crop the ramp into a
+  /// visible box of warm haze.
+  void _paintBloom(Canvas canvas, Rect box) {
+    final centre = Offset(box.center.dx, box.bottom - box.height * 0.40);
+    final radius = box.height * 1.05;
 
     canvas.drawCircle(
-      heart,
+      centre,
       radius,
       Paint()
         ..shader = TideGradients.bloom(
           color: TideColors.lantern,
-          alpha: 0.09 + 0.13 * intensity,
+          alpha: 0.07 + 0.10 * intensity,
           center: Alignment.center,
           radius: 0.5,
-        ).createShader(bounds),
+        ).createShader(Rect.fromCircle(center: centre, radius: radius)),
     );
   }
 
-  /// The seat: hottest where the fire meets its surface, and the one part
-  /// that holds still while everything above it moves. Without it the
-  /// tongues look like they are floating.
-  void _paintSeat(Canvas canvas, Offset base, double reach, double width) {
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(base.dx, base.dy - reach * 0.08),
-        width: width * 1.25,
-        height: reach * 0.22,
-      ),
+  /// The glow hugging the mark: its own silhouette, blurred in ember and
+  /// dropped a little, so the flame sits *in* its light rather than on top
+  /// of it. It breathes with the fire, faintly.
+  ///
+  /// Traced from the cut body, not the outer outline. Blurring the whole
+  /// teardrop filled the negative space with a brown wash, and a cut-out
+  /// that is not clearly empty stops reading as a second flame.
+  void _paintHalo(Canvas canvas, Path body, Rect box) {
+    final breath = 1 + 0.12 * _flicker(t, 0.9);
+
+    canvas.drawPath(
+      body.shift(Offset(0, box.height * 0.03)),
       Paint()
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, width * 0.20)
-        ..color = Color.lerp(TideColors.lantern, TideColors.bone, 0.28)!
-            .withValues(alpha: 0.20 + 0.10 * intensity),
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, box.width * 0.16)
+        ..color = TideColors.ember.withValues(
+          alpha: ((0.26 + 0.20 * intensity) * breath).clamp(0.0, 1.0),
+        ),
     );
   }
 
-  /// Fire sheds. Staggered so one leaves as another arrives, and each
-  /// completes exactly one flight per cycle, which keeps them inside the
-  /// seamless loop the flicker is already built on.
-  void _paintEmbers(Canvas canvas, Offset base, double reach, double width) {
-    final count = (2 + 3 * intensity).round();
+  /// A lit face on the side the app's one light comes from. Clipped to the
+  /// mark, so it models the surface instead of spilling off it — the single
+  /// detail that stops a gradient fill looking like a flat sticker.
+  ///
+  /// Kept faint. Bone is unsaturated, and at a third opacity it bleached the
+  /// top of the flame to pastel; a fire's hot face is brighter, not paler.
+  void _paintSheen(Canvas canvas, Path body, Rect box) {
+    canvas
+      ..save()
+      ..clipPath(body)
+      ..drawRect(
+        box,
+        Paint()
+          ..shader = TideGradients.bloom(
+            color: TideColors.bone,
+            alpha: 0.14,
+            center: const Alignment(-0.50, -0.20),
+            radius: 0.50,
+          ).createShader(box),
+      )
+      ..restore();
+  }
+
+  /// Fire sheds, a little. Staggered so one leaves as another arrives, and
+  /// each completes exactly one flight per cycle, which keeps them inside
+  /// the seamless loop the flicker is already built on.
+  ///
+  /// Painted in lantern with a whisper of blur, never in [TideColors.flare]:
+  /// a pale yellow at low alpha over dark water mixes to khaki, and the
+  /// embers came out as grey dots.
+  void _paintEmbers(Canvas canvas, Rect box) {
+    final count = (1 + intensity).round();
 
     for (var i = 0; i < count; i++) {
       final phase = i / count;
@@ -297,14 +298,16 @@ class _FlamePainter extends CustomPainter {
 
       canvas.drawCircle(
         Offset(
-          base.dx + width * 0.95 * math.sin((rise * 2 + phase) * math.pi * 2),
-          base.dy - reach * (0.70 + 0.80 * rise),
+          box.left +
+              box.width *
+                  (0.60 + 0.10 * math.sin((rise * 2 + phase) * math.pi * 2)),
+          box.top + box.height * (0.08 - 0.30 * rise),
         ),
-        1.4 * (1 - rise * 0.55),
+        box.width * 0.024 * (1 - rise * 0.5),
         Paint()
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.8)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.6)
           ..color = TideColors.lantern.withValues(
-            alpha: (fade * 0.42 * intensity).clamp(0.0, 1.0),
+            alpha: (fade * 0.85 * intensity).clamp(0.0, 1.0),
           ),
       );
     }

@@ -444,19 +444,15 @@ class _StreakChip extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             Positioned(
-              // Standing on the card's bottom edge in its right-hand third,
-              // and — this is the part that took three tries — very nearly
-              // whole. An 86px flame in the middle of a 158px card stopped
-              // being the card's light and became its subject. Burying it in
-              // the corner instead overcorrected: clipped to a sliver it
-              // read as a rendering artefact rather than as a fire, which is
-              // worse than too big. It needs enough room to show the whole
-              // silhouette — foot, bulge, neck, tip — because that shape is
-              // the only thing separating fire from a smudge of warm light.
-              right: -8,
-              bottom: -16,
-              width: 60,
-              height: 84,
+              // In the right-hand third, below the chevron, and whole. The
+              // flame is a crisp mark now rather than a haze of light, and a
+              // mark cut off by the card's edge reads as a layout accident.
+              // It is also kept small: an emblem the size of the number
+              // stops being the card's light and becomes its subject.
+              right: 0,
+              bottom: -4,
+              width: 46,
+              height: 64,
               child: TideFlame(intensity: _heat),
             ),
             Column(

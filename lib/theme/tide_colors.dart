@@ -74,6 +74,25 @@ abstract final class TideColors {
   /// the same way nothing reaches for [coral] except destruction.
   static const frost = Color(0xFFD3E9F4);
 
+  // --- Fire -------------------------------------------------------------
+
+  /// The two ends of the streak flame's ramp: [lantern] turned a few degrees
+  /// either way round the wheel, never picked fresh.
+  ///
+  /// A flame filled in flat lantern read as a sticker — one amber with no
+  /// heat moving through it. Fire runs from a pale, yellower hot face to a
+  /// deeper orange where it cools, and deriving both ends from the one
+  /// accent keeps the mark lit by the same light as everything else. Only
+  /// the flame reaches for these. The ember stops at orange, well short of
+  /// the red that [coral] reserves for destruction.
+  static final Color flare = HSLColor.fromColor(
+    lantern,
+  ).withHue(44).withSaturation(0.95).withLightness(0.64).toColor();
+
+  static final Color ember = HSLColor.fromColor(
+    lantern,
+  ).withHue(20).withSaturation(0.85).withLightness(0.52).toColor();
+
   // --- Derived ----------------------------------------------------------
 
   /// Hairline separator. Warm, like the ink it divides.

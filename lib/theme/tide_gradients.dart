@@ -8,7 +8,8 @@ import 'tide_colors.dart';
 /// page, card, row, well, pill, button, title text. When every object ramps,
 /// none of them reads as lit; the screen just reads as busy. What survives
 /// here is the page ground, one bloom recipe, the glass the tab bar is made
-/// of, and the accent ramp used *only* inside the tide curve.
+/// of, the accent ramp used *only* inside the tide curve, and the streak
+/// flame's fill.
 ///
 /// Cards are flat. They separate from the page on luminance, which is what
 /// the palette was rebuilt to allow.
@@ -106,6 +107,19 @@ abstract final class TideGradients {
       TideColors.lantern.withValues(alpha: 0),
     ],
     stops: const [0, 0.6],
+  );
+
+  // --- Fire -------------------------------------------------------------
+
+  /// The streak flame's fill: pale and hot on the side the app's one light
+  /// falls on, deepening to ember away from it. Top-left to bottom-right
+  /// like every other ramp, so the mark is lit from the same side as the
+  /// page it sits on.
+  static LinearGradient get flame => LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [TideColors.flare, TideColors.lantern, TideColors.ember],
+    stops: const [0, 0.42, 1],
   );
 
   // --- Hairlines --------------------------------------------------------
