@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
+import 'package:tide/services/auth/auth_service.dart';
 import 'package:tide/services/auth/demo_auth_service.dart';
 import 'package:tide/services/device_flags.dart';
 import 'package:tide/services/tide_store.dart';
@@ -31,7 +32,8 @@ Future<void> reachSignUp(WidgetTester tester) async {
   await settle(tester);
 }
 
-/// Fills the sign-up form, submits it, and waits out the welcome.
+/// Fills the sign-up form, submits it, enters the emailed code and waits
+/// out the welcome.
 ///
 /// Assumes the form is already in sign-up mode — see [reachSignUp].
 Future<void> signUp(
@@ -47,6 +49,7 @@ Future<void> signUp(
   await tester.pump();
 
   await pressAuthButton(tester, 'Create account');
+  await enterEmailCode(tester);
   await crossWelcome(tester);
 }
 
@@ -265,17 +268,25 @@ void main() {
   });
 
   group('the store behind the form', () {
-    test('creating an account clears the demo history and arms the tour', () async {
-      final store = TideStore();
+    test('a new account waits on its code, then opens empty with a tour', () async {
+      final flags = DeviceFlags.memory();
+      final store = TideStore(flags: flags);
       expect(store.habits, isNotEmpty);
-      expect(store.tourPending, isFalse);
 
-      await store.createAccount(
+      final outcome = await store.createAccount(
         name: '  Sam Reyes  ',
         email: 'sam@example.com',
         password: 'seawater88',
       );
 
+      expect(outcome, SignUpOutcome.needsCode);
+      expect(store.signedIn, isFalse, reason: 'nothing opens without the code');
+      expect(store.pendingVerificationEmail, 'sam@example.com');
+      expect(flags.pendingVerification, 'sam@example.com');
+
+      await store.verifyEmailCode(DemoAuthService.demoCode);
+
+      expect(store.pendingVerificationEmail, isNull);
       expect(store.habits, isEmpty);
       expect(store.today.scheduled, 0);
       expect(store.unlockedMilestoneCount, 0);
@@ -287,6 +298,28 @@ void main() {
       expect(store.account!.firstName, 'Sam', reason: 'what the welcome says');
     });
 
+    test('a wrong code is refused and the sign-up stays pending', () async {
+      final store = TideStore();
+      await store.createAccount(
+        name: 'Sam',
+        email: 'sam@example.com',
+        password: 'seawater88',
+      );
+
+      await expectLater(
+        store.verifyEmailCode('000000'),
+        throwsA(
+          isA<AuthFailure>().having(
+            (failure) => failure.problem,
+            'problem',
+            AuthProblem.invalidCode,
+          ),
+        ),
+      );
+      expect(store.signedIn, isFalse);
+      expect(store.pendingVerificationEmail, 'sam@example.com');
+    });
+
     test('an account with no name is called by its address', () async {
       final store = TideStore();
       await store.createAccount(
@@ -294,6 +327,8 @@ void main() {
         email: 'a@b.co',
         password: 'seawater88',
       );
+      await store.verifyEmailCode(DemoAuthService.demoCode);
+
       expect(store.accountName, 'a');
       expect(store.account!.firstName, isNull);
     });
@@ -319,6 +354,7 @@ void main() {
         email: 'sam@example.com',
         password: 'seawater88',
       );
+      await store.verifyEmailCode(DemoAuthService.demoCode);
 
       var notifications = 0;
       store.addListener(() => notifications++);

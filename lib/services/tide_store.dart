@@ -26,8 +26,9 @@ import 'tide_scope.dart';
 ///
 /// The account does outlive it. Who is signed in comes from [auth] and
 /// survives a restart until the person logs out; whether this device has
-/// seen onboarding, and whether an account has had its tour, come from
-/// [flags]. Those are the only things Tide keeps.
+/// seen onboarding, whether an account has had its tour, and whether a
+/// sign-up is waiting on its emailed code come from [flags]. Those are the
+/// only things Tide keeps.
 class TideStore extends ChangeNotifier {
   TideStore({AuthService? auth, DeviceFlags? flags})
     : auth = auth ?? DemoAuthService(),
@@ -97,6 +98,11 @@ class TideStore extends ChangeNotifier {
 
   /// Onboarding has been read or skipped on this device, ever.
   bool get onboardingComplete => flags.onboardingSeen;
+
+  /// The address of a sign-up waiting on its emailed code, if there is one.
+  /// Kept on the device, so closing the app between the code being sent and
+  /// being typed reopens on the code screen.
+  String? get pendingVerificationEmail => flags.pendingVerification;
 
   /// Which half of the form the in-flight request came from. Consulted when
   /// the profile cannot say whether an account is new, and cleared once the
@@ -455,8 +461,9 @@ class TideStore extends ChangeNotifier {
         request: () => auth.logIn(email: email, password: password),
       );
 
-  /// Resolves to [SignUpOutcome.confirmEmail] when the account is waiting on
-  /// its confirmation link; nothing has signed in then. Throws [AuthFailure].
+  /// Resolves to [SignUpOutcome.needsCode] when the account is waiting on its
+  /// emailed code — nothing has signed in then, and the address is kept as
+  /// [pendingVerificationEmail]. Throws [AuthFailure].
   Future<SignUpOutcome> createAccount({
     required String name,
     required String email,
@@ -469,14 +476,59 @@ class TideStore extends ChangeNotifier {
         email: email,
         password: password,
       );
-      final account = auth.currentAccount;
-      if (outcome == SignUpOutcome.signedIn && account != null) {
-        await _adopt(account);
+      switch (outcome) {
+        case SignUpOutcome.needsCode:
+          flags.setPendingVerification(email.trim());
+          notifyListeners();
+        case SignUpOutcome.signedIn:
+          final account = auth.currentAccount;
+          if (account != null) await _adopt(account);
       }
       return outcome;
     } finally {
       _creating = null;
     }
+  }
+
+  /// Confirms the pending sign-up with its emailed code, which also signs
+  /// the account in. Throws [AuthFailure]; the sign-up stays pending.
+  Future<void> verifyEmailCode(String code) async {
+    final email = pendingVerificationEmail;
+    if (email == null) {
+      throw const AuthFailure(
+        AuthProblem.unknown,
+        'No sign-up is waiting on a code.',
+      );
+    }
+    await _signingIn(
+      creating: true,
+      request: () => auth.verifyEmailCode(email: email, code: code),
+    );
+  }
+
+  /// Emails the pending sign-up a fresh code. Throws [AuthFailure].
+  Future<void> resendEmailCode() async {
+    final email = pendingVerificationEmail;
+    if (email == null) {
+      throw const AuthFailure(
+        AuthProblem.unknown,
+        'No sign-up is waiting on a code.',
+      );
+    }
+    await auth.resendEmailCode(email: email);
+  }
+
+  /// Log in found [email] unconfirmed: its sign-up is picked back up.
+  void beginVerification(String email) {
+    flags.setPendingVerification(email.trim());
+    notifyListeners();
+  }
+
+  /// "Use a different email" — the pending sign-up is let go.
+  void abandonVerification() {
+    if (flags.pendingVerification == null) return;
+    flags.setPendingVerification(null);
+    notifyListeners();
   }
 
   /// Throws [AuthFailure].
@@ -529,7 +581,9 @@ class TideStore extends ChangeNotifier {
     if (account == null) return;
     _account = account;
     _session.value = account.id;
-    flags.markOnboardingSeen();
+    flags
+      ..markOnboardingSeen()
+      ..setPendingVerification(null);
     unawaited(_armTourIfOwed(account));
   }
 
@@ -574,8 +628,8 @@ class TideStore extends ChangeNotifier {
 
     // The profile is the authority on whether an account is new. Without
     // it, the button that was pressed is the best remaining evidence — and
-    // an account that arrived on its own, from an email link, is treated as
-    // returning rather than having its history cleared on a guess.
+    // an account that arrived on its own is treated as returning rather
+    // than having its history cleared on a guess.
     final seenHere = flags.tourDone(next.id);
     final isNew = !(toured ?? !(creating ?? false)) && !seenHere;
     if (seenHere && toured == false) unawaited(_saveTour(next));
@@ -583,7 +637,9 @@ class TideStore extends ChangeNotifier {
     _account = next;
     _welcomingNew = isNew;
     _tourPending = isNew;
-    flags.markOnboardingSeen();
+    flags
+      ..markOnboardingSeen()
+      ..setPendingVerification(null);
 
     // A new account opens genuinely empty — the one moment an empty app is
     // the honest thing to show, and the tour is what keeps it from reading

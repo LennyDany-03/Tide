@@ -88,11 +88,18 @@ enum AuthProblem {
   /// wrong — the account lookup is unavailable.
   badCredentials,
 
-  /// The account exists but its confirmation link has not been opened.
+  /// The account exists but its emailed code has not been entered yet.
   emailNotConfirmed,
 
+  /// The emailed code is wrong, or has expired. Supabase does not say which.
+  invalidCode,
+
   weakPassword,
+
+  /// Too many requests. When the service says how long to wait, the number
+  /// of seconds is the failure's detail.
   rateLimited,
+
   offline,
 
   /// The person closed the Google picker. Not worth a sentence.
@@ -108,7 +115,7 @@ class AuthFailure implements Exception {
   final AuthProblem problem;
 
   /// Anything more specific the service had to add: the provider's own
-  /// wording, or the Google address that was picked.
+  /// wording, the Google address that was picked, or seconds to wait.
   final String? detail;
 
   @override
@@ -117,11 +124,12 @@ class AuthFailure implements Exception {
 }
 
 enum SignUpOutcome {
-  /// The account is open and signed in.
+  /// The account is open and signed in — a project with email confirmation
+  /// turned off.
   signedIn,
 
-  /// The account exists but waits on the link in its confirmation email.
-  confirmEmail,
+  /// The account exists, and waits on the six-digit code emailed to it.
+  needsCode,
 }
 
 /// The seam between Tide and whoever actually holds the accounts.
@@ -129,15 +137,16 @@ enum SignUpOutcome {
 /// Two implementations: `SupabaseAuthService` for a real build, and
 /// `DemoAuthService` for tests and for a build with no project configured.
 /// Both keep the same rules — log in only reaches an account that exists,
-/// create only makes one that does not — so the auth screen has one set of
-/// outcomes to handle whichever of them is behind it.
+/// create only makes one that does not, and a new email account opens only
+/// once its code is in — so the screens have one set of outcomes to handle
+/// whichever of them is behind it.
 abstract class AuthService {
   /// The account a restored session belongs to, available synchronously at
   /// launch so the first screen can be chosen without a flash.
   TideAccount? get currentAccount;
 
-  /// Every sign-in and sign-out, including the ones no screen started: an
-  /// email link opening the app, a session that could not be refreshed.
+  /// Every sign-in and sign-out, including the ones no screen started — a
+  /// session that could not be refreshed, a sign-out on another device.
   Stream<TideAccount?> get accountChanges;
 
   /// True when accounts do not outlive the process.
@@ -154,6 +163,17 @@ abstract class AuthService {
     required String email,
     required String password,
   });
+
+  /// Confirms a new account with the code emailed to it, which also signs it
+  /// in. Throws [AuthFailure].
+  Future<TideAccount> verifyEmailCode({
+    required String email,
+    required String code,
+  });
+
+  /// Emails a fresh code to an account that has not been confirmed. Throws
+  /// [AuthFailure].
+  Future<void> resendEmailCode({required String email});
 
   /// [creating] is which half of the form the button was pressed from, and
   /// decides the rule: create refuses an address that already has an

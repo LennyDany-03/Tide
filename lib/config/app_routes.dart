@@ -14,6 +14,7 @@ import '../screens/settings/settings_screen.dart';
 import '../screens/shell/tide_shell.dart';
 import '../screens/splash/splash_screen.dart';
 import '../screens/upgrade/upgrade_sheet.dart';
+import '../screens/verify_email/verify_email_screen.dart';
 import '../screens/welcome/welcome_screen.dart';
 import '../services/tide_store.dart';
 import '../theme/tide_motion.dart';
@@ -24,6 +25,7 @@ abstract final class Routes {
   static const splash = '/splash';
   static const onboarding = '/onboarding';
   static const auth = '/auth';
+  static const verifyEmail = '/verify';
   static const welcome = '/welcome';
   static const today = '/today';
   static const history = '/history';
@@ -45,11 +47,14 @@ abstract final class AppRoutes {
 
   static GoRouter build({required TideStore store, bool showSplash = false}) {
     // Chosen from what is already on the device, so a launch never shows the
-    // wrong screen first: a restored session opens Today, a device that has
-    // been through onboarding opens the account form, and only a first
-    // launch explains the app.
+    // wrong screen first: a restored session opens Today, a sign-up waiting
+    // on its code opens the code screen, a device that has been through
+    // onboarding opens the account form, and only a first launch explains
+    // the app.
     final firstScreen = store.signedIn
         ? Routes.today
+        : store.pendingVerificationEmail != null
+        ? Routes.verifyEmail
         : store.onboardingComplete
         ? Routes.auth
         : Routes.onboarding;
@@ -91,38 +96,40 @@ abstract final class AppRoutes {
         // Sign-up and log-in. A `go` rather than a push in both directions:
         // onboarding and the form are two halves of one entry sequence, and
         // leaving either on a stack means a back gesture inside the app can
-        // land on the account screen of an account you already have.
+        // land on the account screen of an account you already have. The
+        // code screen sends people back here with what they had typed.
         GoRoute(
           path: Routes.auth,
-          pageBuilder: (context, state) => CustomTransitionPage<void>(
-            key: state.pageKey,
-            transitionDuration: TideMotion.sheetIn,
-            reverseTransitionDuration: TideMotion.sheetOut,
-            // Rises and settles, catching the ring the closing onboarding
-            // step is shrinking toward. A plain fade here left the mark
-            // materialising at the top of a still page.
-            transitionsBuilder: (context, animation, secondary, child) {
-              final eased = CurvedAnimation(
-                parent: animation,
-                curve: TideMotion.sheetCurve,
-              );
-              return FadeTransition(
-                opacity: eased,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 0.06),
-                    end: Offset.zero,
-                  ).animate(eased),
-                  child: child,
-                ),
-              );
-            },
-            child: const AuthScreen(),
-          ),
+          pageBuilder: (context, state) {
+            final draft = state.extra;
+            return _rise(
+              state,
+              AuthScreen(draft: draft is AuthDraft ? draft : null),
+            );
+          },
+        ),
+
+        // The emailed code: the second half of creating an account. It
+        // rises the same way the form did, because it is the same errand
+        // continuing rather than somewhere new.
+        GoRoute(
+          path: Routes.verifyEmail,
+          pageBuilder: (context, state) {
+            final delivery = state.extra;
+            return _rise(
+              state,
+              VerifyEmailScreen(
+                delivery: delivery is CodeDelivery
+                    ? delivery
+                    : CodeDelivery.unknown,
+              ),
+            );
+          },
         ),
 
         // Between the account form and Today. Reached only through the
-        // guard below, never by a screen asking for it.
+        // guard below or the code screen's tick, never by a screen asking
+        // for it on a whim.
         GoRoute(
           path: Routes.welcome,
           pageBuilder: (context, state) => _fade(state, const WelcomeScreen()),
@@ -242,14 +249,23 @@ abstract final class AppRoutes {
   /// Who may be where.
   ///
   /// One rule set instead of a `go` at the end of every account call,
-  /// because accounts arrive from places no screen is waiting on: the email
-  /// confirmation link opening the app, a restored session, a refresh token
-  /// revoked while the app was closed. Wherever the change comes from, the
-  /// router hears it through [TideStore.sessionChanges] and puts the person
-  /// on the right side of the door.
+  /// because accounts arrive from places no screen is waiting on: a restored
+  /// session, a refresh token revoked while the app was closed, a sign-out on
+  /// another device. Wherever the change comes from, the router hears it
+  /// through [TideStore.sessionChanges] and puts the person on the right
+  /// side of the door.
   static String? _guard(TideStore store, String path) {
     // The splash decides for itself when it is done.
     if (path == Routes.splash) return null;
+
+    // The code screen. Signed in *here* means the code was just accepted:
+    // the screen is playing its tick and hands over to the welcome itself
+    // when that is done. Bouncing it the instant the account arrived would
+    // cut the confirmation off before anyone saw it.
+    if (path == Routes.verifyEmail) {
+      if (store.signedIn) return null;
+      return store.pendingVerificationEmail == null ? Routes.auth : null;
+    }
 
     final atDoor = path == Routes.onboarding || path == Routes.auth;
     if (store.signedIn) return atDoor ? Routes.welcome : null;
@@ -278,6 +294,35 @@ abstract final class AppRoutes {
             ),
             child: child,
           ),
+      child: child,
+    );
+  }
+
+  /// Rises and settles. The account form uses it to catch the ring the
+  /// closing onboarding step is shrinking toward — a plain fade there left
+  /// the mark materialising at the top of a still page — and the code
+  /// screen uses it because it continues the form.
+  static CustomTransitionPage<void> _rise(GoRouterState state, Widget child) {
+    return CustomTransitionPage<void>(
+      key: state.pageKey,
+      transitionDuration: TideMotion.sheetIn,
+      reverseTransitionDuration: TideMotion.sheetOut,
+      transitionsBuilder: (context, animation, secondary, child) {
+        final eased = CurvedAnimation(
+          parent: animation,
+          curve: TideMotion.sheetCurve,
+        );
+        return FadeTransition(
+          opacity: eased,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.06),
+              end: Offset.zero,
+            ).animate(eased),
+            child: child,
+          ),
+        );
+      },
       child: child,
     );
   }

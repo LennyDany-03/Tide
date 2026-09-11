@@ -43,10 +43,5 @@ abstract final class SupabaseConfig {
     defaultValue: '',
   );
 
-  /// Where the email confirmation link hands back to the app. Listed under
-  /// Authentication → URL Configuration → Redirect URLs in Supabase, and
-  /// matched by the intent filter in `android/app/src/main/AndroidManifest.xml`.
-  static const String authRedirect = 'com.example.tide://login-callback';
-
   static bool get isConfigured => url.isNotEmpty && publishableKey.isNotEmpty;
 }

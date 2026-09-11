@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/app_constants.dart';
 import '../../config/app_routes.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/tide_scope.dart';
@@ -14,17 +15,29 @@ import '../../widgets/tide_button.dart';
 import '../../widgets/tide_field.dart';
 import '../../widgets/tide_mark.dart';
 import '../../widgets/tide_surface.dart';
+import '../verify_email/verify_email_screen.dart';
 import 'widgets/google_mark.dart';
 import 'widgets/password_strength.dart';
 
+/// What the form opens with when somebody is sent *back* to it rather than
+/// arriving fresh: the code screen's "use a different email" returns here
+/// with the address still in the box and the sign-up half showing.
+@immutable
+class AuthDraft {
+  const AuthDraft({this.email = '', this.signingUp = false});
+
+  final String email;
+  final bool signingUp;
+}
+
 /// The gate between the explanation and the app.
 ///
-/// It talks to a real account service now — `TideStore.auth`, which is
-/// Supabase in a build with a project configured and memory in tests. It
-/// never navigates on success. Signing in changes the store's session and
-/// the router's guard moves the person on to the welcome, so an account
-/// confirmed from an email link lands in exactly the same place as one
-/// typed in here.
+/// It talks to a real account service — `TideStore.auth`, which is Supabase
+/// in a build with a project configured and memory in tests. Logging in does
+/// not navigate on success: it changes the store's session and the router's
+/// guard moves the person on to the welcome. Creating an account does
+/// navigate, to the code screen, because nothing about the session has
+/// changed yet — the account opens only once its emailed code is in.
 ///
 /// **Log in only opens accounts that exist; create only makes ones that do
 /// not.** Each half says so in words and offers the other half, rather than
@@ -56,7 +69,9 @@ import 'widgets/password_strength.dart';
 /// arrives already closed rather than redrawing itself, because the whole
 /// claim of the hand-off is that it is the same object.
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  const AuthScreen({super.key, this.draft});
+
+  final AuthDraft? draft;
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -82,7 +97,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final Map<String, String> _errors = {};
 
   /// What the form has to say that no single field owns: the offer to switch
-  /// halves, a confirmation email on its way, the network being down.
+  /// halves, an account still waiting on its code, the network being down.
   _Notice? _notice;
 
   /// Bumped per submit so the same complaint shakes again.
@@ -94,6 +109,16 @@ class _AuthScreenState extends State<AuthScreen> {
   /// sign-ins racing each other would land two routes on the shell.
   bool get _busy =>
       _phase != TideButtonPhase.idle || _googlePhase != TideButtonPhase.idle;
+
+  @override
+  void initState() {
+    super.initState();
+    final draft = widget.draft;
+    if (draft != null) {
+      _email.text = draft.email;
+      if (draft.signingUp) _mode = _Mode.signUp;
+    }
+  }
 
   @override
   void dispose() {
@@ -177,21 +202,11 @@ class _AuthScreenState extends State<AuthScreen> {
           email: email,
           password: _password.text,
         );
-        if (outcome == SignUpOutcome.confirmEmail) {
+        if (outcome == SignUpOutcome.needsCode) {
           if (!mounted) return;
-          setState(() {
-            _phase = TideButtonPhase.idle;
-            // Back to log in with the address and password kept: once the
-            // link is opened, that is the form they need, filled in.
-            _mode = _Mode.logIn;
-            _notice = _Notice(
-              tone: _Tone.info,
-              message:
-                  'Check $email for a link to confirm it. Open it on this '
-                  'phone and Tide signs you in — or confirm anywhere, then '
-                  'log in here.',
-            );
-          });
+          // The button stays busy on its way out: what happens next is the
+          // code screen, not this form becoming usable again.
+          context.go(Routes.verifyEmail, extra: CodeDelivery.justSent);
           return;
         }
       } else {
@@ -208,6 +223,14 @@ class _AuthScreenState extends State<AuthScreen> {
         _explain(failure);
       });
     }
+  }
+
+  /// Log in found an account that never entered its code. It is picked up
+  /// where it was left: a fresh code goes out as the code screen opens.
+  void _enterCode() {
+    if (_busy) return;
+    TideScope.read(context).beginVerification(_email.text.trim());
+    context.go(Routes.verifyEmail, extra: CodeDelivery.sendNow);
   }
 
   /// Continue with Google, under the rule of whichever half is showing.
@@ -278,8 +301,14 @@ class _AuthScreenState extends State<AuthScreen> {
       case AuthProblem.emailNotConfirmed:
         _notice = _Notice(
           tone: _Tone.info,
-          message: 'Confirm $who first — the link is in your inbox.',
+          message:
+              '$who still needs its ${AppConstants.emailCodeLength}-digit '
+              'code to finish signing up.',
+          action: 'Enter code',
+          onAction: _enterCode,
         );
+      case AuthProblem.invalidCode:
+        _notice = const _Notice(message: 'That code did not work.');
       case AuthProblem.weakPassword:
         _errors['password'] = 'Choose a stronger password';
         final detail = failure.detail;
@@ -382,7 +411,8 @@ class _AuthScreenState extends State<AuthScreen> {
           'the app closes.';
     }
     return _signingUp
-        ? 'We email a link to confirm the address before the account opens.'
+        ? 'We email a ${AppConstants.emailCodeLength}-digit code to confirm '
+              'the address.'
         : 'You stay signed in on this device until you log out.';
   }
 

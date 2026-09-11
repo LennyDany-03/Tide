@@ -111,6 +111,13 @@ void main() {
       await fill(tester, ['Sam Reyes', 'sam@example.com', 'seawater88']);
       await pressAuthButton(tester, 'Create account');
 
+      expect(
+        find.text('Check your email'),
+        findsOneWidget,
+        reason: 'nothing opens until the code is in',
+      );
+      await enterEmailCode(tester);
+
       expect(find.text('Welcome,'), findsOneWidget);
       expect(find.text('Sam'), findsOneWidget);
 

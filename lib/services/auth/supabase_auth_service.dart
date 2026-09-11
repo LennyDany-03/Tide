@@ -7,6 +7,13 @@ import 'auth_service.dart';
 
 /// Accounts held by Supabase Auth, with Google through the native picker.
 ///
+/// **Why a code rather than a link.** A confirmation link only signs in the
+/// device that opens it — PKCE keeps half of the exchange inside the app —
+/// so a link tapped in Gmail on a laptop confirmed the address and signed
+/// nobody in. A six-digit code typed into the app works wherever the email
+/// was read, and nobody leaves the app to use it. The email that carries it
+/// is `supabase/email/confirm_signup.html`.
+///
 /// **Why there is an account lookup.** Supabase answers a wrong password and
 /// an address it has never seen with the same `invalid_credentials` error —
 /// deliberately, so its login endpoint cannot be used to find out who has an
@@ -15,7 +22,7 @@ import 'auth_service.dart';
 /// `account_status` function in `supabase/auth_setup.sql`. That is a real
 /// trade: anyone holding the publishable key can ask whether an address is
 /// registered. It is only asked after a refused login or before a sign-up,
-/// and it never answers more than none / password / google.
+/// and it never answers more than none / unconfirmed / password / google.
 ///
 /// If the function has not been installed the lookup returns null, and
 /// every path falls back to Supabase's own vaguer answers instead of failing.
@@ -70,7 +77,8 @@ class SupabaseAuthService implements AuthService {
       throw AuthFailure(switch (await _statusOf(email)) {
         _AccountStatus.none => AuthProblem.noAccount,
         _AccountStatus.google => AuthProblem.googleAccount,
-        _AccountStatus.password => AuthProblem.wrongPassword,
+        _AccountStatus.password ||
+        _AccountStatus.unconfirmed => AuthProblem.wrongPassword,
         null => AuthProblem.badCredentials,
       });
     } on AuthFailure {
@@ -93,6 +101,8 @@ class SupabaseAuthService implements AuthService {
     if (status == _AccountStatus.google) {
       throw const AuthFailure(AuthProblem.googleAccount);
     }
+    // An address that signed up and never entered its code falls through:
+    // signing up again is how Supabase sends it a fresh code.
 
     try {
       final response = await _auth.signUp(
@@ -100,21 +110,52 @@ class SupabaseAuthService implements AuthService {
         password: password,
         // Picked up by the profile trigger, and by the app as the name.
         data: {'full_name': name.trim()},
-        emailRedirectTo: _redirect,
       );
       if (response.session != null) return SignUpOutcome.signedIn;
       // With "Confirm email" on, Supabase answers an address that is already
-      // registered with an identity-less user rather than an error, so that
+      // confirmed with an identity-less user rather than an error, so that
       // sign-up cannot be used to probe for accounts either. The lookup above
       // normally catches this first; this is for when it is not installed.
       if (response.user?.identities?.isEmpty ?? false) {
         throw const AuthFailure(AuthProblem.accountExists);
       }
-      return SignUpOutcome.confirmEmail;
+      return SignUpOutcome.needsCode;
     } on AuthException catch (error) {
       throw _translate(error);
     } on AuthFailure {
       rethrow;
+    } catch (error) {
+      throw _unexpected(error);
+    }
+  }
+
+  @override
+  Future<TideAccount> verifyEmailCode({
+    required String email,
+    required String code,
+  }) async {
+    try {
+      final response = await _auth.verifyOTP(
+        type: OtpType.signup,
+        email: email.trim(),
+        token: code,
+      );
+      return _require(response.user);
+    } on AuthException catch (error) {
+      throw _translate(error);
+    } on AuthFailure {
+      rethrow;
+    } catch (error) {
+      throw _unexpected(error);
+    }
+  }
+
+  @override
+  Future<void> resendEmailCode({required String email}) async {
+    try {
+      await _auth.resend(type: OtpType.signup, email: email.trim());
+    } on AuthException catch (error) {
+      throw _translate(error);
     } catch (error) {
       throw _unexpected(error);
     }
@@ -126,8 +167,7 @@ class SupabaseAuthService implements AuthService {
       throw AuthFailure(
         AuthProblem.googleUnavailable,
         SupabaseConfig.googleWebClientId.isEmpty
-            ? 'Google sign-in needs the web client ID in '
-                  'lib/config/supabase_config.dart.'
+            ? 'Google sign-in needs GOOGLE_WEB_CLIENT_ID in .env.'
             : 'Google sign-in is available in the Android app.',
       );
     }
@@ -136,14 +176,17 @@ class SupabaseAuthService implements AuthService {
       await _prepareGoogle();
       final picked = await GoogleSignIn.instance.authenticate();
 
+      // A sign-up that never entered its code is not an account as far as
+      // Google is concerned: it was never confirmed, and Google has just
+      // verified the address.
       final status = await _statusOf(picked.email);
-      if (!creating && status == _AccountStatus.none) {
+      final exists =
+          status == _AccountStatus.password || status == _AccountStatus.google;
+      if (!creating && status != null && !exists) {
         await _forgetGoogle();
         throw AuthFailure(AuthProblem.noAccount, picked.email);
       }
-      if (creating &&
-          (status == _AccountStatus.password ||
-              status == _AccountStatus.google)) {
+      if (creating && exists) {
         await _forgetGoogle();
         throw AuthFailure(AuthProblem.accountExists, picked.email);
       }
@@ -157,9 +200,9 @@ class SupabaseAuthService implements AuthService {
         );
       }
 
-      // An address that already has a password account is linked to it here
-      // by Supabase, since Google's addresses arrive verified — which is how
-      // one account ends up with both ways in.
+      // An address that already has a confirmed password account is linked
+      // to it here by Supabase, since Google's addresses arrive verified —
+      // which is how one account ends up with both ways in.
       final response = await _auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
@@ -249,6 +292,7 @@ class SupabaseAuthService implements AuthService {
       );
       return switch (result) {
         'none' => _AccountStatus.none,
+        'unconfirmed' => _AccountStatus.unconfirmed,
         'password' => _AccountStatus.password,
         'google' => _AccountStatus.google,
         _ => null,
@@ -257,18 +301,6 @@ class SupabaseAuthService implements AuthService {
       debugPrint('account_status lookup unavailable: $error');
       return null;
     }
-  }
-
-  /// Only a phone can be opened by a link. Anywhere else the link still
-  /// confirms the address — the redirect afterwards just lands on the
-  /// project's Site URL — and the person logs in by hand.
-  static String? get _redirect {
-    if (kIsWeb) return null;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.android ||
-      TargetPlatform.iOS => SupabaseConfig.authRedirect,
-      _ => null,
-    };
   }
 
   static TideAccount? _toAccount(User? user) {
@@ -322,18 +354,27 @@ class SupabaseAuthService implements AuthService {
       error.code == 'invalid_credentials' ||
       error.message == 'Invalid login credentials';
 
+  static final RegExp _waitSeconds = RegExp(r'after (\d+) seconds?');
+
   static AuthFailure _translate(AuthException error) {
     if (error is AuthRetryableFetchException) {
       return const AuthFailure(AuthProblem.offline);
     }
+    final message = error.message;
     return switch (error.code) {
       'email_not_confirmed' => const AuthFailure(AuthProblem.emailNotConfirmed),
-      'weak_password' => AuthFailure(AuthProblem.weakPassword, error.message),
+      // Supabase uses the one code for a wrong token and an expired one.
+      'otp_expired' => const AuthFailure(AuthProblem.invalidCode),
+      'weak_password' => AuthFailure(AuthProblem.weakPassword, message),
       'user_already_exists' ||
       'email_exists' => const AuthFailure(AuthProblem.accountExists),
-      'over_email_send_rate_limit' ||
-      'over_request_rate_limit' => const AuthFailure(AuthProblem.rateLimited),
-      _ => AuthFailure(AuthProblem.unknown, error.message),
+      'over_email_send_rate_limit' || 'over_request_rate_limit' => AuthFailure(
+        AuthProblem.rateLimited,
+        _waitSeconds.firstMatch(message)?.group(1),
+      ),
+      _ when message.contains('Token has expired or is invalid') =>
+        const AuthFailure(AuthProblem.invalidCode),
+      _ => AuthFailure(AuthProblem.unknown, message),
     };
   }
 
@@ -348,4 +389,4 @@ class SupabaseAuthService implements AuthService {
   }
 }
 
-enum _AccountStatus { none, password, google }
+enum _AccountStatus { none, unconfirmed, password, google }

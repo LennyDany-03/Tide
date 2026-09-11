@@ -1,4 +1,6 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tide/services/auth/demo_auth_service.dart';
 import 'package:tide/widgets/tide_button.dart';
 
 /// Fixed pumps throughout rather than `pumpAndSettle`: onboarding runs a
@@ -18,8 +20,8 @@ Future<void> settle(WidgetTester tester, [int ms = 700]) async {
 }
 
 /// Pumps in small steps, for sequences that chain an animation into a timer
-/// into a route change — the welcome — where one long jump would land on
-/// the first link and leave the rest unstarted.
+/// into a route change — the welcome, the code screen's tick — where one
+/// long jump would land on the first link and leave the rest unstarted.
 Future<void> pumpFor(WidgetTester tester, Duration total) async {
   const step = Duration(milliseconds: 100);
   for (var elapsed = Duration.zero; elapsed < total; elapsed += step) {
@@ -36,6 +38,16 @@ Future<void> pressAuthButton(WidgetTester tester, String label) async {
   await settle(tester, 200);
   await tester.tap(target);
   await settle(tester);
+}
+
+/// Types the emailed code on the code screen and waits out the tick, which
+/// lands on the welcome. The code field is the only text field there.
+Future<void> enterEmailCode(
+  WidgetTester tester, [
+  String code = DemoAuthService.demoCode,
+]) async {
+  await tester.enterText(find.byType(TextField), code);
+  await pumpFor(tester, const Duration(milliseconds: 2400));
 }
 
 /// Waits out the welcome — its entrance, its hold and the fade to Today —

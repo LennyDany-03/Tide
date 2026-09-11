@@ -11,6 +11,7 @@
 --   4. auth.users triggers     create/sync a profile on sign-up and on change
 --   5. account_status(email)   lets the sign-in screen say "no account, create
 --                              one" instead of "invalid credentials"
+--   6. email-assets bucket     public images for the confirmation email
 -- =============================================================================
 
 
@@ -134,9 +135,10 @@ on conflict (id) do nothing;
 -- wrong password and for an address it has never seen. Tide wants to tell
 -- those apart, so this answers exactly one question about an address:
 --
---   'none'      no account
---   'password'  an account that can sign in with a password
---   'google'    an account with no password (signed up with Google)
+--   'none'         no account
+--   'unconfirmed'  signed up with a password, but never entered the emailed code
+--   'password'     a confirmed account that signs in with a password
+--   'google'       an account with no password (signed up with Google)
 --
 -- Trade-off, stated plainly: anyone with the publishable key can ask whether
 -- an address is registered. Nothing else is ever returned — no id, no name, no
@@ -151,14 +153,15 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_password text;
+  v_password  text;
+  v_confirmed timestamptz;
 begin
   if p_email is null or char_length(p_email) > 320 then
     return 'none';
   end if;
 
-  select u.encrypted_password
-    into v_password
+  select u.encrypted_password, u.email_confirmed_at
+    into v_password, v_confirmed
     from auth.users u
    where u.email = lower(btrim(p_email))
      and u.deleted_at is null
@@ -169,6 +172,9 @@ begin
   end if;
 
   if coalesce(v_password, '') <> '' then
+    if v_confirmed is null then
+      return 'unconfirmed';
+    end if;
     return 'password';
   end if;
 
@@ -186,3 +192,17 @@ grant execute on function public.account_status(text) to anon, authenticated;
 
 revoke all on function public.handle_auth_user() from public, anon, authenticated;
 revoke all on function public.touch_updated_at() from public, anon, authenticated;
+
+
+-- 6. Email assets -----------------------------------------------------------------------
+-- A public bucket for the images the confirmation email loads (the logo).
+-- Public means anyone can *read* a file by its URL, which an email needs.
+-- Nobody can upload: there is no insert policy, so only the dashboard can add
+-- files. PNG only, 1 MB cap.
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('email-assets', 'email-assets', true, 1048576, array['image/png'])
+on conflict (id) do update
+  set public             = true,
+      file_size_limit    = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;

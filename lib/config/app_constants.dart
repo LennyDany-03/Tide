@@ -14,6 +14,20 @@ abstract final class AppConstants {
   /// Free-plan history window, quoted on the paywall.
   static const int freeHistoryDays = 30;
 
+  /// Digits in the code emailed to confirm a new account. Must match
+  /// Supabase → Sign In / Providers → Email → Email OTP Length.
+  static const int emailCodeLength = 6;
+
+  /// How long that code works, quoted on the code screen and in
+  /// `supabase/email/confirm_signup.html`. Must match Email OTP Expiration
+  /// (600 seconds).
+  static const int emailCodeLifetimeMinutes = 10;
+
+  /// Seconds before another code may be requested. Supabase refuses a second
+  /// email to the same address inside about a minute anyway; waiting it out
+  /// here means Resend never offers something that is about to fail.
+  static const int emailCodeResendSeconds = 60;
+
   /// Default freeze allowance on a new habit.
   static const int defaultFreezeAllowance = 2;
   static const int maxFreezeAllowance = 7;

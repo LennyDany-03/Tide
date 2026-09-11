@@ -6,9 +6,10 @@ import 'auth_service.dart';
 /// project configured.
 ///
 /// It keeps the real service's rules rather than waving everything through,
-/// so the paths the auth screen takes — no account, account exists, wrong
-/// password — can be exercised without a network. It knows one account from
-/// the start, the owner of the demo history, so log in has somewhere to go.
+/// so the paths the screens take — no account, account exists, wrong
+/// password, an account still waiting on its code — can be exercised without
+/// a network. It knows one account from the start, the owner of the demo
+/// history, so log in has somewhere to go.
 class DemoAuthService implements AuthService {
   DemoAuthService({bool signedIn = false}) {
     if (signedIn) _current = _accounts[demoEmail]!.account;
@@ -16,6 +17,10 @@ class DemoAuthService implements AuthService {
 
   static const String demoEmail = 'jules@tide.app';
   static const String demoPassword = 'tidewater';
+
+  /// The only code this service accepts. There is no inbox to send a real
+  /// one to, so every sign-up's code is this.
+  static const String demoCode = '123456';
 
   final Map<String, _DemoAccount> _accounts = {
     demoEmail: _DemoAccount(
@@ -26,6 +31,7 @@ class DemoAuthService implements AuthService {
         providers: {'email'},
       ),
       password: demoPassword,
+      confirmed: true,
       tourCompleted: true,
     ),
   };
@@ -57,6 +63,9 @@ class DemoAuthService implements AuthService {
     if (entry.password != password) {
       throw const AuthFailure(AuthProblem.wrongPassword);
     }
+    if (!entry.confirmed) {
+      throw const AuthFailure(AuthProblem.emailNotConfirmed);
+    }
     _set(entry.account);
     return entry.account;
   }
@@ -68,24 +77,44 @@ class DemoAuthService implements AuthService {
     required String password,
   }) async {
     final key = _key(email);
-    if (_accounts.containsKey(key)) {
+    final existing = _accounts[key];
+    if (existing != null && existing.confirmed) {
       throw const AuthFailure(AuthProblem.accountExists);
     }
+
+    // Signing up again over an unconfirmed account starts it afresh, the
+    // way Supabase sends a new code rather than refusing.
     final trimmed = name.trim();
-    final account = TideAccount(
-      id: 'demo-${_accounts.length + 1}',
-      email: key,
-      name: trimmed.isEmpty ? null : trimmed,
-      providers: const {'email'},
-    );
     _accounts[key] = _DemoAccount(
-      account,
+      TideAccount(
+        id: existing?.account.id ?? 'demo-${_accounts.length + 1}',
+        email: key,
+        name: trimmed.isEmpty ? null : trimmed,
+        providers: const {'email'},
+      ),
       password: password,
+      confirmed: false,
       tourCompleted: false,
     );
-    _set(account);
-    return SignUpOutcome.signedIn;
+    return SignUpOutcome.needsCode;
   }
+
+  @override
+  Future<TideAccount> verifyEmailCode({
+    required String email,
+    required String code,
+  }) async {
+    final entry = _accounts[_key(email)];
+    if (entry == null || entry.confirmed || code != demoCode) {
+      throw const AuthFailure(AuthProblem.invalidCode);
+    }
+    entry.confirmed = true;
+    _set(entry.account);
+    return entry.account;
+  }
+
+  @override
+  Future<void> resendEmailCode({required String email}) async {}
 
   @override
   Future<TideAccount> continueWithGoogle({required bool creating}) async {
@@ -120,10 +149,12 @@ class _DemoAccount {
   _DemoAccount(
     this.account, {
     required this.password,
+    required this.confirmed,
     required this.tourCompleted,
   });
 
   final TideAccount account;
   final String password;
+  bool confirmed;
   bool tourCompleted;
 }

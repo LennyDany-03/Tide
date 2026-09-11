@@ -230,4 +230,20 @@ abstract final class TideMotion {
   /// Long enough to read a first name and the line under it, short enough
   /// that nobody is kept from the app they just signed into. A tap skips it.
   static const Duration welcomeHold = Duration(milliseconds: 1300);
+
+  // --- Email code -------------------------------------------------------
+
+  /// The envelope drawing itself in on the code screen.
+  static const Duration mailDraw = Duration(milliseconds: 1100);
+
+  /// A digit landing in its cell. Quick: it answers a keystroke.
+  static const Duration codeDigit = Duration(milliseconds: 180);
+
+  /// The code accepted — the cells lighting left to right, the envelope
+  /// folding away into a ring, the tick drawing through it.
+  static const Duration codeAccepted = Duration(milliseconds: 1100);
+
+  /// The finished tick held still before the welcome takes over, so it is
+  /// seen complete rather than only ever in motion.
+  static const Duration codeAcceptedHold = Duration(milliseconds: 650);
 }

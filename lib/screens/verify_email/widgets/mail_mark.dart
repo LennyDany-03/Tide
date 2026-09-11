@@ -1,0 +1,249 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+
+import '../../../theme/tide_colors.dart';
+import '../../../theme/tide_motion.dart';
+
+/// The envelope the code went out in, and the tick it becomes.
+///
+/// Drawn in the logo's own line: one lantern stroke, round caps, drawing
+/// itself in rather than appearing. Once it is closed, a lit point sets off
+/// round its edge and keeps going — the same point that orbits the mark on
+/// the splash, saying the same thing here: the loop is still running while
+/// the code is on its way.
+///
+/// When the code is accepted the envelope does not cut to a checkmark. It
+/// shrinks away as a ring draws round the space it left, the tick draws
+/// through the ring, and two rings leave it — the splash's reading of "it
+/// landed", used for the one other moment in the app that deserves it.
+class MailMark extends StatefulWidget {
+  const MailMark({super.key, required this.accepted, this.size = 84});
+
+  /// 0..1 through the acceptance. Owned by the screen, because the cells
+  /// light on the same clock.
+  final Animation<double> accepted;
+
+  final double size;
+
+  @override
+  State<MailMark> createState() => _MailMarkState();
+}
+
+class _MailMarkState extends State<MailMark> with TickerProviderStateMixin {
+  late final AnimationController _draw = AnimationController(
+    vsync: this,
+    duration: TideMotion.mailDraw,
+  );
+
+  late final AnimationController _orbit = AnimationController(
+    vsync: this,
+    duration: TideMotion.orbit,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    widget.accepted.addListener(_onAccepted);
+    _draw.forward().whenComplete(() {
+      if (mounted && widget.accepted.value == 0) _orbit.repeat();
+    });
+  }
+
+  @override
+  void didUpdateWidget(MailMark old) {
+    super.didUpdateWidget(old);
+    if (old.accepted != widget.accepted) {
+      old.accepted.removeListener(_onAccepted);
+      widget.accepted.addListener(_onAccepted);
+    }
+  }
+
+  /// The point stops where it is once the tick starts; it has nothing left
+  /// to wait for.
+  void _onAccepted() {
+    if (widget.accepted.value > 0 && _orbit.isAnimating) _orbit.stop();
+  }
+
+  @override
+  void dispose() {
+    widget.accepted.removeListener(_onAccepted);
+    _draw.dispose();
+    _orbit.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: widget.size,
+      child: RepaintBoundary(
+        child: CustomPaint(
+          painter: _MailPainter(
+            draw: _draw,
+            orbit: _orbit,
+            accepted: widget.accepted,
+            lantern: TideColors.lantern,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MailPainter extends CustomPainter {
+  _MailPainter({
+    required this.draw,
+    required this.orbit,
+    required this.accepted,
+    required this.lantern,
+  }) : super(repaint: Listenable.merge([draw, orbit, accepted]));
+
+  final Animation<double> draw;
+  final Animation<double> orbit;
+  final Animation<double> accepted;
+  final Color lantern;
+
+  static double _span(double t, double from, double to) => TideMotion
+      .morphCurve
+      .transform(((t - from) / (to - from)).clamp(0.0, 1.0));
+
+  /// The first [t] of [source]'s length, across however many contours.
+  static Path _trace(Path source, double t) {
+    if (t <= 0) return Path();
+    if (t >= 1) return source;
+    final metrics = source.computeMetrics().toList();
+    var remaining = metrics.fold<double>(0, (sum, m) => sum + m.length) * t;
+    final out = Path();
+    for (final metric in metrics) {
+      if (remaining <= 0) break;
+      final take = math.min(remaining, metric.length);
+      out.addPath(metric.extractPath(0, take), Offset.zero);
+      remaining -= take;
+    }
+    return out;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.shortestSide;
+    final c = size.center(Offset.zero);
+    final stroke = s * 0.04;
+    final d = draw.value;
+    final a = accepted.value;
+
+    Paint line(double alpha, [double weight = 1]) => Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke * weight
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = lantern.withValues(alpha: alpha);
+
+    // --- The envelope, leaving as the tick arrives ------------------------
+    final leave = _span(a, 0, 0.35);
+    if (leave < 1) {
+      final body = Rect.fromCenter(
+        center: c.translate(0, s * 0.02),
+        width: s * 0.78,
+        height: s * 0.54,
+      );
+      final corner = Radius.circular(s * 0.07);
+      final outline = Path()..addRRect(RRect.fromRectAndRadius(body, corner));
+      final inset = s * 0.045;
+      final flap = Path()
+        ..moveTo(body.left + inset, body.top + inset)
+        ..lineTo(c.dx, body.top + body.height * 0.55)
+        ..lineTo(body.right - inset, body.top + inset);
+
+      final alpha = 1 - leave;
+      canvas
+        ..save()
+        ..translate(c.dx, c.dy)
+        ..scale(1 - 0.3 * leave)
+        ..translate(-c.dx, -c.dy);
+
+      final fill = _span(d, 0.35, 1);
+      if (fill > 0) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(body, corner),
+          Paint()..color = lantern.withValues(alpha: 0.08 * fill * alpha),
+        );
+      }
+      canvas
+        ..drawPath(_trace(outline, _span(d, 0, 0.65)), line(alpha))
+        ..drawPath(_trace(flap, _span(d, 0.45, 0.9)), line(alpha));
+
+      final point = _span(d, 0.85, 1) * alpha;
+      if (point > 0) {
+        final metric = outline.computeMetrics().first;
+        final at = metric
+            .getTangentForOffset(metric.length * orbit.value)
+            ?.position;
+        if (at != null) {
+          canvas
+            ..drawCircle(
+              at,
+              stroke * 2.4,
+              Paint()..color = lantern.withValues(alpha: 0.18 * point),
+            )
+            ..drawCircle(
+              at,
+              stroke * 0.95,
+              Paint()..color = lantern.withValues(alpha: point),
+            );
+        }
+      }
+      canvas.restore();
+    }
+
+    if (a <= 0) return;
+
+    // --- The ring and the tick --------------------------------------------
+    final radius = s * 0.42;
+    canvas.drawCircle(
+      c,
+      radius,
+      Paint()..color = lantern.withValues(alpha: 0.14 * _span(a, 0.3, 0.7)),
+    );
+
+    final ring = _span(a, 0.2, 0.65);
+    if (ring > 0) {
+      canvas.drawArc(
+        Rect.fromCircle(center: c, radius: radius),
+        -math.pi / 2,
+        ring * 2 * math.pi,
+        false,
+        line(1),
+      );
+    }
+
+    final tick = Path()
+      ..moveTo(c.dx - s * 0.17, c.dy + s * 0.01)
+      ..lineTo(c.dx - s * 0.05, c.dy + s * 0.13)
+      ..lineTo(c.dx + s * 0.19, c.dy - s * 0.12);
+    canvas.drawPath(_trace(tick, _span(a, 0.55, 0.9)), line(1, 1.3));
+
+    // Two rings leaving the mark, the second trailing the first. Painted
+    // past the widget's bounds on purpose: a clipped ripple is a flicker.
+    final ripple = _span(a, 0.62, 1);
+    for (final (delay, strength) in [(0.0, 0.4), (0.22, 0.24)]) {
+      final p = ((ripple - delay) / (1 - delay)).clamp(0.0, 1.0);
+      if (p <= 0 || p >= 1) continue;
+      canvas.drawCircle(
+        c,
+        radius * (1 + 0.55 * p),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4
+          ..color = lantern.withValues(alpha: strength * (1 - p)),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_MailPainter old) =>
+      old.lantern != lantern ||
+      old.draw != draw ||
+      old.orbit != orbit ||
+      old.accepted != accepted;
+}
