@@ -179,9 +179,8 @@ class SheetDismissButton extends StatelessWidget {
   }
 }
 
-/// The backdrop behind a sheet or the long-press context menu: a scrim plus
-/// a real blur, so the page underneath stays legible as *context* without
-/// competing for attention.
+/// The backdrop behind a sheet: a scrim plus a real blur, so the page
+/// underneath stays legible as *context* without competing for attention.
 class TideBackdrop extends StatelessWidget {
   const TideBackdrop({
     super.key,

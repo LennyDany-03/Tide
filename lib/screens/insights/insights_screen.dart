@@ -12,6 +12,7 @@ import '../../widgets/gauge_number.dart';
 import '../../widgets/habit_glyph.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/stagger_list.dart';
+import '../../widgets/tide_line_gauge.dart';
 import '../../widgets/tide_surface.dart';
 import '../../widgets/tide_tab_bar.dart';
 import '../../widgets/trend_chart.dart';
@@ -465,62 +466,109 @@ class _MilestonesRow extends StatelessWidget {
       onTap: onTap,
       child: TideSurface(
         color: TideColors.shelf,
-        padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(18, 16, 14, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 38,
-              height: 38,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: TideColors.lantern.withValues(alpha: 0.12),
-              ),
-              child: const HabitGlyph(
-                glyph: TideGlyph.sparkle,
-                size: 17,
-                color: TideColors.lantern,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Milestones', style: TideType.heading),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$unlocked of $total surfaced',
-                    style: TideType.labelMuted,
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: TideColors.lantern.withValues(alpha: 0.12),
                   ),
-                ],
-              ),
-            ),
-            // The route in miniature: one pip per milestone, lit as far as
-            // you have got.
-            for (var i = 0; i < total; i++) ...[
-              if (i > 0) const SizedBox(width: 4),
-              Container(
-                width: 5,
-                height: 5,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: i < unlocked
-                      ? TideColors.lantern
-                      : TideColors.bone.withValues(alpha: 0.14),
+                  child: const HabitGlyph(
+                    glyph: TideGlyph.sparkle,
+                    size: 17,
+                    color: TideColors.lantern,
+                  ),
                 ),
-              ),
-            ],
-            const SizedBox(width: 10),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: TideColors.silt,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Milestones', style: TideType.heading),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$unlocked of $total surfaced',
+                        style: TideType.labelMuted,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: TideColors.silt,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // The route in miniature sits under the title, not beside it.
+            // Fixed-width pips in the title row only fitted while the
+            // catalogue was a handful long; at 28 they took every pixel the
+            // text column had, and "Milestones" wrapped one letter per line.
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: _MilestoneTrack(unlocked: unlocked, total: total),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// One segment per milestone, lit as far as you have got. Segments share
+/// the card's width rather than claiming a fixed size, so the track fits
+/// however long the catalogue grows.
+class _MilestoneTrack extends StatelessWidget {
+  const _MilestoneTrack({required this.unlocked, required this.total});
+
+  final int unlocked;
+  final int total;
+
+  static const double _gap = 3;
+  static const double _height = 4;
+
+  @override
+  Widget build(BuildContext context) {
+    if (total <= 0) return const SizedBox.shrink();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final segment = (constraints.maxWidth - _gap * (total - 1)) / total;
+        // Below a few pixels a segment is no longer a legible mark — only
+        // the gaps read. One continuous level says the same thing cleanly.
+        if (segment < 3) {
+          return TideLineGauge(progress: unlocked / total, height: _height);
+        }
+        return Row(
+          children: [
+            for (var i = 0; i < total; i++) ...[
+              if (i > 0) const SizedBox(width: _gap),
+              Expanded(
+                child: Container(
+                  height: _height,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(_height / 2),
+                    color: i < unlocked
+                        ? TideColors.lantern
+                        : TideColors.bone.withValues(alpha: 0.1),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }
