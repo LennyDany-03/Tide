@@ -216,7 +216,10 @@ class _CodeCellsState extends State<CodeCells>
     } else if (digit != null) {
       border = TideColors.bone.withValues(alpha: 0.14);
     } else {
-      border = Colors.transparent;
+      // An empty cell still needs an edge. A trench fill with no border is
+      // near-black on near-black on Midnight, and a row of six read on a
+      // phone as a single lit box — the active one — with nothing beside it.
+      border = TideColors.hairline;
     }
 
     return AnimatedContainer(
