@@ -25,7 +25,7 @@ import 'tide_palette.dart';
 /// one thing, and nothing else may reach for them. That is what keeps them
 /// from becoming a second and third accent by drift.
 abstract final class TideColors {
-  static TidePalette _palette = TidePalettes.deepWater;
+  static TidePalette _palette = TidePalettes.standard;
 
   /// The palette every token below is currently reading from.
   static TidePalette get palette => _palette;

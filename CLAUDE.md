@@ -39,7 +39,7 @@ flutter test test/streak_calculator_test.dart --plain-name 'an unlogged today do
 
 The theme layer is prescriptive, not advisory. Read the doc comments in `lib/theme/` before adding visual code.
 
-- **`TideColors` is the entire colour vocabulary**, and its tokens are *getters* reading the active `TidePalette` (`lib/theme/tide_palette.dart`: Deep water, Midnight, Ink, Blossom, Paper). No file outside `lib/theme/` may introduce a hue. The fix for a flat-looking screen is motion, depth and consistency — never a new colour.
+- **`TideColors` is the entire colour vocabulary**, and its tokens are *getters* reading the active `TidePalette` (`lib/theme/tide_palette.dart`: Midnight — the default, `TidePalettes.standard` — plus Deep water, Ink, Blossom, Paper). No file outside `lib/theme/` may introduce a hue. The fix for a flat-looking screen is motion, depth and consistency — never a new colour.
   - Because tokens are runtime values, never put them in a `const` expression or a default parameter value (make the parameter nullable and fall back inside `build`). `TideType` styles are getters for the same reason.
   - Ink on a solid accent fill is `TideColors.onLantern`, never `deepWater` — on light palettes the two differ.
   - Switch palettes only through `store.setPalette`, which calls `TideTheme.applyPalette` to rebuild and repaint the tree. A new palette must pass `test/palette_test.dart`'s contrast floors.

@@ -232,15 +232,22 @@ abstract final class TidePalettes {
     shadow: Color(0x1F161616),
   );
 
-  /// In the order Settings lists them: the dark palettes, then the light.
+  /// The palette the app opens in, and what an unknown id falls back to.
+  ///
+  /// Named once here so the store, the token layer and the tests can never
+  /// disagree about which palette a fresh app is drawn in.
+  static const TidePalette standard = midnight;
+
+  /// In the order Settings lists them: the dark palettes, then the light,
+  /// with the default first.
   static const List<TidePalette> all = [
-    deepWater,
     midnight,
+    deepWater,
     ink,
     blossom,
     paper,
   ];
 
   static TidePalette byId(String id) =>
-      all.firstWhere((palette) => palette.id == id, orElse: () => deepWater);
+      all.firstWhere((palette) => palette.id == id, orElse: () => standard);
 }

@@ -47,6 +47,20 @@ void main() {
     });
   }
 
+  test('a fresh app opens in Midnight', () {
+    expect(TidePalettes.standard, same(TidePalettes.midnight));
+    expect(TidePalettes.all.first, same(TidePalettes.standard));
+    expect(TidePalettes.byId('no-such-palette'), same(TidePalettes.standard));
+  });
+
+  testWidgets('the app boots with the default palette applied', (tester) async {
+    await tester.pumpWidget(const TideApp(startOnboarded: true));
+    await tester.pump(const Duration(milliseconds: 900));
+
+    expect(TideColors.palette, same(TidePalettes.standard));
+    expect(TideColors.lantern, TidePalettes.midnight.lantern);
+  });
+
   test('palette ids are unique', () {
     final ids = TidePalettes.all.map((p) => p.id).toSet();
     expect(ids.length, TidePalettes.all.length);
@@ -62,7 +76,7 @@ void main() {
     tester.view.physicalSize = const Size(1100, 2400);
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.reset);
-    addTearDown(() => TideColors.use(TidePalettes.deepWater));
+    addTearDown(() => TideColors.use(TidePalettes.standard));
 
     await tester.pumpWidget(const TideApp(startOnboarded: true));
     // Fixed pumps rather than pumpAndSettle: several screens carry

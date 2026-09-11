@@ -53,9 +53,9 @@ class TideStore extends ChangeNotifier {
 
   /// The palette the whole app is drawn in.
   ///
-  /// Session-only, like everything else in the store: the app opens on Deep
-  /// water every launch.
-  TidePalette palette = TidePalettes.deepWater;
+  /// Session-only, like everything else in the store: the app opens on
+  /// [TidePalettes.standard] (Midnight) every launch.
+  TidePalette palette = TidePalettes.standard;
 
   bool dailyReminders = true;
   bool quietHours = false;
