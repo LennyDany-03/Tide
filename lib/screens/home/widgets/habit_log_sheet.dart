@@ -13,6 +13,7 @@ import '../../../widgets/habit_glyph.dart';
 import '../../../widgets/hold_to_fill.dart';
 import '../../../widgets/press_scale.dart';
 import '../../../widgets/tide_sheet.dart';
+import 'duration_log_sheet.dart';
 
 /// Logging a habit that has a count, raised as a bottom sheet.
 ///
@@ -108,10 +109,21 @@ class _LogSheetState extends State<_LogSheet>
   /// banked, then it rocks once and settles. An idling wave would be
   /// decoration; a wave that only moves when the level does is the level
   /// reporting itself.
-  late final AnimationController _slosh = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  );
+  ///
+  /// Made in [initState], not lazily. A duration habit hands this sheet over
+  /// to its dial and never touches the slosh, so a lazy controller would be
+  /// created for the first time inside [dispose] — on an element already
+  /// torn out of the tree.
+  late final AnimationController _slosh;
+
+  @override
+  void initState() {
+    super.initState();
+    _slosh = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+  }
 
   @override
   void dispose() {
@@ -148,6 +160,17 @@ class _LogSheetState extends State<_LogSheet>
   Widget build(BuildContext context) {
     final habit = TideScope.of(context).habitById(widget.habitId);
     if (habit == null) return const SizedBox.shrink();
+
+    // A duration's unit is a minute, and one hold per minute is ninety holds
+    // for a ninety-minute session. Time gets its own instrument.
+    if (habit.type == HabitType.duration) {
+      return DurationLogSheet(
+        habit: habit,
+        leading: _Glyph(habit: habit),
+        onLog: widget.onLog,
+        onDismiss: () => Navigator.of(context).pop(),
+      );
+    }
 
     final today = DateTime.now();
     final logged = habit.amountOn(today);

@@ -59,6 +59,17 @@ abstract final class TideMotion {
   static const Duration pillSlide = Duration(milliseconds: 280);
   static const Curve pillCurve = Curves.easeOutCubic;
 
+  /// The duration dial following a thumb. Short enough that the arc never
+  /// feels towed behind the finger; long enough to smooth a touch that
+  /// jitters between two positions a pixel apart.
+  static const Duration dialFollow = Duration(milliseconds: 70);
+  static const Curve dialFollowCurve = Curves.easeOut;
+
+  /// The duration dial easing onto a value it was not dragged to — a quick
+  /// amount, Full, or the last fraction of a minute after the thumb lifts.
+  static const Duration dialSettle = Duration(milliseconds: 320);
+  static const Curve dialSettleCurve = Curves.easeOutCubic;
+
   /// Sheets rising from the bottom with floating elevation.
   static const Duration sheetIn = Duration(milliseconds: 380);
   static const Duration sheetOut = Duration(milliseconds: 260);

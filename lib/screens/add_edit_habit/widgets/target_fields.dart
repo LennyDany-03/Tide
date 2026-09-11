@@ -57,15 +57,9 @@ class TargetFields extends StatefulWidget {
   /// Common durations, in minutes.
   static const List<int> durationPresets = [10, 15, 20, 30, 45, 60, 90];
 
-  /// "45 min", "1 hr", "1 hr 30 min" — never a bare number of minutes past
-  /// the hour, which is the form nobody plans a day in.
-  static String durationLabel(num minutes) {
-    final total = minutes.round();
-    if (total < 60) return '$total min';
-    final hours = total ~/ 60;
-    final rest = total % 60;
-    return rest == 0 ? '$hours hr' : '$hours hr $rest min';
-  }
+  /// "45 min", "1 hr", "1 hr 30 min". The one spelling lives on [Minutes], so
+  /// the editor and the log sheet cannot write the same length differently.
+  static String durationLabel(num minutes) => Minutes.label(minutes);
 
   @override
   State<TargetFields> createState() => _TargetFieldsState();

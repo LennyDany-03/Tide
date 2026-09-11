@@ -4,8 +4,9 @@ import 'tide_glyph.dart';
 
 /// What "done" means for a habit, and therefore which gesture logs it.
 ///
-/// Binary habits are swiped on the row itself; quantity and duration habits
-/// open a sheet where the count is held out one unit at a time.
+/// Binary habits are swiped on the row itself. Quantity habits open a sheet
+/// where the count is held out one unit at a time; duration habits open a
+/// dial that is set to the time spent and confirmed in one tap.
 enum HabitType {
   binary,
   quantity,
@@ -21,10 +22,23 @@ enum HabitType {
   String get gestureHint => switch (this) {
     HabitType.binary => 'swipe right to mark',
     HabitType.quantity => 'tap to count up',
-    HabitType.duration => 'tap to count up',
+    HabitType.duration => 'tap to log time',
   };
 
   bool get isHeld => this != HabitType.binary;
+}
+
+/// How a length of time is written wherever the app shows one: "45 min",
+/// "1 hr", "1 hr 30 min" — never a bare count of minutes past the hour,
+/// which is not the form anybody plans a day in.
+abstract final class Minutes {
+  static String label(num minutes) {
+    final total = minutes.round();
+    if (total < 60) return '$total min';
+    final hours = total ~/ 60;
+    final rest = total % 60;
+    return rest == 0 ? '$hours hr' : '$hours hr $rest min';
+  }
 }
 
 /// A single habit and its complete log history.
@@ -104,12 +118,13 @@ class Habit {
   bool countsTowardStreak(DateTime date) =>
       isCompleteOn(date) || isFrozenOn(date);
 
-  /// "5/8" for quantity, "23 min / 30 min" for duration, '' for binary.
+  /// "8 glasses" for quantity, "1 hr 30 min" for duration, '' for binary.
   String get targetLabel {
     return switch (type) {
       HabitType.binary => '',
       HabitType.quantity => '$target${unit.isEmpty ? '' : ' $unit'}',
-      HabitType.duration => '$target ${unit.isEmpty ? 'min' : unit}',
+      HabitType.duration =>
+        unit.isEmpty || unit == 'min' ? Minutes.label(target) : '$target $unit',
     };
   }
 

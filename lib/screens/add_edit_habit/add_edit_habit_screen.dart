@@ -133,8 +133,13 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
 
   /// Switching type resets the target to something sensible for that type
   /// rather than carrying "8 glasses" across into a duration habit.
+  ///
+  /// It resets on any change of type, not only from a target of 1. The old
+  /// guard kept any target above 1, so Quantity then Duration turned 8
+  /// glasses into an 8-minute session.
   void _setType(int index) {
     final next = HabitType.values[index];
+    if (next == _type) return;
     _edit(() {
       _type = next;
       switch (next) {
@@ -142,12 +147,12 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
           _target = 1;
           _unit = '';
         case HabitType.quantity:
-          if (_unit.isEmpty || _unit == 'min') _unit = 'glasses';
-          if (_target <= 1) _target = 8;
+          _unit = 'glasses';
+          _target = 8;
         case HabitType.duration:
           // Duration is always carried in minutes; the control formats it.
           _unit = 'min';
-          if (_target <= 1) _target = 30;
+          _target = 30;
       }
     });
   }
