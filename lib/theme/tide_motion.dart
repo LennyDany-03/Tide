@@ -246,4 +246,14 @@ abstract final class TideMotion {
   /// The finished tick held still before the welcome takes over, so it is
   /// seen complete rather than only ever in motion.
   static const Duration codeAcceptedHold = Duration(milliseconds: 650);
+
+  // --- Account deleted --------------------------------------------------
+
+  /// The farewell after an account is deleted: the ring closing, the tick
+  /// drawing through it, then the words and Done rising in under it.
+  ///
+  /// There is no hold to go with it. This screen waits on Done rather than
+  /// moving on by itself — it is the last thing the app says to the account,
+  /// and it should not leave before it has been read.
+  static const Duration farewell = Duration(milliseconds: 1700);
 }

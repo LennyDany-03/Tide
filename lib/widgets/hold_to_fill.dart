@@ -314,8 +314,8 @@ class _HoldToStepState extends State<HoldToStep>
 /// A destructive action behind a coral hold-to-fill ring.
 ///
 /// Used identically by Habit detail's delete, the add/edit sheet's delete,
-/// and "Delete all data" in Settings — so the gesture that destroys things
-/// is learned once.
+/// and log out and delete account in Settings — so the gesture that
+/// destroys things is learned once.
 class HoldToConfirmButton extends StatelessWidget {
   const HoldToConfirmButton({
     super.key,

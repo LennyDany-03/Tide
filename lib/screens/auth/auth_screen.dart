@@ -329,6 +329,9 @@ class _AuthScreenState extends State<AuthScreen> {
           message:
               failure.detail ?? 'Google sign-in is not available right now.',
         );
+      // Deletion is only ever asked for from Settings; here it is unreachable
+      // and reads like any other refusal.
+      case AuthProblem.deletionUnavailable:
       case AuthProblem.unknown:
         _notice = _Notice(
           message: failure.detail ?? 'Something went wrong. Try again.',

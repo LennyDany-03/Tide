@@ -12,6 +12,7 @@
 --   5. account_status(email)   lets the sign-in screen say "no account, create
 --                              one" instead of "invalid credentials"
 --   6. email-assets bucket     public images for the confirmation email
+--   7. delete_account()        lets a signed-in user delete their own account
 -- =============================================================================
 
 
@@ -206,3 +207,37 @@ on conflict (id) do update
   set public             = true,
       file_size_limit    = excluded.file_size_limit,
       allowed_mime_types = excluded.allowed_mime_types;
+
+
+-- 7. delete_account() ---------------------------------------------------------------------
+-- Settings → Danger zone → Delete account. Deleting a user through the Admin
+-- API needs the service_role key, which must never ship in the app, so this
+-- does the one thing the app needs from it: delete the caller. It takes no
+-- argument — the user is whoever the request's JWT names — so nobody can
+-- delete anyone else.
+--
+-- Everything that references auth.users goes with it by cascade: identities
+-- (the Google link), sessions, refresh tokens, MFA factors, and the
+-- public.profiles row. The address is then free to sign up again, and
+-- account_status answers 'none' for it.
+
+create or replace function public.delete_account()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'delete_account needs a signed-in user'
+      using errcode = '28000';
+  end if;
+
+  delete from auth.users where id = v_uid;
+end;
+$$;
+
+revoke all on function public.delete_account() from public, anon, authenticated;
+grant execute on function public.delete_account() to authenticated;

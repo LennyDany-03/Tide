@@ -18,13 +18,24 @@ import '../../../widgets/tide_surface.dart';
 /// and the next begins. Those are two different jobs and the spacing alone
 /// was doing neither of them well.
 class SettingsGroup extends StatelessWidget {
-  const SettingsGroup({super.key, required this.title, required this.rows});
+  const SettingsGroup({
+    super.key,
+    required this.title,
+    required this.rows,
+    this.destructive = false,
+  });
 
   final String title;
   final List<Widget> rows;
 
+  /// The heading wears coral — the danger zone, where every row in the
+  /// panel is one that cannot be taken back.
+  final bool destructive;
+
   @override
   Widget build(BuildContext context) {
+    final accent = destructive ? TideColors.coral : TideColors.lantern;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -36,14 +47,16 @@ class SettingsGroup extends StatelessWidget {
                 width: 3,
                 height: 13,
                 decoration: BoxDecoration(
-                  color: TideColors.lantern,
+                  color: accent,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(width: 9),
               Text(
                 title,
-                style: TideType.label.copyWith(color: TideColors.bone),
+                style: TideType.label.copyWith(
+                  color: destructive ? TideColors.coral : TideColors.bone,
+                ),
               ),
             ],
           ),

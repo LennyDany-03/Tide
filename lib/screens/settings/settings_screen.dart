@@ -13,6 +13,7 @@ import '../../widgets/tide_mark.dart';
 import '../../widgets/tide_switch.dart';
 import '../../widgets/tide_tab_bar.dart';
 import 'widgets/account_card.dart';
+import 'widgets/delete_account_dialog.dart';
 import 'widgets/settings_group.dart';
 import 'widgets/settings_row.dart';
 
@@ -39,9 +40,14 @@ import 'widgets/settings_row.dart';
 /// four controls over nothing is worse than a shorter one — it is the part
 /// of the app that is supposed to tell the truth about how it behaves.
 ///
-/// Log out is last, and held rather than tapped. The session is kept until
-/// somebody asks for it to end, so ending it should never be something a
-/// thumb scrolling to the colophon does by accident.
+/// Log out is held rather than tapped. The session is kept until somebody
+/// asks for it to end, so ending it should never be something a thumb
+/// scrolling to the colophon does by accident.
+///
+/// Deleting the account sits apart from it, last, under its own coral
+/// heading. It is the only thing on this screen that cannot be undone, so
+/// it costs two decisions rather than one: the row opens a panel that says
+/// what goes, and only a hold inside that panel deletes anything.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -170,6 +176,24 @@ class SettingsScreen extends StatelessWidget {
                     label: 'Hold to log out',
                     holdingLabel: 'Keep holding to log out',
                     onConfirm: () => TideScope.read(context).logOut(),
+                  ),
+                ),
+              ],
+            ),
+
+            SettingsGroup(
+              title: 'Danger zone',
+              destructive: true,
+              rows: [
+                SettingsRow(
+                  label: 'Delete account',
+                  subtitle: 'Removes your account and sign-in for good',
+                  icon: Icons.delete_outline_rounded,
+                  destructive: true,
+                  showChevron: true,
+                  onTap: () => confirmDeleteAccount(
+                    context,
+                    email: TideScope.read(context).accountEmail,
                   ),
                 ),
               ],

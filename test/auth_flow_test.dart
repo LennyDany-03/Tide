@@ -161,26 +161,8 @@ void main() {
       await tester.pumpWidget(const TideApp(startOnboarded: true));
       await settle(tester, 900);
 
-      await tester.tap(
-        find.descendant(
-          of: find.byType(TideTabBar),
-          matching: find.text('Settings'),
-        ),
-      );
-      await settle(tester);
-
       final hold = find.text('Hold to log out');
-      await tester.scrollUntilVisible(
-        hold,
-        300,
-        scrollable: find
-            .ancestor(
-              of: find.text('Your account, and how Tide behaves.'),
-              matching: find.byType(Scrollable),
-            )
-            .first,
-      );
-      await settle(tester, 300);
+      await scrollSettingsTo(tester, hold);
 
       // A tap does nothing; only a hold that fills the button commits.
       await tester.tap(hold);
@@ -196,4 +178,89 @@ void main() {
       expect(find.text('Welcome back'), findsOneWidget);
     });
   });
+
+  group('deleting the account', () {
+    testWidgets('asks, needs a hold, and the account is gone after', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const TideApp(startOnboarded: true));
+      await settle(tester, 900);
+
+      final row = find.text('Delete account');
+      await scrollSettingsTo(tester, row);
+
+      // The row only asks; backing out of the panel keeps everything.
+      await tester.tap(row);
+      await settle(tester, 400);
+      expect(find.text('Delete your account?'), findsOneWidget);
+      await tester.tap(find.text('Keep my account'));
+      await settle(tester, 400);
+      expect(find.text('Delete your account?'), findsNothing);
+
+      await tester.tap(row);
+      await settle(tester, 400);
+
+      // A tap on the panel's button is not a hold.
+      final hold = find.text('Hold to delete account');
+      await tester.tap(hold);
+      await settle(tester, 300);
+      expect(find.text('Delete your account?'), findsOneWidget);
+
+      final gesture = await tester.startGesture(tester.getCenter(hold));
+      await pumpFor(tester, const Duration(milliseconds: 1600));
+      await gesture.up();
+      await pumpFor(tester, const Duration(milliseconds: 2400));
+
+      // The farewell, not the form — and it stays until Done.
+      expect(find.text('Delete your account?'), findsNothing);
+      expect(find.text('Account deleted'), findsOneWidget);
+      expect(
+        find.text(
+          'The Tide account for ${DemoAuthService.demoEmail} has been '
+          'deleted successfully.',
+          findRichText: true,
+        ),
+        findsOneWidget,
+      );
+      await pumpFor(tester, const Duration(milliseconds: 2000));
+      expect(find.widgetWithText(TideButton, 'Log in'), findsNothing);
+
+      await tester.tap(find.widgetWithText(TideButton, 'Done'));
+      await settle(tester, 900);
+
+      expect(find.text('Account deleted'), findsNothing);
+      expect(find.widgetWithText(TideButton, 'Log in'), findsOneWidget);
+
+      // Deleted, not merely signed out: the address no longer logs in.
+      await fill(tester, [
+        DemoAuthService.demoEmail,
+        DemoAuthService.demoPassword,
+      ]);
+      await pressAuthButton(tester, 'Log in');
+      expect(find.text('No Tide account uses this email'), findsOneWidget);
+    });
+  });
+}
+
+/// Opens Settings from the tab bar and scrolls [target] into view.
+Future<void> scrollSettingsTo(WidgetTester tester, Finder target) async {
+  await tester.tap(
+    find.descendant(
+      of: find.byType(TideTabBar),
+      matching: find.text('Settings'),
+    ),
+  );
+  await settle(tester);
+
+  await tester.scrollUntilVisible(
+    target,
+    300,
+    scrollable: find
+        .ancestor(
+          of: find.text('Your account, and how Tide behaves.'),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
+  await settle(tester, 300);
 }

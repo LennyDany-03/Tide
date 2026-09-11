@@ -561,6 +561,39 @@ class TideStore extends ChangeNotifier {
     _release();
   }
 
+  /// Deletes the account on the server for good, then leaves it the way
+  /// [logOut] does.
+  ///
+  /// Unlike log out, this does not go ahead offline. An account that looked
+  /// deleted on this device while it still existed on the server would be
+  /// worse than a refusal, so a failure throws [AuthFailure] and the account
+  /// stays signed in to try again.
+  Future<void> deleteAccount() async {
+    final account = _account;
+    if (account == null) return;
+    // Recorded before the request, not after it: the service's own sign-out
+    // can reach [_release] through the change stream before this call
+    // returns, and by then the router must already know that a signed-out
+    // app is owed a farewell rather than the account form.
+    _deletedEmail = account.email;
+    try {
+      await auth.deleteAccount();
+    } catch (_) {
+      _deletedEmail = null;
+      rethrow;
+    }
+    _release();
+  }
+
+  /// The address of the account deleted this session, while its farewell is
+  /// still owed. Not kept on the device: a relaunch has nobody to see off.
+  String? get deletedAccountEmail => _deletedEmail;
+  String? _deletedEmail;
+
+  /// The farewell has been read. Does not notify: the screen leaving is what
+  /// moves the app on, and nothing on screen is drawn from this.
+  void acknowledgeDeletion() => _deletedEmail = null;
+
   void finishTour() {
     if (!_tourPending) return;
     _tourPending = false;

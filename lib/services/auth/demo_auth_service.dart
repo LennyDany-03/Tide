@@ -137,6 +137,16 @@ class DemoAuthService implements AuthService {
   @override
   Future<void> logOut() async => _set(null);
 
+  /// Forgets the account entirely — including the demo owner, so a deleted
+  /// demo account refuses log in afterwards the way a real one would.
+  @override
+  Future<void> deleteAccount() async {
+    final current = _current;
+    if (current == null) return;
+    _accounts.remove(_key(current.email));
+    _set(null);
+  }
+
   void _set(TideAccount? account) {
     _current = account;
     _changes.add(account);

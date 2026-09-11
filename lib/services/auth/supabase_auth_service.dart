@@ -258,6 +258,42 @@ class SupabaseAuthService implements AuthService {
     }
   }
 
+  /// **Why an RPC rather than the Admin API.** Deleting a user through
+  /// `auth.admin` needs the service-role key, which must never ship in the
+  /// app. The `delete_account` function in `supabase/auth_setup.sql` runs
+  /// with the database's rights but only ever deletes the caller — the user
+  /// named by the JWT the request carries — and everything hanging off that
+  /// user (identities, sessions, the profile) goes with it by cascade.
+  @override
+  Future<void> deleteAccount() async {
+    if (_auth.currentUser == null) return;
+    try {
+      await _client.rpc<dynamic>('delete_account');
+    } on PostgrestException catch (error) {
+      // PGRST202: PostgREST has no function by that name to call.
+      if (error.code == 'PGRST202') {
+        throw const AuthFailure(
+          AuthProblem.deletionUnavailable,
+          'Account deletion is not set up on the server yet. Run '
+          'supabase/auth_setup.sql in the SQL editor.',
+        );
+      }
+      debugPrint('delete_account refused: ${error.code} ${error.message}');
+      throw AuthFailure(AuthProblem.unknown, error.message);
+    } catch (error) {
+      throw _unexpected(error);
+    }
+
+    // The user is gone, so there is no server session left to end: the local
+    // one is dropped, and the server's 403 for a missing user is expected.
+    try {
+      await _auth.signOut(scope: SignOutScope.local);
+    } catch (error) {
+      debugPrint('Local sign-out after deletion: $error');
+    }
+    if (googleAvailable) await _forgetGoogle();
+  }
+
   /// `initialize` may only succeed once per process, so it is kept — but a
   /// failed attempt must not be kept as if it had worked.
   Future<void> _prepareGoogle() {

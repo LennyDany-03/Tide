@@ -7,6 +7,7 @@ import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/account_avatar.dart';
+import '../../widgets/rise.dart';
 import '../../widgets/tide_backdrop.dart';
 
 /// The moment between signing in and the app.
@@ -117,7 +118,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           // information. Without one, the greeting takes the
                           // headline itself rather than leaving a gap.
                           if (firstName != null) ...[
-                            _Rise(
+                            Rise(
                               progress: span(0.2, 0.7),
                               lift: 8,
                               child: Text(
@@ -127,7 +128,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             ),
                             const SizedBox(height: 6),
                           ],
-                          _Rise(
+                          Rise(
                             progress: span(0.3, 0.85),
                             lift: 14,
                             child: Text(
@@ -141,7 +142,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             ),
                           ),
                           const SizedBox(height: 14),
-                          _Rise(
+                          Rise(
                             progress: span(0.45, 1),
                             lift: 8,
                             child: Text(
@@ -161,30 +162,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Fades in while rising the last few pixels into place.
-class _Rise extends StatelessWidget {
-  const _Rise({
-    required this.progress,
-    required this.lift,
-    required this.child,
-  });
-
-  final double progress;
-  final double lift;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: progress,
-      child: Transform.translate(
-        offset: Offset(0, lift * (1 - progress)),
-        child: child,
       ),
     );
   }

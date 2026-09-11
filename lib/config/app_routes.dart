@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../screens/account_deleted/account_deleted_screen.dart';
 import '../screens/achievements/achievements_screen.dart';
 import '../screens/add_edit_habit/add_edit_habit_screen.dart';
 import '../screens/appearance/appearance_sheet.dart';
@@ -27,6 +28,7 @@ abstract final class Routes {
   static const auth = '/auth';
   static const verifyEmail = '/verify';
   static const welcome = '/welcome';
+  static const accountDeleted = '/account-deleted';
   static const today = '/today';
   static const history = '/history';
   static const insights = '/insights';
@@ -133,6 +135,15 @@ abstract final class AppRoutes {
         GoRoute(
           path: Routes.welcome,
           pageBuilder: (context, state) => _fade(state, const WelcomeScreen()),
+        ),
+
+        // The other end of the same door: after the account is deleted. A
+        // fade, like the welcome it mirrors, and likewise reached only
+        // through the guard.
+        GoRoute(
+          path: Routes.accountDeleted,
+          pageBuilder: (context, state) =>
+              _fade(state, const AccountDeletedScreen()),
         ),
 
         // The four tabs. A branch keeps its own navigator, so pushing habit
@@ -267,6 +278,14 @@ abstract final class AppRoutes {
       return store.pendingVerificationEmail == null ? Routes.auth : null;
     }
 
+    // The farewell after deleting the account. It exists only in the moments
+    // after a deletion, and hands over to the account form itself on Done.
+    if (path == Routes.accountDeleted) {
+      if (store.signedIn) return Routes.today;
+      if (store.deletedAccountEmail != null) return null;
+      return store.onboardingComplete ? Routes.auth : Routes.onboarding;
+    }
+
     final atDoor = path == Routes.onboarding || path == Routes.auth;
     if (store.signedIn) return atDoor ? Routes.welcome : null;
 
@@ -277,7 +296,9 @@ abstract final class AppRoutes {
     }
     if (path == Routes.auth) return null;
 
-    // Everything else is inside the app, and needs an account.
+    // Everything else is inside the app, and needs an account. An account
+    // that was just deleted from in here is seen off before the form.
+    if (store.deletedAccountEmail != null) return Routes.accountDeleted;
     return store.onboardingComplete ? Routes.auth : Routes.onboarding;
   }
 

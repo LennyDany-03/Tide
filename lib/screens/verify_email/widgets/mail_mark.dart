@@ -1,9 +1,8 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_motion.dart';
+import '../../../widgets/tide_tick.dart';
 
 /// The envelope the code went out in, and the tick it becomes.
 ///
@@ -16,7 +15,8 @@ import '../../../theme/tide_motion.dart';
 /// When the code is accepted the envelope does not cut to a checkmark. It
 /// shrinks away as a ring draws round the space it left, the tick draws
 /// through the ring, and two rings leave it — the splash's reading of "it
-/// landed", used for the one other moment in the app that deserves it.
+/// landed". The ring and tick are [TideTick], shared with the farewell after
+/// an account is deleted.
 class MailMark extends StatefulWidget {
   const MailMark({super.key, required this.accepted, this.size = 84});
 
@@ -104,26 +104,6 @@ class _MailPainter extends CustomPainter {
   final Animation<double> accepted;
   final Color lantern;
 
-  static double _span(double t, double from, double to) => TideMotion
-      .morphCurve
-      .transform(((t - from) / (to - from)).clamp(0.0, 1.0));
-
-  /// The first [t] of [source]'s length, across however many contours.
-  static Path _trace(Path source, double t) {
-    if (t <= 0) return Path();
-    if (t >= 1) return source;
-    final metrics = source.computeMetrics().toList();
-    var remaining = metrics.fold<double>(0, (sum, m) => sum + m.length) * t;
-    final out = Path();
-    for (final metric in metrics) {
-      if (remaining <= 0) break;
-      final take = math.min(remaining, metric.length);
-      out.addPath(metric.extractPath(0, take), Offset.zero);
-      remaining -= take;
-    }
-    return out;
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.shortestSide;
@@ -132,15 +112,15 @@ class _MailPainter extends CustomPainter {
     final d = draw.value;
     final a = accepted.value;
 
-    Paint line(double alpha, [double weight = 1]) => Paint()
+    Paint line(double alpha) => Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke * weight
+      ..strokeWidth = stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..color = lantern.withValues(alpha: alpha);
 
     // --- The envelope, leaving as the tick arrives ------------------------
-    final leave = _span(a, 0, 0.35);
+    final leave = TideTick.span(a, 0, 0.35);
     if (leave < 1) {
       final body = Rect.fromCenter(
         center: c.translate(0, s * 0.02),
@@ -162,7 +142,7 @@ class _MailPainter extends CustomPainter {
         ..scale(1 - 0.3 * leave)
         ..translate(-c.dx, -c.dy);
 
-      final fill = _span(d, 0.35, 1);
+      final fill = TideTick.span(d, 0.35, 1);
       if (fill > 0) {
         canvas.drawRRect(
           RRect.fromRectAndRadius(body, corner),
@@ -170,10 +150,16 @@ class _MailPainter extends CustomPainter {
         );
       }
       canvas
-        ..drawPath(_trace(outline, _span(d, 0, 0.65)), line(alpha))
-        ..drawPath(_trace(flap, _span(d, 0.45, 0.9)), line(alpha));
+        ..drawPath(
+          TideTick.trace(outline, TideTick.span(d, 0, 0.65)),
+          line(alpha),
+        )
+        ..drawPath(
+          TideTick.trace(flap, TideTick.span(d, 0.45, 0.9)),
+          line(alpha),
+        );
 
-      final point = _span(d, 0.85, 1) * alpha;
+      final point = TideTick.span(d, 0.85, 1) * alpha;
       if (point > 0) {
         final metric = outline.computeMetrics().first;
         final at = metric
@@ -196,48 +182,8 @@ class _MailPainter extends CustomPainter {
       canvas.restore();
     }
 
-    if (a <= 0) return;
-
     // --- The ring and the tick --------------------------------------------
-    final radius = s * 0.42;
-    canvas.drawCircle(
-      c,
-      radius,
-      Paint()..color = lantern.withValues(alpha: 0.14 * _span(a, 0.3, 0.7)),
-    );
-
-    final ring = _span(a, 0.2, 0.65);
-    if (ring > 0) {
-      canvas.drawArc(
-        Rect.fromCircle(center: c, radius: radius),
-        -math.pi / 2,
-        ring * 2 * math.pi,
-        false,
-        line(1),
-      );
-    }
-
-    final tick = Path()
-      ..moveTo(c.dx - s * 0.17, c.dy + s * 0.01)
-      ..lineTo(c.dx - s * 0.05, c.dy + s * 0.13)
-      ..lineTo(c.dx + s * 0.19, c.dy - s * 0.12);
-    canvas.drawPath(_trace(tick, _span(a, 0.55, 0.9)), line(1, 1.3));
-
-    // Two rings leaving the mark, the second trailing the first. Painted
-    // past the widget's bounds on purpose: a clipped ripple is a flicker.
-    final ripple = _span(a, 0.62, 1);
-    for (final (delay, strength) in [(0.0, 0.4), (0.22, 0.24)]) {
-      final p = ((ripple - delay) / (1 - delay)).clamp(0.0, 1.0);
-      if (p <= 0 || p >= 1) continue;
-      canvas.drawCircle(
-        c,
-        radius * (1 + 0.55 * p),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.4
-          ..color = lantern.withValues(alpha: strength * (1 - p)),
-      );
-    }
+    TideTick.paint(canvas, size, a, lantern);
   }
 
   @override

@@ -106,6 +106,11 @@ enum AuthProblem {
   cancelled,
 
   googleUnavailable,
+
+  /// Account deletion is not installed on the server: the `delete_account`
+  /// function from `supabase/auth_setup.sql` has not been run.
+  deletionUnavailable,
+
   unknown,
 }
 
@@ -186,4 +191,10 @@ abstract class AuthService {
   Future<void> markTourCompleted(TideAccount account);
 
   Future<void> logOut();
+
+  /// Deletes the signed-in account for good, then ends its session here.
+  ///
+  /// Throws [AuthFailure] when the server refuses or cannot be reached; the
+  /// session is left signed in then, so the person can try again.
+  Future<void> deleteAccount();
 }
