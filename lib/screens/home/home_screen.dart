@@ -6,8 +6,10 @@ import '../../config/tour_catalog.dart';
 import '../../services/models/habit.dart';
 import '../../services/streak_calculator.dart';
 import '../../services/tide_scope.dart';
+import '../../theme/tide_colors.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/gauge_number.dart';
 import '../../widgets/tide_button.dart';
 import '../../widgets/tide_tab_bar.dart';
 import '../../widgets/tour/tour_anchor.dart';
@@ -140,7 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
                   20,
-                  MediaQuery.paddingOf(context).top + 28,
+                  MediaQuery.paddingOf(context).top + 24,
                   20,
                   0,
                 ),
@@ -154,12 +156,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     stop: TourStop.header,
                     child: HomeHeader(
                       date: DateTime.now(),
+                      milestonesUnlocked: store.unlockedMilestoneCount,
                       onMilestones: () => context.push(Routes.milestones),
                     ),
                   ),
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 12)),
+              const SliverToBoxAdapter(child: SizedBox(height: 22)),
               SliverToBoxAdapter(
                 child: TourAnchor(
                   stop: TourStop.hero,
@@ -199,11 +202,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 )
               else ...[
-                // No section header above the list. "HABITS ———— 4" was
-                // labelling the only list on the screen, ruling it off and
-                // then counting it — three pieces of chrome to introduce
-                // four cards that introduce themselves.
-                const SliverToBoxAdapter(child: SizedBox(height: 28)),
+                // A title over the list again, but not the one that was
+                // taken out. "HABITS ———— 4" was tracked capitals, a rule and
+                // a count: three pieces of chrome. What replaces it is the
+                // Insights section head — a lantern tick and a sentence-case
+                // name — because the list now sits under a grid of tiles,
+                // and without a name the first card reads as a fourth tile
+                // that fell out of the grid.
+                const SliverToBoxAdapter(child: SizedBox(height: 30)),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                  sliver: SliverToBoxAdapter(
+                    child: _ListHead(active: habits.length),
+                  ),
+                ),
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverToBoxAdapter(
@@ -237,12 +249,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 // go. This is the tour's add stop on a Today that already
                 // has something on it.
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  padding: const EdgeInsets.fromLTRB(20, HabitCard.gap, 20, 0),
                   sliver: SliverToBoxAdapter(
                     child: TourAnchor(
                       stop: TourStop.add,
                       child: AddHabitTile(
                         atLimit: !store.canAddHabit,
+                        used: store.isPro ? null : store.activeHabitCount,
                         onTap: () => context.push(
                           store.canAddHabit ? Routes.newHabit : Routes.upgrade,
                         ),
@@ -259,6 +272,50 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The list's name, and how many habits are in it.
+///
+/// Built like the Insights section head — a short lantern tick and a
+/// sentence-case title — so the two screens introduce a block the same
+/// way. It counts the list rather than repeating the day's status, which
+/// the tile directly above already says.
+class _ListHead extends StatelessWidget {
+  const _ListHead({required this.active});
+
+  final int active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 3,
+          height: 15,
+          decoration: BoxDecoration(
+            color: TideColors.lantern,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text('Habits', style: TideType.hero.copyWith(fontSize: 19)),
+        const Spacer(),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            GaugeNumber(
+              value: active,
+              style: TideType.gauge(14, color: TideColors.silt),
+            ),
+            Text(' active', style: TideType.labelMuted),
+          ],
         ),
       ],
     );

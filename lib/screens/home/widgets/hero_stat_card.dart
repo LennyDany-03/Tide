@@ -11,32 +11,32 @@ import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/gauge_number.dart';
 import '../../../widgets/press_scale.dart';
+import '../../../widgets/stagger_list.dart';
 import '../../../widgets/tide_flame.dart';
 import '../../../widgets/tide_level.dart';
 import '../../../widgets/tide_surface.dart';
 
-/// The day's headline: how much of today is done, as water standing at a
-/// level behind the figure.
+/// The day's headline, as a bento: one dominant tile and two that support
+/// it.
 ///
-/// There is no card. The figure and the water sit directly on the page,
-/// full-bleed to both edges — a hero inside a rounded rectangle is one more
-/// object on a screen already full of them, and the panel said nothing the
-/// type and the water were not already saying.
+/// **Why the layout changed.** The hero used to be a figure on open ground,
+/// a full-bleed band of water under it, and then two identical half-width
+/// chips. Three horizontal slabs of roughly equal weight stacked down the
+/// screen — nothing about it said which of the three mattered most, and the
+/// water, ending at both screen edges, read as a divider between the title
+/// and the stats rather than as the day filling up.
 ///
-/// The figure sits clear above the water rather than inside it. Running the
-/// water behind the whole block gave the level somewhere to travel, but at
-/// a half-finished day the lit waterline lands exactly across the caption
-/// and cuts the letterforms in half — and where the line falls is decided by
-/// the data, so there is no layout that survives every value. Text above,
-/// water below, and the crest is free to be as bright as it needs to be.
+/// An asymmetric grid fixes the hierarchy with position alone. The day takes
+/// the tall left tile, because it is the fact you open the app for; the week
+/// and the streak stack in the narrower right column, because they are
+/// context for it. The eye lands left, large, first — and every tile is the
+/// same material with the same edge, so it reads as one instrument, not
+/// three widgets that happen to be adjacent.
 ///
-/// The two chips below were flat readouts: an icon, a number, a caption,
-/// nothing moving and nothing to press. The streak one especially, which is
-/// the single figure people open a habit app to look at, and which had a
-/// destination sitting one tap away that it never offered. Both now report
-/// themselves — the rate draws its own eight weeks, the streak fills a ring
-/// toward whatever it is heading for — and the streak carries you through
-/// to the route it is measured against.
+/// The water survived and is better for it: confined to the bottom of its
+/// own tile it is unmistakably *that tile's* level, and it can never run
+/// through the figure, because the figure sits in the part of the tile the
+/// water is not allowed into.
 class HeroStatCard extends StatelessWidget {
   const HeroStatCard({
     super.key,
@@ -62,71 +62,277 @@ class HeroStatCard extends StatelessWidget {
   /// Through to Milestones, which is the screen the streak is measured on.
   final VoidCallback onStreakTap;
 
-  double get _level => scheduled == 0 ? 0 : completed / scheduled;
-
-  /// Tall enough that the difference between a quarter done and half done
-  /// is a distance you can see, not a two-pixel nudge.
-  static const double _waterHeight = 96;
+  /// Space between tiles, both ways. One number, so the grid's gutters are
+  /// identical and the three tiles lock together as a single block.
+  static const double _gutter = 10;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              GaugeNumber(value: completed, style: TideType.gaugeHero()),
-              const SizedBox(width: 8),
-              Text(
-                'of $scheduled',
-                style: TideType.gauge(18, color: TideColors.silt),
-              ),
-              const Spacer(),
-              Text(
-                dayComplete ? 'all marked' : 'marked today',
-                style: TideType.labelMuted.copyWith(
-                  color: dayComplete ? TideColors.lantern : TideColors.silt,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      // Intrinsic rather than a fixed height: the text scales, and the tall
+      // tile has to stay exactly as tall as the two it stands beside at
+      // every size, or the grid stops being a grid.
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 11 : 9 rather than 2 : 1. At phone width a true two-to-one
+            // leaves the right column too narrow for a figure and a caption
+            // side by side with anything else, and the streak tile needs
+            // room for its fire.
+            Expanded(
+              flex: 11,
+              child: StaggerIn(
+                index: 0,
+                child: _DayTile(
+                  completed: completed,
+                  scheduled: scheduled,
+                  dayComplete: dayComplete,
                 ),
               ),
-            ],
+            ),
+            const SizedBox(width: _gutter),
+            Expanded(
+              flex: 9,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  StaggerIn(
+                    index: 1,
+                    child: _RateChip(rate: weeklyRate, series: weeklySeries),
+                  ),
+                  const SizedBox(height: _gutter),
+                  // Takes whatever height is left, so the bottom edges of
+                  // the two columns always meet.
+                  Expanded(
+                    child: StaggerIn(
+                      index: 2,
+                      child: _StreakChip(
+                        streak: bestStreak,
+                        onTap: onStreakTap,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// How much of today is done: the figure, where the day stands, and the
+/// water at that level along the bottom of the tile.
+class _DayTile extends StatelessWidget {
+  const _DayTile({
+    required this.completed,
+    required this.scheduled,
+    required this.dayComplete,
+  });
+
+  final int completed;
+  final int scheduled;
+  final bool dayComplete;
+
+  double get _level => scheduled == 0 ? 0 : completed / scheduled;
+
+  /// The band the water may occupy. The text column reserves exactly this
+  /// much below itself, so at a full day the crest still stops short of the
+  /// caption — where the waterline falls is decided by the data, and no
+  /// value is allowed to put it through a letterform.
+  static const double _waterHeight = 76;
+
+  @override
+  Widget build(BuildContext context) {
+    return TideSurface(
+      radius: TideElevation.radius20,
+      // A finished day warms the tile, at the lowest intensity lantern is
+      // used anywhere — the same tint a finished habit card takes.
+      color: dayComplete
+          ? Color.lerp(TideColors.shelf, TideColors.lantern, 0.05)
+          : TideColors.shelf,
+      border: Border.all(
+        color: dayComplete
+            ? TideColors.lantern.withValues(alpha: 0.2)
+            : TideColors.hairline,
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: _waterHeight,
+            child: TideLevel(level: _level, amplitude: 5),
           ),
-        ),
-
-        // Full-bleed: the water runs off both edges of the screen, so it
-        // reads as a body of water the page sits in rather than as a widget
-        // with a left and a right end.
-        SizedBox(
-          height: _waterHeight,
-          child: TideLevel(level: _level, amplitude: 9),
-        ),
-        const SizedBox(height: 20),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          // Intrinsic rather than a stretch alone: the row sits in a sliver
-          // with no bounded height to stretch against, and the two chips
-          // have genuinely different content — the sparkline makes one
-          // taller — so the shorter one has to be told to match.
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: _RateChip(rate: weeklyRate, series: weeklySeries),
+                _LiveStatus(
+                  remaining: scheduled - completed,
+                  scheduled: scheduled,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _StreakChip(streak: bestStreak, onTap: onStreakTap),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    GaugeNumber(
+                      value: completed,
+                      style: TideType.gaugeHero(),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '/',
+                      style: TideType.gauge(22, color: TideColors.silt),
+                    ),
+                    GaugeNumber(
+                      value: scheduled,
+                      style: TideType.gauge(22, color: TideColors.silt),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 6),
+                Text(
+                  'marked today',
+                  style: TideType.labelMuted,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: _waterHeight),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Where the day stands, in three words and a pulse.
+///
+/// The pulse is the one perpetual motion on the tile, and it runs only while
+/// something is still open. A live dot on a finished day is an alarm about
+/// nothing; once the day is marked it stops and sits solid, which is its own
+/// small moment of rest.
+class _LiveStatus extends StatefulWidget {
+  const _LiveStatus({required this.remaining, required this.scheduled});
+
+  final int remaining;
+  final int scheduled;
+
+  @override
+  State<_LiveStatus> createState() => _LiveStatusState();
+}
+
+class _LiveStatusState extends State<_LiveStatus>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: TideMotion.syncPulse,
+  );
+
+  bool get _live => widget.scheduled > 0 && widget.remaining > 0;
+
+  /// Not "All marked": the log sheet already says that about one habit, and
+  /// a day and a habit finishing are different claims.
+  String get _label {
+    if (widget.scheduled == 0) return 'Nothing due';
+    if (!_live) return 'Day complete';
+    return '${widget.remaining} to go';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_LiveStatus old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  void _sync() {
+    if (_live) {
+      if (!_pulse.isAnimating) _pulse.repeat();
+    } else {
+      _pulse
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final still = MediaQuery.disableAnimationsOf(context);
+    const dot = SizedBox.square(
+      dimension: 6,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: TideColors.lantern,
         ),
-      ],
+      ),
+    );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(7, 4, 10, 4),
+      decoration: BoxDecoration(
+        color: TideColors.lantern.withValues(alpha: _live ? 0.10 : 0.16),
+        borderRadius: TideElevation.radius12,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox.square(
+            dimension: 14,
+            child: AnimatedBuilder(
+              animation: _pulse,
+              builder: (context, _) {
+                final t = _pulse.value;
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // A ring of the dot's own light leaving it and fading —
+                    // the pulse a live indicator gives, without a second
+                    // colour or a glow.
+                    if (_live && !still)
+                      Opacity(
+                        opacity: (1 - t) * 0.55,
+                        child: Transform.scale(scale: 1 + 1.3 * t, child: dot),
+                      ),
+                    dot,
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            _label,
+            style: TideType.labelMuted.copyWith(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: TideColors.lantern,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -163,7 +369,8 @@ class _RateChip extends StatelessWidget {
     return TideSurface(
       radius: TideElevation.radius20,
       color: TideColors.shelf,
-      padding: const EdgeInsets.fromLTRB(15, 13, 15, 14),
+      border: Border.all(color: TideColors.hairline),
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -181,10 +388,15 @@ class _RateChip extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 2),
-          Text('this week', style: TideType.labelMuted),
+          Text(
+            'this week',
+            style: TideType.labelMuted,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 30,
+            height: 28,
             width: double.infinity,
             child: _Sparkline(series: series),
           ),
@@ -375,7 +587,7 @@ class _SparkPainter extends CustomPainter {
 /// the wrong question — it reports how far through a leg you are, when a
 /// streak's entire emotional content is that it is *still alight* and that
 /// letting it go out would cost something. So the fire is the card now, and
-/// the leg being walked is a 3px rule underneath, which is about as much
+/// the leg being walked is a 2px rule underneath, which is about as much
 /// room as "four days into the thirty between full moon and undertow"
 /// deserves.
 ///
@@ -435,24 +647,21 @@ class _StreakChip extends StatelessWidget {
       child: TideSurface(
         radius: TideElevation.radius20,
         color: TideColors.shelf,
-        padding: const EdgeInsets.fromLTRB(15, 13, 12, 14),
+        border: Border.all(color: TideColors.hairline),
+        padding: const EdgeInsets.fromLTRB(14, 13, 12, 14),
         child: Stack(
-          // The fire burns up out of the bottom corner and is cut off by the
-          // card's own radius — `TideSurface` clips, so the flame is allowed
-          // to overrun the padding and be trimmed by the shape rather than
-          // sitting politely inside it like an illustration.
           clipBehavior: Clip.none,
           children: [
             Positioned(
               // In the right-hand third, below the chevron, and whole. The
-              // flame is a crisp mark now rather than a haze of light, and a
+              // flame is a crisp mark rather than a haze of light, and a
               // mark cut off by the card's edge reads as a layout accident.
               // It is also kept small: an emblem the size of the number
               // stops being the card's light and becomes its subject.
               right: 0,
               bottom: -4,
-              width: 46,
-              height: 64,
+              width: 44,
+              height: 60,
               child: TideFlame(intensity: _heat),
             ),
             Column(
@@ -463,8 +672,8 @@ class _StreakChip extends StatelessWidget {
                   children: [
                     GaugeCountUp(value: streak, style: TideType.gauge(24)),
                     const Spacer(),
-                    // Small, and the only chevron on the screen: it is the
-                    // one readout here that leads anywhere.
+                    // Small, and the only chevron in the grid: it is the one
+                    // tile here that leads anywhere.
                     Icon(
                       Icons.chevron_right_rounded,
                       size: 18,
@@ -476,24 +685,21 @@ class _StreakChip extends StatelessWidget {
                 Text(
                   'day streak',
                   style: TideType.labelMuted,
-                  // The card is half the page wide and the fire takes a
-                  // third of what is left; a caption that wraps here pushes
-                  // the whole footer down past the flame's shoulder.
+                  // The tile is under half the page wide and the fire takes
+                  // a third of it; a caption that wraps here pushes the
+                  // whole footer down past the flame's shoulder.
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 12),
-                // The whole footer is held to the left two thirds, clear of
-                // the fire standing in the right one. Both halves of it
-                // needed it: a rule that runs the full width has to cross
-                // whatever is in the corner, and a hard bright line laid
-                // over a soft glow is the cheapest thing two good elements
-                // can do to each other — but the caption underneath was the
-                // worse offender, because it ellipsised straight into the
-                // brightest part of the flame and simply became unreadable.
+                // The footer is held to the left two thirds, clear of the
+                // fire standing in the right one. A rule running the full
+                // width has to cross whatever is in the corner, and a caption
+                // there ellipsised straight into the brightest part of the
+                // flame and became unreadable.
                 FractionallySizedBox(
                   alignment: Alignment.centerLeft,
-                  widthFactor: 0.66,
+                  widthFactor: 0.68,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../services/models/habit.dart';
+import '../../../services/models/tide_glyph.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_motion.dart';
@@ -28,13 +29,18 @@ import '../../../widgets/swipe_log_background.dart';
 /// luminance, no gradient — and it is opaque, which is what still lets the
 /// card slide cleanly over the swipe backdrop when it is dragged.
 ///
-/// The card divides into two handles, and the division is the same on every
-/// card in the app:
+/// **Read left to right: what it is, how it has gone, where today stands.**
+/// The glyph sits in a tile of its own; the name carries the week and one
+/// line of status beneath it; and a single mark at the far end says whether
+/// today is open, filling, done or frozen. The card used to put a progress
+/// ring *around* the glyph, which fused "which habit" and "how far" into one
+/// 34px object, and then end the row on a bare streak figure nothing
+/// labelled. Splitting identity from state, and naming the streak where it
+/// is shown, is what lets a list of four be scanned rather than decoded.
 ///
-/// * **The ring** opens the habit — a tap goes to detail.
-/// * **The body** logs it — binary habits are swiped, and a habit with a
-///   count opens the log sheet, where its units are metered out one at a
-///   time.
+/// The body logs the habit — binary habits are swiped, and a habit with a
+/// count opens the log sheet, where its units are metered out one at a
+/// time.
 ///
 /// The trailing side of the body reads the day rather than offering one
 /// fixed action: an open day is frozen, a frozen day gives its token back,
@@ -51,11 +57,6 @@ import '../../../widgets/swipe_log_background.dart';
 /// and horizontal drag settle in the gesture arena on their own (movement
 /// picks the drag, stillness picks the press), so the whole card can carry
 /// both without the two fighting.
-///
-/// The body used to hold-to-log a counted habit in place, sweeping the
-/// whole target under one finger. Two problems: the only outcomes were
-/// nothing and all ten, and a slow gesture sat on a card you scroll past.
-/// The counting moved to a surface of its own.
 class HabitCard extends StatefulWidget {
   const HabitCard({
     super.key,
@@ -88,7 +89,6 @@ class HabitCard extends StatefulWidget {
 
   final VoidCallback onComplete;
 
-  /// Called with the amount to log — the full target, from a swipe.
   final VoidCallback onFreeze;
   final VoidCallback onUnfreeze;
 
@@ -102,14 +102,20 @@ class HabitCard extends StatefulWidget {
   static const double height = 78;
 
   /// Vertical air between two cards. Enough that the gap reads as ground
-  /// showing through rather than as a thick divider.
-  static const double gap = 10;
+  /// showing through rather than as a thick divider — and the same as the
+  /// bento grid's gutter plus a little, so the list breathes slightly more
+  /// than the summary above it.
+  static const double gap = 12;
 
   static const BorderRadius radius = TideElevation.radius20;
 
   @override
   State<HabitCard> createState() => _HabitCardState();
 }
+
+/// Where today stands for one habit — the single state the trailing mark
+/// draws.
+enum _Mark { open, counting, done, frozen }
 
 class _HabitCardState extends State<HabitCard>
     with SingleTickerProviderStateMixin {
@@ -131,7 +137,15 @@ class _HabitCardState extends State<HabitCard>
   /// its second line care about.
   bool get _done => _completed || _frozen;
 
+  bool get _counted => widget.habit.type != HabitType.binary;
+
   double get _progress => widget.habit.progressOn(DateTime.now());
+
+  _Mark get _mark {
+    if (_frozen) return _Mark.frozen;
+    if (_completed) return _Mark.done;
+    return _counted ? _Mark.counting : _Mark.open;
+  }
 
   @override
   void initState() {
@@ -253,17 +267,35 @@ class _HabitCardState extends State<HabitCard>
 
   // --- Copy -------------------------------------------------------------
 
-  /// The second line, and only when there is something to say.
+  /// The line under the name: always something, and never the gesture.
   ///
-  /// This used to spell out the gesture on every row forever — "swipe right
-  /// to log" under all four habits, every day. An affordance label that
-  /// never retires stops being help and becomes noise, and the ring already
-  /// shows where the habit stands.
-  String? get _detail {
+  /// It used to spell out "swipe right to log" under every habit, every
+  /// day — an affordance label that never retires stops being help and
+  /// becomes noise. What it says now is the most useful fact about the
+  /// habit at this moment: how far a count has got, that a day is being
+  /// held, or how long the run is. The streak moved here from a bare figure
+  /// at the end of the row, where nothing said what it was counting.
+  String get _detail {
     if (_frozen) return 'frozen, streak held';
-    if (_done) return null;
-    if (widget.habit.type == HabitType.binary) return null;
-    return '${_amount()} of ${widget.habit.target}';
+    if (!_done && _counted) return '${_amount()} of ${widget.habit.target}';
+    if (widget.streak > 0) return '${widget.streak} day streak';
+    return 'No streak yet';
+  }
+
+  TextStyle get _detailStyle {
+    if (_frozen) {
+      return TideType.labelMuted.copyWith(
+        color: TideColors.frost.withValues(alpha: 0.75),
+      );
+    }
+    // A count in progress is the one line here that is about *today*, so it
+    // takes the accent, faintly.
+    if (!_done && _counted && _progress > 0) {
+      return TideType.labelMuted.copyWith(
+        color: TideColors.lantern.withValues(alpha: 0.85),
+      );
+    }
+    return TideType.labelMuted;
   }
 
   String _amount() {
@@ -329,24 +361,16 @@ class _HabitCardState extends State<HabitCard>
   /// thing a swipe is supposed to say is that a card has *lifted away* and
   /// left a socket behind it. A card is a rounded object; it does not stop
   /// being one because part of it is over a tint.
-  ///
-  /// The seam is fine. The corner that genuinely was wrong is the row's,
-  /// and that is fixed one level up in [build]: the stack used to clip with
-  /// `Clip.hardEdge`, which is a rectangle, so the card left the row
-  /// through a right angle while the socket kept its radius.
-
   Widget _body() {
-    final detail = _detail;
-
     final row = TideSurface(
       height: HabitCard.height,
       radius: HabitCard.radius,
       color: _fill,
       border: Border.all(color: _edge),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.fromLTRB(12, 0, 16, 0),
       child: Row(
         children: [
-          _ringHandle(),
+          _GlyphTile(glyph: widget.habit.glyph, hue: _glyphHue, wash: _wash),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -361,36 +385,31 @@ class _HabitCardState extends State<HabitCard>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (detail != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    detail,
-                    style: _frozen
-                        ? TideType.labelMuted.copyWith(
-                            color: TideColors.frost.withValues(alpha: 0.75),
-                          )
-                        : TideType.labelMuted,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                const SizedBox(height: 7),
+                Row(
+                  children: [
+                    RippleStrip(
+                      levels: widget.weekLevels,
+                      frozen: widget.frozenDays,
+                      height: 6,
+                      spacing: 2.5,
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        _detail,
+                        style: _detailStyle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-          RippleStrip(levels: widget.weekLevels, frozen: widget.frozenDays),
-          const SizedBox(width: 14),
-          SizedBox(
-            width: 24,
-            child: Text(
-              '${widget.streak}',
-              textAlign: TextAlign.right,
-              style: TideType.gauge(
-                17,
-                color: _done ? _stateHue : TideColors.silt,
-              ),
-            ),
-          ),
+          _StatusMark(mark: _mark, progress: _progress),
         ],
       ),
     );
@@ -420,51 +439,166 @@ class _HabitCardState extends State<HabitCard>
     );
   }
 
-  /// The card fill. One step of luminance off the page, tinted very
-  /// slightly once the day is settled — warm where it was earned, cold
-  /// where it was frozen, at the lowest intensity either hue is used at
-  /// anywhere.
+  /// The card fill. One step of luminance off the page while the habit is
+  /// open; part of the way back down toward the page once the day is
+  /// settled.
+  ///
+  /// A settled card used to be tinted *up* — lantern or frost lerped into
+  /// the fill — and on this ground the warm lerp came out a lighter olive
+  /// slab. That made the finished habits the brightest objects in a list
+  /// whose job is to show what is still outstanding. Sinking them toward
+  /// the page does the opposite: open work stands forward, finished work
+  /// settles back, and the solid mark at the end still says which is which.
   Color get _fill {
-    if (_frozen) return Color.lerp(TideColors.shelf, TideColors.frost, 0.05)!;
-    if (_done) return Color.lerp(TideColors.shelf, TideColors.lantern, 0.05)!;
+    if (_done) return Color.lerp(TideColors.shelf, TideColors.deepWater, 0.4)!;
     return TideColors.shelf;
   }
 
-  /// Ice for a frozen day, the accent for an earned one.
-  ///
-  /// A frozen card used to be lantern throughout — the same ring, border and
-  /// figure as a habit that was actually completed — so the only thing
-  /// separating "I did this" from "I bought a day off" was a line of small
-  /// grey text. Temperature carries it now.
-  Color get _stateHue => _frozen ? TideColors.frost : TideColors.lantern;
-
-  /// The hairline round the card, and the only place its state is spelled
-  /// out on the edge rather than inside it.
-  ///
-  /// Kept low on purpose. A brighter warm edge on a finished habit made the
-  /// two done cards the loudest things in a list whose whole job is to show
-  /// what is still outstanding — done is already carried by a full ring, a
-  /// silt name and a lantern streak figure, and it does not need a fourth
-  /// signal competing for the eye.
+  /// The hairline round the card. Ice stays on the edge of a frozen card,
+  /// faintly, because a held day and an earned one should not be mistaken
+  /// for each other at a glance; an earned day needs no edge of its own —
+  /// the lantern disc already carries it.
   Color get _edge {
-    if (_frozen) return TideColors.frost.withValues(alpha: 0.2);
-    if (_done) return TideColors.lantern.withValues(alpha: 0.18);
+    if (_frozen) return TideColors.frost.withValues(alpha: 0.16);
     return TideColors.hairline;
   }
 
-  /// The glyph is informational on Home. Pressing and holding it opens the
-  /// same action menu as pressing and holding the row.
-  Widget _ringHandle() {
-    return TideRing(
-      progress: _done ? 1 : _progress,
-      size: 34,
-      strokeWidth: 2,
-      color: _stateHue,
-      child: HabitGlyph(
-        glyph: widget.habit.glyph,
-        size: 14,
-        color: _done ? _stateHue : TideColors.bone.withValues(alpha: 0.75),
+  /// The glyph lights with the habit: ice once frozen, lantern once earned
+  /// or under way, and plain ink while nothing has happened yet.
+  Color get _glyphHue {
+    if (_frozen) return TideColors.frost;
+    if (_completed || (_counted && _progress > 0)) return TideColors.lantern;
+    return TideColors.bone.withValues(alpha: 0.8);
+  }
+
+  /// The tile behind the glyph. A wash of the same hue rather than the
+  /// trench — a recess darker than the card reads as a hole punched in it.
+  Color get _wash {
+    if (_frozen) return TideColors.frost.withValues(alpha: 0.08);
+    if (_completed) return TideColors.lantern.withValues(alpha: 0.09);
+    return TideColors.bone.withValues(alpha: 0.05);
+  }
+}
+
+/// Which habit this is, on a small tile of its own colour.
+class _GlyphTile extends StatelessWidget {
+  const _GlyphTile({
+    required this.glyph,
+    required this.hue,
+    required this.wash,
+  });
+
+  final TideGlyph glyph;
+  final Color hue;
+  final Color wash;
+
+  @override
+  Widget build(BuildContext context) {
+    // Tweened, so a habit being marked warms its tile in the same beat the
+    // trailing mark fills — the card changes state as one object.
+    return AnimatedContainer(
+      duration: TideMotion.ringFill,
+      curve: TideMotion.tabCurve,
+      width: 42,
+      height: 42,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: wash,
+        borderRadius: TideElevation.radius12,
+      ),
+      child: HabitGlyph(glyph: glyph, size: 16, color: hue),
+    );
+  }
+}
+
+/// Where today stands, at the end of the row, as one mark.
+///
+/// * **Open** — an empty circle: the universal "not yet", with no words.
+/// * **Counting** — a ring filling toward the target, with a plus in it,
+///   because tapping this card adds to the count.
+/// * **Done** — a solid lantern disc and a check. The one solid warm object
+///   on the card, so a finished habit is legible from across the list.
+/// * **Frozen** — ice: a frost ring and a flake, the same mark the freeze
+///   swipe shows.
+///
+/// A change between them pops rather than cuts, on the signature overshoot,
+/// so marking a habit lands as a small physical event.
+class _StatusMark extends StatelessWidget {
+  const _StatusMark({required this.mark, required this.progress});
+
+  final _Mark mark;
+  final double progress;
+
+  static const double _size = 30;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: _size,
+      child: AnimatedSwitcher(
+        duration: TideMotion.tabSwitch,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.6, end: 1).animate(
+              CurvedAnimation(parent: animation, curve: TideMotion.overshoot),
+            ),
+            child: child,
+          ),
+        ),
+        child: SizedBox.square(
+          key: ValueKey(mark),
+          dimension: _size,
+          child: _face(),
+        ),
       ),
     );
+  }
+
+  Widget _face() {
+    return switch (mark) {
+      _Mark.done => const DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: TideColors.lantern,
+        ),
+        child: Icon(
+          Icons.check_rounded,
+          size: 18,
+          color: TideColors.deepWater,
+        ),
+      ),
+      _Mark.frozen => DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: TideColors.frost.withValues(alpha: 0.10),
+          border: Border.all(color: TideColors.frost.withValues(alpha: 0.35)),
+        ),
+        child: const Icon(
+          Icons.ac_unit_rounded,
+          size: 14,
+          color: TideColors.frost,
+        ),
+      ),
+      _Mark.counting => TideRing(
+        progress: progress,
+        size: _size,
+        strokeWidth: 2.5,
+        child: Icon(
+          Icons.add_rounded,
+          size: 15,
+          color: progress > 0 ? TideColors.lantern : TideColors.silt,
+        ),
+      ),
+      _Mark.open => DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: TideColors.bone.withValues(alpha: 0.18),
+            width: 1.5,
+          ),
+        ),
+      ),
+    };
   }
 }
