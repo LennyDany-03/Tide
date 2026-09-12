@@ -523,11 +523,23 @@ class SupabaseBillingService extends BillingService {
       'amount_mismatch' ||
       'payment_mismatch' ||
       'unknown_order' ||
+      'unknown_subscription' ||
+      'unknown_mandate' ||
       'unknown_plan' => BillingProblem.rejected,
       'payment_failed' => BillingProblem.declined,
       // Verified and paid; only the grant did not land. The webhook applies
       // the same payment, so this waits rather than failing.
       'grant_failed' => BillingProblem.pending,
+      // The mandate *is* cancelled at Razorpay — that is the part that cannot
+      // be undone by retrying — and only our row lagged. `subscription.cancelled`
+      // will arrive at the webhook and finish it, so this waits like a grant
+      // that has not landed rather than reading as "cancelling failed", which
+      // would invite a second attempt at something already done.
+      'mark_failed' => BillingProblem.pending,
+      'already_subscribed' => BillingProblem.alreadySubscribed,
+      // A build whose price list disagrees with the server's about which rail
+      // a plan is bought on. Nothing the person can do.
+      'wrong_rail' => BillingProblem.unavailable,
       'gateway_error' => BillingProblem.declined,
       'unauthorised' => BillingProblem.unavailable,
       _ => switch (error.status) {
@@ -536,8 +548,31 @@ class SupabaseBillingService extends BillingService {
         502 || 503 || 504 => BillingProblem.offline,
         _ => BillingProblem.unknown,
       },
-    }, message ?? error.reasonPhrase);
+    }, message ?? _gatewayDetail(error.status));
   }
+
+  /// What to say when the reply carried no body of ours.
+  ///
+  /// **Never `error.reasonPhrase`.** A reply with no `error.code` in it did not
+  /// come from the function; it came from the gateway in front of one, and
+  /// `reasonPhrase` there is a bare HTTP phrase. "Not Found" tells somebody
+  /// nothing, and a cancel dialog is the worst place in the app to print it —
+  /// the two words appear directly under a sentence about money, where they
+  /// read as though something has gone wrong with the plan itself.
+  ///
+  /// The 404 wording names what is missing, the same courtesy [_translateRpc]
+  /// extends for `PGRST202`. It is developer-facing on purpose: a deployed
+  /// build cannot reach it, because a function that is not there is not a state
+  /// a released app gets into.
+  static String _gatewayDetail(int status) => switch (status) {
+    404 =>
+      'Billing is not finished setting up on the server. Deploy the functions '
+          'in supabase/functions/.',
+    401 || 403 => 'Sign in again.',
+    502 || 503 || 504 =>
+      'The server could not be reached. Nothing has changed.',
+    _ => 'The server could not be reached. Nothing has changed.',
+  };
 
   /// Matched on the description rather than on a type, the same way
   /// `SupabaseAuthService._unexpected` does it: `SocketException` lives in

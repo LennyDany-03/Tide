@@ -67,6 +67,23 @@ void main() {
       .where((line) => line.contains('public.$name('))
       .toList();
 
+  /// Whether [name] is revoked from all three client roles.
+  ///
+  /// Matched with a whitespace-tolerant pattern rather than by looking for the
+  /// exact two lines. The statement spans a line break, and an editor that
+  /// reindents this file — which one did, turning every statement's
+  /// continuation from two spaces into four — must not be able to make this
+  /// test report that a privilege had been handed to the app. The claim is
+  /// about the privilege; the column the keyword starts in is nobody's
+  /// business.
+  bool revokedFromApp(String name, String args) => RegExp(
+    r'revoke\s+all\s+on\s+function\s+public\.'
+    '${RegExp.escape(name)}'
+    r'\s*\(\s*'
+    '${RegExp.escape(args)}'
+    r'\s*\)\s*from\s+public,\s*anon,\s*authenticated\s*;',
+  ).hasMatch(sql);
+
   /// The columns a function must never assign, whoever may call it. A column a
   /// function does not name is a column it cannot move, and that is the whole
   /// safety argument for every writer in this file except the two that grant.
@@ -122,11 +139,9 @@ void main() {
 
         test('is revoked from the app and granted only to service_role', () {
           expect(
-            sql,
-            contains(
-              'revoke all on function public.$name(uuid)\n'
-              '  from public, anon, authenticated;',
-            ),
+            revokedFromApp(name, 'uuid'),
+            isTrue,
+            reason: '$name must be revoked from public, anon and authenticated',
           );
           final grants = grantsOf(name);
           expect(grants, hasLength(1), reason: 'exactly one grant');
@@ -185,11 +200,9 @@ void main() {
 
         test('is revoked from everyone, then granted only to authenticated', () {
           expect(
-            sql,
-            contains(
-              'revoke all on function public.$name()\n'
-              '  from public, anon, authenticated;',
-            ),
+            revokedFromApp(name, ''),
+            isTrue,
+            reason: '$name must be revoked before it is granted',
           );
           expect(
             RegExp(

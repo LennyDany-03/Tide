@@ -58,6 +58,16 @@ class CheckoutNotice extends StatelessWidget {
       BillingProblem.rejected =>
         'That payment could not be verified. Nothing has been charged — '
             'get in touch if money has left your account.',
+      // Both of these are auto-pay's. Neither is a failed payment, and
+      // drawing them as one would be wrong in opposite directions: the first
+      // person already has the thing they are trying to buy, and the second
+      // needs to buy it again rather than being told something broke.
+      BillingProblem.alreadySubscribed =>
+        'This account already has a subscription. '
+            'Check your plan in Settings.',
+      BillingProblem.resubscribeNeeded =>
+        'Your old subscription was cancelled and cannot be restarted. '
+            'Subscribing again sets up a new payment method.',
       _ =>
         detail == null || detail.isEmpty
             ? 'The payment did not go through. Nothing was charged.'
