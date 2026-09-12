@@ -9,6 +9,15 @@ enum MilestoneKind {
 
   /// Logged [Milestone.threshold] days without spending a single freeze.
   cleanDays,
+
+  /// Held a Tide Pro plan. The only badge in the catalogue that is not
+  /// earned by logging anything, which is exactly why it sits off the route
+  /// rather than on it: the ladder measures the habit, and this does not.
+  ///
+  /// It is a real badge and not a receipt — it stays lit while the plan
+  /// runs and goes dark when it lapses, so the wall never claims something
+  /// about the account that is no longer true.
+  pro,
 }
 
 @immutable

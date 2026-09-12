@@ -15,6 +15,7 @@ import 'auth/demo_auth_service.dart';
 import 'billing/billing_service.dart';
 import 'billing/demo_billing_service.dart';
 import 'billing/entitlement.dart';
+import 'billing/payment_record.dart';
 import 'device_flags.dart';
 import 'habits/demo_habit_repository.dart';
 import 'habits/habit_repository.dart';
@@ -233,6 +234,74 @@ class TideStore extends ChangeNotifier {
       ? AppConstants.maxFreezeAllowance
       : AppConstants.freeFreezeAllowance;
 
+  // --- Receipts -----------------------------------------------------------
+  //
+  // Read on demand, kept in memory, never written to the device. There is no
+  // FutureBuilder anywhere in this app and there is not one here: the billing
+  // screen reads [payments] and [receiptsStatus] synchronously in `build` and
+  // draws whatever is true this frame, exactly the way Today reads [habits]
+  // and [syncStatus]. The asynchrony is in the action, not in the widget tree.
+
+  List<PaymentRecord> _payments = const [];
+  ReceiptsStatus _receiptsStatus = ReceiptsStatus.unread;
+  Future<void>? _receiptsLoad;
+
+  /// The account's payment history, newest first. Empty until something has
+  /// asked for it.
+  List<PaymentRecord> get payments => _payments;
+
+  ReceiptsStatus get receiptsStatus => _receiptsStatus;
+
+  /// Reads the account's receipts. Never throws — the screen draws
+  /// [receiptsStatus] instead.
+  ///
+  /// The list is deliberately *not* cleared while a read is in flight, and not
+  /// cleared when one fails. A refresh that emptied the list would flash it
+  /// away on every pull, and a failed refresh would take away the receipts
+  /// somebody was in the middle of reading.
+  ///
+  /// Concurrent callers share the one request: the screen's first read and a
+  /// pull to refresh land together often enough to matter.
+  Future<void> refreshReceipts() {
+    final account = _account;
+    if (account == null) {
+      _forgetReceipts();
+      return Future<void>.value();
+    }
+    return _receiptsLoad ??= _readReceipts(
+      account.id,
+    ).whenComplete(() => _receiptsLoad = null);
+  }
+
+  Future<void> _readReceipts(String accountId) async {
+    _receiptsStatus = ReceiptsStatus.loading;
+    notifyListeners();
+    try {
+      final answer = await billing.snapshot();
+      // Signed out, or somebody else signed in, while it was on its way. Those
+      // receipts belong to an account that is no longer open.
+      if (_account?.id != accountId) return;
+      _payments = answer.payments;
+      _receiptsStatus = ReceiptsStatus.loaded;
+    } catch (error) {
+      debugPrint('Receipts not read: $error');
+      if (_account?.id != accountId) return;
+      _receiptsStatus = ReceiptsStatus.failed;
+    }
+    notifyListeners();
+  }
+
+  /// The receipt list belongs to whoever is signed in and to nobody else.
+  ///
+  /// Nothing is written to the device, so there is nothing to erase — but it
+  /// is dropped from memory the instant the account is, on both paths: the one
+  /// that signs somebody out and the one that swaps somebody in. Does not
+  /// notify; both callers already do.
+  void _forgetReceipts() {
+    _payments = const [];
+    _receiptsStatus = ReceiptsStatus.unread;
+  }
+
   // --- Reads ------------------------------------------------------------
 
   /// Active habits, unfinished ones first.
@@ -341,7 +410,15 @@ class TideStore extends ChangeNotifier {
     final clean = cleanStreak;
 
     return MilestoneCatalog.all.map((milestone) {
-      final value = milestone.kind == MilestoneKind.streak ? best : clean;
+      // The Pro badge is not counted toward, so it has no partial state:
+      // the plan is running or it is not. Giving it a fraction would draw a
+      // progress bar toward a purchase, which is the one thing on this
+      // screen that must not look like something you are nearly at.
+      final value = switch (milestone.kind) {
+        MilestoneKind.streak => best,
+        MilestoneKind.cleanDays => clean,
+        MilestoneKind.pro => isPro ? 1 : 0,
+      };
       return MilestoneStatus(
         milestone: milestone,
         unlocked: value >= milestone.threshold,
@@ -765,12 +842,32 @@ class TideStore extends ChangeNotifier {
       themeColor: TideColors.lantern.toARGB32(),
     );
     _applyEntitlement(next);
+    // Only if somebody has already opened the billing screen. The receipt is
+    // read back from the server rather than invented from the payment that
+    // just succeeded: a store that wrote its own rows of payment history would
+    // be the one thing this whole layer is built not to be.
+    if (_receiptsStatus != ReceiptsStatus.unread) {
+      unawaited(refreshReceipts());
+    }
     return next;
   }
 
   /// Asks the server what this account is entitled to. Never throws.
   Future<void> refreshEntitlement() async =>
       _applyEntitlement(await billing.refresh());
+
+  /// Stops the plan renewing. Every day already paid for stays: Pro runs to
+  /// the end of the period either way, which is what the screen has to say
+  /// before the tap as well as after it.
+  ///
+  /// Throws [BillingFailure] — the screen draws it. Nothing here decides
+  /// anything; the entitlement applied came back from the server.
+  Future<void> cancelPlan() async =>
+      _applyEntitlement(await billing.cancelSubscription());
+
+  /// Undo of [cancelPlan].
+  Future<void> resumePlan() async =>
+      _applyEntitlement(await billing.resumeSubscription());
 
   /// A plan arriving: the server's answer, a webhook granting a period while
   /// the app was in somebody's pocket, or a refund taking one back.
@@ -884,6 +981,7 @@ class TideStore extends ChangeNotifier {
     // that account on the free plan would take away something they paid for.
     billing.open(next.id);
     _entitlement = billing.cached(next.id);
+    _forgetReceipts();
     _habits = isNew ? const [] : repository.cached(next.id);
     _simulatedBonus = 0;
     _pendingHabitCue = null;
@@ -918,6 +1016,7 @@ class TideStore extends ChangeNotifier {
     // The plan goes immediately, list and all: the next person to pick up this
     // phone must not find somebody else's Pro.
     _entitlement = Entitlement.free;
+    _forgetReceipts();
     unawaited(billing.close(forget: true));
     _session.value = null;
     notifyListeners();
@@ -947,7 +1046,17 @@ class TideStore extends ChangeNotifier {
   /// The plan is in here because pull to refresh is what somebody does when
   /// the app disagrees with what they believe they paid for.
   Future<void> sync() async {
-    await Future.wait([repository.refresh(), refreshEntitlement()]);
+    await Future.wait([
+      repository.refresh(),
+      // Receipts only once somebody has actually looked at them — pull to
+      // refresh on Today is not a reason to fetch an account's payment
+      // history. The snapshot carries the entitlement too, so this is not a
+      // second round trip.
+      if (_receiptsStatus == ReceiptsStatus.unread)
+        refreshEntitlement()
+      else
+        refreshReceipts(),
+    ]);
   }
 
   // --- Settings -----------------------------------------------------------

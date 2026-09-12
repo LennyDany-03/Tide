@@ -1,10 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/config/plan_catalog.dart';
+import 'package:tide/config/pro_features.dart';
 import 'package:tide/services/auth/demo_auth_service.dart';
 import 'package:tide/services/billing/billing_service.dart';
 import 'package:tide/services/billing/demo_billing_service.dart';
 import 'package:tide/services/billing/entitlement.dart';
 import 'package:tide/services/billing/payment_gateway.dart';
+import 'package:tide/services/billing/payment_record.dart';
 import 'package:tide/services/device_flags.dart';
 import 'package:tide/services/tide_store.dart';
 
@@ -249,6 +251,171 @@ void main() {
     });
   });
 
+  group('cancelling', () {
+    test('keeps every day that was paid for', () async {
+      final store = signedIn();
+      await store.purchase(PlanCatalog.monthly);
+      final until = store.entitlement.periodEnd;
+      final days = store.entitlement.daysRemaining;
+
+      await store.cancelPlan();
+
+      expect(store.isPro, isTrue, reason: 'cancelling is not surrendering');
+      expect(store.entitlement.status, EntitlementStatus.cancelled);
+      expect(store.entitlement.periodEnd, until);
+      expect(store.entitlement.daysRemaining, days);
+    });
+
+    test('the gates stay open until the period ends', () async {
+      final store = signedIn();
+      await store.purchase(PlanCatalog.yearly);
+      await store.cancelPlan();
+
+      for (final feature in ProFeature.values) {
+        expect(store.allows(feature), isTrue, reason: feature.name);
+      }
+    });
+
+    test('cancelling twice is the same as cancelling once', () async {
+      final store = signedIn();
+      await store.purchase(PlanCatalog.monthly);
+      await store.cancelPlan();
+      final after = store.entitlement;
+
+      await store.cancelPlan();
+
+      expect(store.entitlement.periodEnd, after.periodEnd);
+      expect(store.entitlement.status, EntitlementStatus.cancelled);
+    });
+
+    test('resume goes back to active without moving the date', () async {
+      final store = signedIn();
+      await store.purchase(PlanCatalog.monthly);
+      final until = store.entitlement.periodEnd;
+
+      await store.cancelPlan();
+      await store.resumePlan();
+
+      expect(store.entitlement.status, EntitlementStatus.active);
+      expect(store.entitlement.cancelledAt, isNull);
+      expect(
+        store.entitlement.periodEnd,
+        until,
+        reason: 'resume must not be a way to extend a period',
+      );
+    });
+
+    test('neither does anything on an account with no plan', () async {
+      final store = signedIn();
+      await store.cancelPlan();
+      expect(store.isPro, isFalse);
+      expect(store.entitlement.status, EntitlementStatus.none);
+
+      await store.resumePlan();
+      expect(
+        store.isPro,
+        isFalse,
+        reason: 'resume is not a way to become Pro for free',
+      );
+    });
+
+    test('resume cannot revive a plan that has run out', () async {
+      final billing = DemoBillingService();
+      final store = signedIn(billing: billing);
+      await store.purchase(PlanCatalog.monthly);
+      billing.revoke();
+      await settle();
+      expect(store.isPro, isFalse);
+
+      await store.resumePlan();
+
+      expect(store.isPro, isFalse);
+      expect(store.entitlement.status, isNot(EntitlementStatus.active));
+    });
+  });
+
+  group('receipts', () {
+    test('nothing is fetched until something asks', () async {
+      final store = signedIn();
+      expect(store.receiptsStatus, ReceiptsStatus.unread);
+      expect(store.payments, isEmpty);
+    });
+
+    test('a payment shows up in the history', () async {
+      final store = signedIn();
+      await store.purchase(PlanCatalog.yearly);
+      await store.refreshReceipts();
+
+      expect(store.receiptsStatus, ReceiptsStatus.loaded);
+      expect(store.payments, hasLength(1));
+      expect(store.payments.first.planId, 'pro_yearly');
+      expect(store.payments.first.paid, isTrue);
+    });
+
+    test('a dismissed payment sheet leaves no receipt behind', () async {
+      // The server filters these out of billing_snapshot, so the demo must
+      // not invent one — otherwise every test would carry a bug the real
+      // service does not have.
+      final store = signedIn(
+        gateway: DemoPaymentGateway(
+          delay: Duration.zero,
+          fail: const BillingFailure(BillingProblem.cancelled),
+        ),
+      );
+      await store.purchase(PlanCatalog.monthly).catchError(
+        (Object _) => Entitlement.free,
+      );
+      await store.refreshReceipts();
+
+      expect(store.payments, isEmpty);
+    });
+
+    test('a refund is struck through rather than removed', () async {
+      final billing = DemoBillingService();
+      final store = signedIn(billing: billing);
+      await store.purchase(PlanCatalog.monthly);
+      billing.revoke();
+      await store.refreshReceipts();
+
+      expect(store.payments, hasLength(1), reason: 'history is not edited');
+      expect(store.payments.first.status, PaymentStatus.refunded);
+    });
+
+    test('logging out leaves none of them behind', () async {
+      final store = signedIn();
+      await store.purchase(PlanCatalog.monthly);
+      await store.refreshReceipts();
+      expect(store.payments, isNotEmpty);
+
+      await store.logOut();
+      await settle();
+
+      expect(store.payments, isEmpty);
+      expect(
+        store.receiptsStatus,
+        ReceiptsStatus.unread,
+        reason: 'the next person to open this screen has asked for nothing',
+      );
+    });
+
+    test('a failed read keeps the rows it already had', () async {
+      // The rule the whole four-state design rests on: a refresh never
+      // empties the list, so a dropped connection does not take away the
+      // receipts somebody is reading.
+      final billing = _BrokenSnapshot();
+      final store = signedIn(billing: billing);
+      await store.purchase(PlanCatalog.monthly);
+      await store.refreshReceipts();
+      expect(store.payments, hasLength(1));
+
+      billing.broken = true;
+      await store.refreshReceipts();
+
+      expect(store.receiptsStatus, ReceiptsStatus.failed);
+      expect(store.payments, hasLength(1), reason: 'the rows stay on screen');
+    });
+  });
+
   group('what the store will not do', () {
     test('there is no way to become Pro without the billing service', () {
       // Not an assertion about behaviour so much as about surface: the
@@ -282,4 +449,20 @@ void main() {
       expect(store.weeklyRecap, isFalse);
     });
   });
+}
+
+/// A billing service whose snapshot can be made to fail on demand, so the
+/// "keep the rows you already had" rule can be tested without a network.
+class _BrokenSnapshot extends DemoBillingService {
+  bool broken = false;
+
+  @override
+  Future<BillingSnapshot> snapshot({int limit = 20}) {
+    if (broken) {
+      return Future<BillingSnapshot>.error(
+        const BillingFailure(BillingProblem.offline),
+      );
+    }
+    return super.snapshot(limit: limit);
+  }
 }

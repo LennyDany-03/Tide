@@ -10,7 +10,10 @@ import '../screens/calendar/calendar_screen.dart';
 import '../screens/habit_detail/habit_detail_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/insights/insights_screen.dart';
+import '../screens/billing/billing_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
+import '../screens/pro_pass/pro_pass_screen.dart';
+import '../screens/pro_welcome/pro_welcome_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/shell/tide_shell.dart';
 import '../screens/splash/splash_screen.dart';
@@ -37,6 +40,9 @@ abstract final class Routes {
   static const newHabit = '/habit/new';
   static const upgrade = '/upgrade';
   static const appearance = '/appearance';
+  static const proWelcome = '/pro/welcome';
+  static const proPass = '/pro/pass';
+  static const billing = '/billing';
 
   static String habit(String id) => '/today/habit/$id';
   static String editHabit(String id) => '/habit/$id/edit';
@@ -242,6 +248,32 @@ abstract final class AppRoutes {
           path: Routes.upgrade,
           parentNavigatorKey: _rootKey,
           pageBuilder: (context, state) => _sheet(state, const UpgradeSheet()),
+        ),
+
+        // What happens after a payment, and the pass it hands over.
+        //
+        // The welcome is opaque and full-screen: it is the one moment the app
+        // has the person's whole attention on purpose, and compositing a
+        // dimmed Settings behind a four-second sequence would cost frames on
+        // the screen least able to spare them.
+        GoRoute(
+          path: Routes.proWelcome,
+          parentNavigatorKey: _rootKey,
+          pageBuilder: (context, state) =>
+              _fade(state, const ProWelcomeScreen()),
+        ),
+        GoRoute(
+          path: Routes.proPass,
+          parentNavigatorKey: _rootKey,
+          pageBuilder: (context, state) => _page(state, const ProPassScreen()),
+        ),
+
+        // Plan and receipts. A full page rather than a sheet — it is somewhere
+        // you go and read, and it can be as long as the history is.
+        GoRoute(
+          path: Routes.billing,
+          parentNavigatorKey: _rootKey,
+          pageBuilder: (context, state) => _page(state, const BillingScreen()),
         ),
 
         // The palette picker. A sheet over Settings rather than a page, so

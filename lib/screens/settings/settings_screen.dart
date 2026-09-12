@@ -203,11 +203,15 @@ class SettingsScreen extends StatelessWidget {
                 // the *pitch* only ever happens where the ceiling is actually
                 // in somebody's way.
                 SettingsRow(
-                  label: '${AppConstants.appName} Pro',
+                  label: 'Plan and receipts',
                   subtitle: _planLine(store),
                   icon: Icons.workspace_premium_outlined,
                   showChevron: true,
-                  onTap: () => context.push(Routes.upgrade),
+                  // Billing, not the paywall. Somebody arriving here from
+                  // Settings is checking on what they have, not shopping —
+                  // the pitch belongs where the ceiling is actually in the
+                  // way, which is where the paywall is raised from.
+                  onTap: () => context.push(Routes.billing),
                 ),
                 Padding(
                   padding: const EdgeInsets.all(14),

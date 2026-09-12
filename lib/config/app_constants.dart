@@ -53,6 +53,11 @@ abstract final class AppConstants {
   /// only showing the date. Matches `Entitlement.lapsesSoon`.
   static const int renewalNoticeDays = 7;
 
+  /// How many receipts the billing screen asks for. Matches the default on
+  /// `billing_snapshot(p_limit)`, which clamps to 1..100 whatever is sent —
+  /// this is a receipt list, not an export.
+  static const int receiptLimit = 20;
+
   static const List<String> weekdayInitials = [
     'M',
     'T',

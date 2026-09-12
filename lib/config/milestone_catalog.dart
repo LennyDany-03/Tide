@@ -242,5 +242,23 @@ abstract final class MilestoneCatalog {
       caption: '200 clean',
       kind: MilestoneKind.cleanDays,
     ),
+
+    // --- Off the ladder entirely --------------------------------------------
+    // Last, and last for a structural reason: everything that reads this list
+    // assumes the unlocked badges form a prefix of it. This one is unlocked
+    // by paying rather than by a rising number, so anywhere but the end it
+    // would light up out of turn and drag the route's lantern past streaks
+    // nobody has reached.
+    //
+    // `threshold: 1` because there is nothing to count — you hold a plan or
+    // you do not. The caption says so rather than quoting a figure.
+    Milestone(
+      id: 'high-water',
+      name: 'High water',
+      glyph: TideGlyph.sparkle,
+      threshold: 1,
+      caption: 'Tide Pro',
+      kind: MilestoneKind.pro,
+    ),
   ];
 }

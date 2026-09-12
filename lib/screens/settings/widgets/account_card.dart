@@ -164,8 +164,17 @@ class _Period extends StatelessWidget {
   Widget build(BuildContext context) {
     final end = entitlement.periodEnd;
     final plan = PlanCatalog.byId(entitlement.planId);
-    final soon = entitlement.lapsesSoon;
     final days = entitlement.daysRemaining;
+
+    // Cancelling has exactly one visible consequence, and this is it: the app
+    // stops offering to renew. Without that, a prepaid plan with no mandate
+    // gives a cancel button nothing to do — which is how you end up with
+    // "I cancelled, did it work?" in the inbox.
+    //
+    // Keyed off the status, never off `cancelledAt`: revoke_payment sets that
+    // on a refund, so it does not mean the person cancelled.
+    final cancelled = entitlement.status == EntitlementStatus.cancelled;
+    final soon = entitlement.lapsesSoon && !cancelled;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,15 +185,18 @@ class _Period extends StatelessWidget {
               child: Text(
                 end == null
                     ? '${AppConstants.appName} Pro'
-                    : '${plan?.title ?? 'Pro'} · until ${_date(end)}',
+                    : '${cancelled ? 'Cancelled' : plan?.title ?? 'Pro'}'
+                          ' · until ${_date(end)}',
                 style: TideType.labelMuted,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (soon)
+            if (entitlement.lapsesSoon)
               Text(
-                '$days ${days == 1 ? 'day' : 'days'} left',
+                cancelled
+                    ? 'Ends in $days'
+                    : '$days ${days == 1 ? 'day' : 'days'} left',
                 style: TideType.gauge(12, color: TideColors.lantern),
               ),
           ],

@@ -18,6 +18,8 @@
 --      billing_snapshot()       that, plus the receipts, in one request
 --   7. apply_payment()          the one place a period is granted or extended
 --      revoke_payment()         and the one place it is taken back
+--  7b. cancel_subscription()    the only two writes the app itself may make,
+--      resume_subscription()    and neither can grant anything
 --   8. realtime broadcasts      a changed subscription announced on the
 --                               owner's private topic, billing:<user id>
 --   9. expire_subscriptions()   optional tidying for a cron
@@ -396,6 +398,13 @@ as $fn$
             from public.payment_orders
            where user_id = (select auth.uid())
              and status in ('captured', 'refunded', 'failed')
+             -- A payment sheet that was closed is not a failed payment, and it
+             -- is certainly not a receipt. The app records a dismissal as a
+             -- failed order so the order stops being open and the reason is
+             -- written down — but surfacing it here would put a permanent
+             -- "Payment failed" line in somebody's history every time they
+             -- looked at the price and changed their mind.
+             and not (status = 'failed' and failure ->> 'code' = 'cancelled')
            order by created_at desc
            limit least(greatest(coalesce(p_limit, 20), 1), 100)
         ) o
@@ -596,6 +605,112 @@ $fn$;
 
 revoke all on function public.revoke_payment(text, text)
   from public, anon, authenticated;
+
+
+-- 7b. What the person can do themselves ------------------------------------------
+-- The only two functions in this file an `authenticated` caller may execute that
+-- write anything at all. They are safe to hand out because of what they are
+-- structurally unable to do, not because of what they check:
+--
+--   * Neither takes an argument. There is no user id to forge — the row is
+--     chosen by auth.uid() and nothing else, and PostgREST has no parameter to
+--     put a stranger's uuid into. A cancel_subscription(p_user_id uuid) is
+--     broken by the first caller who passes somebody else's id; this shape
+--     makes that mistake unavailable.
+--   * Neither SET list mentions plan_id, current_period_start,
+--     current_period_end, source, last_payment_id or history. A period cannot
+--     be extended by a function that does not name the column.
+--   * 'active' and 'cancelled' are the same answer to entitlement_of(): both
+--     are Pro while current_period_end is in the future, neither is after. These
+--     two move a row between those states and nowhere else, so no sequence of
+--     calls — any order, any number of times — changes whether the caller is
+--     Pro or for how long.
+--   * Both are idempotent by the shape of the WHERE rather than by a check
+--     somebody has to remember to write.
+--
+-- Deliberately VOLATILE (plpgsql's default — do not mark these `stable`).
+-- PostgREST only accepts POST for a volatile function; `stable` would expose a
+-- state change to GET, which is a CSRF-shaped surface.
+--
+-- **What cancelling means here.** These are prepaid periods with no mandate, so
+-- there is no charge to stop. Cancelling records an intention and keeps every
+-- day that was paid for; entitlement_of already treats 'cancelled' as Pro until
+-- the period ends, which is why nothing in section 6 changes. The one thing the
+-- person can actually see is that the app stops offering to renew.
+
+create or replace function public.cancel_subscription()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_user uuid := (select auth.uid());
+begin
+  if v_user is null then
+    raise exception 'cancel_subscription needs a signed-in caller'
+      using errcode = '28000';
+  end if;
+
+  -- No row, a free account, a period that has run out, or one already
+  -- cancelled: nothing matches and the call is a read.
+  update public.subscriptions
+     set status       = 'cancelled',
+         cancelled_at = now()
+   where user_id = v_user
+     and status = 'active'
+     and current_period_end > now();
+
+  return public.entitlement_of(v_user);
+end;
+$fn$;
+
+revoke all on function public.cancel_subscription()
+  from public, anon, authenticated;
+grant execute on function public.cancel_subscription() to authenticated;
+
+
+-- The undo. 'cancelled' -> 'active', and only that: a row that is 'none' or
+-- 'expired' has no period to resume, and a cancelled row whose period has run
+-- out is not resumed either — it is over, and 'active' with a date in the past
+-- is a lie every dashboard query would then have to see through.
+--
+-- Note that a refunded row is 'none' *and* has both period columns nulled by
+-- revoke_payment, so it fails this WHERE three separate ways. A refund cannot
+-- be undone by the person who was refunded.
+create or replace function public.resume_subscription()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_user uuid := (select auth.uid());
+begin
+  if v_user is null then
+    raise exception 'resume_subscription needs a signed-in caller'
+      using errcode = '28000';
+  end if;
+
+  update public.subscriptions
+     set status       = 'active',
+         cancelled_at = null
+   where user_id = v_user
+     and status = 'cancelled'
+     and current_period_end > now();
+
+  return public.entitlement_of(v_user);
+end;
+$fn$;
+
+revoke all on function public.resume_subscription()
+  from public, anon, authenticated;
+grant execute on function public.resume_subscription() to authenticated;
+
+-- Neither is granted to service_role in section 10, and that is on purpose:
+-- both act on auth.uid(), which is null for the service role, so a grant there
+-- would be a privilege that does nothing. Support cancels with a plain UPDATE,
+-- or takes money back with revoke_payment.
 
 
 -- 8. Realtime -----------------------------------------------------------------------

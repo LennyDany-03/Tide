@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import '../../config/app_constants.dart';
 import '../../config/plan_catalog.dart';
 import 'billing_service.dart';
 import 'entitlement.dart';
 import 'payment_gateway.dart';
+import 'payment_record.dart';
 
 /// Entitlement kept in memory, for tests and for a build with no project.
 ///
@@ -19,6 +21,7 @@ class DemoBillingService extends BillingService {
   DemoBillingService({
     Entitlement? entitlement,
     this.accounts = const {},
+    this.history = const {},
     PaymentGateway? gateway,
   }) : _initial = entitlement ?? Entitlement.free,
        _current = entitlement ?? Entitlement.free,
@@ -48,6 +51,13 @@ class DemoBillingService extends BillingService {
   /// Entitlement an account already has when it is opened, by account id.
   /// Lets a test start signed in as somebody who is already Pro.
   final Map<String, Entitlement> accounts;
+
+  /// Receipts an account already has, by account id — this service's stand-in
+  /// for the `payment_orders` table.
+  final Map<String, List<PaymentRecord>> history;
+
+  /// The open account's receipts, newest first.
+  final List<PaymentRecord> _payments = [];
 
   final StreamController<Entitlement> _changes =
       StreamController<Entitlement>.broadcast();
@@ -91,8 +101,58 @@ class DemoBillingService extends BillingService {
   void open(String accountId) {
     _accountId = accountId;
     _current = accounts[accountId] ?? _initial;
+    _payments
+      ..clear()
+      ..addAll(history[accountId] ?? const []);
     _announce();
   }
+
+  @override
+  Future<BillingSnapshot> snapshot({
+    int limit = AppConstants.receiptLimit,
+  }) async => BillingSnapshot(
+    entitlement: _current,
+    payments: List.unmodifiable(_payments.take(limit)),
+  );
+
+  // The same two guards the SQL has, because this file's whole claim is that a
+  // test passing against it is testing the behaviour the real service has.
+  // Cancel only moves a running 'active' plan; resume only moves a running
+  // 'cancelled' one. Neither can extend anything.
+
+  @override
+  Future<Entitlement> cancelSubscription() async {
+    if (_current.status == EntitlementStatus.active && _current.isPro) {
+      _current = _restated(EntitlementStatus.cancelled, DateTime.now());
+      _announce();
+    }
+    return _current;
+  }
+
+  @override
+  Future<Entitlement> resumeSubscription() async {
+    if (_current.status == EntitlementStatus.cancelled && _current.isPro) {
+      _current = _restated(EntitlementStatus.active, null);
+      _announce();
+    }
+    return _current;
+  }
+
+  /// Rebuilt rather than copied. [Entitlement.copyWith] takes only a skew on
+  /// purpose, and widening it to carry a status would put `copyWith(status:
+  /// active)` — the app deciding somebody is Pro — one line from every screen
+  /// that can see an Entitlement.
+  Entitlement _restated(EntitlementStatus status, DateTime? cancelledAt) =>
+      Entitlement(
+        status: status,
+        planId: _current.planId,
+        periodStart: _current.periodStart,
+        periodEnd: _current.periodEnd,
+        cancelledAt: cancelledAt,
+        source: _current.source,
+        lastPaymentId: _current.lastPaymentId,
+        skew: _current.skew,
+      );
 
   @override
   Future<Entitlement> refresh() async => _current;
@@ -145,6 +205,22 @@ class DemoBillingService extends BillingService {
     if (_current.lastPaymentId == receipt.paymentId) return _current;
     confirmedPlans.add(plan.id);
 
+    // Inserted at the front, because newest-first is the contract every caller
+    // of [snapshot] relies on.
+    _payments.insert(
+      0,
+      PaymentRecord(
+        id: receipt.orderId,
+        planId: plan.id,
+        amountMinor: plan.amountMinor,
+        currency: plan.currency,
+        status: PaymentStatus.captured,
+        method: 'upi',
+        paymentId: receipt.paymentId,
+        createdAt: DateTime.now(),
+      ),
+    );
+
     final now = DateTime.now();
     final running = _current.isPro ? _current.periodEnd! : now;
     _current = Entitlement(
@@ -159,6 +235,9 @@ class DemoBillingService extends BillingService {
     return _current;
   }
 
+  /// No receipt is written for an abandoned checkout, matching the server:
+  /// `billing_snapshot` filters a dismissed sheet out of the history, so a
+  /// demo that recorded one would reproduce a bug into every test.
   @override
   Future<void> abandon(String orderId, {Object? error}) async {
     _open.remove(orderId);
@@ -170,6 +249,7 @@ class DemoBillingService extends BillingService {
     if (forget) {
       _current = Entitlement.free;
       _open.clear();
+      _payments.clear();
       _announce();
     }
   }
@@ -188,8 +268,22 @@ class DemoBillingService extends BillingService {
     _announce();
   }
 
-  /// The other direction: a refund, or a period that ran out.
+  /// The other direction: a refund, or a period that ran out. The newest
+  /// receipt goes with it, so the refunded rendering has a way to be reached.
   void revoke() {
+    if (_payments.isNotEmpty) {
+      final latest = _payments.first;
+      _payments[0] = PaymentRecord(
+        id: latest.id,
+        planId: latest.planId,
+        amountMinor: latest.amountMinor,
+        currency: latest.currency,
+        status: PaymentStatus.refunded,
+        method: latest.method,
+        paymentId: latest.paymentId,
+        createdAt: latest.createdAt,
+      );
+    }
     _current = Entitlement(
       status: EntitlementStatus.expired,
       planId: _current.planId,

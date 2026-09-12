@@ -268,4 +268,25 @@ abstract final class TideMotion {
   /// moving on by itself — it is the last thing the app says to the account,
   /// and it should not leave before it has been read.
   static const Duration farewell = Duration(milliseconds: 1700);
+
+  // --- Tide Pro ---------------------------------------------------------
+
+  /// The whole welcome sequence after a payment: the crown of light, the mark,
+  /// the ticket assembling, the sheen, the features arriving, the button.
+  ///
+  /// The longest single animation in the app, and the rarest — most people see
+  /// it once. [UnlockCelebration] runs 2.3s for something that happens a
+  /// handful of times a year; this happens once and hands over an object, so
+  /// it is allowed longer. It is also the only long one that is skippable,
+  /// which is what makes the length safe: nobody is held in it.
+  static const Duration proWelcome = Duration(milliseconds: 4200);
+
+  /// Skipping it. Not instant — a sequence that snaps to its end reads as a
+  /// glitch rather than as a fast-forward.
+  static const Duration proSkip = Duration(milliseconds: 420);
+
+  /// One pass of light across the pass. Replayed on tap, never looped: a foil
+  /// that keeps glinting turns a rare object into an idle animation.
+  static const Duration proSheen = Duration(milliseconds: 900);
+  static const Curve proSheenCurve = Curves.easeInOutCubic;
 }

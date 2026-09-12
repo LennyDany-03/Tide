@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/app_routes.dart';
 import '../../config/plan_catalog.dart';
 import '../../config/pro_features.dart';
 import '../../services/billing/billing_service.dart';
@@ -65,10 +66,15 @@ class _UpgradeSheetState extends State<UpgradeSheet> {
       if (!mounted) return;
       setState(() => _phase = TideButtonPhase.done);
 
-      // Long enough for the checkmark to land. The sheet closing is the
-      // confirmation — Today is already unlocked behind it.
-      await Future<void>.delayed(const Duration(milliseconds: 650));
-      if (mounted) context.pop();
+      // Long enough for the checkmark to land before the sheet gives way.
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+
+      // Replaced rather than popped-then-pushed. The sheet is already on the
+      // root navigator, so swapping it for the welcome avoids a frame of
+      // whatever was underneath showing through — and backing out of the
+      // welcome still returns wherever the paywall was opened from.
+      context.pushReplacement(Routes.proWelcome);
     } on BillingFailure catch (failure) {
       if (!mounted) return;
       setState(() {

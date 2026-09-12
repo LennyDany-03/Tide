@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../config/app_constants.dart';
 import '../../config/plan_catalog.dart';
 import 'entitlement.dart';
+import 'payment_record.dart';
 
 /// Why a purchase did not finish, as something a sheet can say.
 ///
@@ -111,6 +113,29 @@ class PaymentReceipt {
   final String signature;
 }
 
+/// Entitlement and the account's payment history, from one request — the
+/// shape `billing_snapshot()` returns.
+///
+/// One call rather than two, deliberately: the snapshot's entitlement half
+/// carries a fresh `server_time`, so asking for receipts also re-anchors the
+/// clock skew. Throwing that away and asking `entitlement()` separately would
+/// be two round trips for one answer.
+@immutable
+class BillingSnapshot {
+  const BillingSnapshot({required this.entitlement, required this.payments});
+
+  static const BillingSnapshot none = BillingSnapshot(
+    entitlement: Entitlement.free,
+    payments: [],
+  );
+
+  final Entitlement entitlement;
+
+  /// Newest first — the order the server sorted them in. Both implementations
+  /// guarantee it, so no screen ever sorts a list of money.
+  final List<PaymentRecord> payments;
+}
+
 /// The seam between Tide and whoever takes the money.
 ///
 /// Two implementations: `SupabaseBillingService` for a real build, and
@@ -203,6 +228,33 @@ abstract class BillingService {
   /// somebody to free because their train went into a tunnel — is worse than
   /// being briefly out of date.
   Future<Entitlement> refresh();
+
+  /// Entitlement and the last [limit] receipts, in one request.
+  ///
+  /// Asked for when a screen that shows receipts opens — never on sign-in and
+  /// never at launch. A payment history is not something to fetch on the
+  /// chance somebody looks at it.
+  ///
+  /// Throws [BillingFailure].
+  Future<BillingSnapshot> snapshot({int limit = AppConstants.receiptLimit});
+
+  /// Marks the plan as not renewing, keeping every day already paid for.
+  ///
+  /// Nothing auto-renews on a Tide plan and there is no mandate behind it, so
+  /// this stops no charge — there is no charge to stop. What it changes is
+  /// that the app stops offering to renew. Pro stays on until
+  /// [Entitlement.periodEnd] either way, and the screen says so before the
+  /// tap as well as after it.
+  ///
+  /// Throws [BillingFailure]. Unlike [refresh], a failure here has to be
+  /// seen: a button that silently does nothing is worse than one that admits
+  /// it could not reach the server.
+  Future<Entitlement> cancelSubscription();
+
+  /// Undo of [cancelSubscription] — 'cancelled' back to 'active', and only
+  /// while the period is still running. Anything else resolves unchanged.
+  /// Throws [BillingFailure].
+  Future<Entitlement> resumeSubscription();
 
   /// Opens an order for [plan] on the server. Throws [BillingFailure].
   Future<CheckoutIntent> startCheckout(BillingPlan plan);

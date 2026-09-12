@@ -5,10 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../config/app_constants.dart';
 import '../../config/plan_catalog.dart';
 import 'billing_service.dart';
 import 'entitlement.dart';
 import 'payment_gateway.dart';
+import 'payment_record.dart';
 
 /// Entitlement held by Supabase, money taken by Razorpay.
 ///
@@ -131,6 +133,98 @@ class SupabaseBillingService extends BillingService {
   }
 
   @override
+  Future<BillingSnapshot> snapshot({
+    int limit = AppConstants.receiptLimit,
+  }) async {
+    final accountId = _accountId;
+    if (accountId == null) return BillingSnapshot.none;
+    try {
+      final answer = await _client
+          .rpc<dynamic>('billing_snapshot', params: {'p_limit': limit})
+          .timeout(_timeout);
+      if (_accountId != accountId) return BillingSnapshot.none;
+      final body = answer is Map ? answer : const {};
+      return BillingSnapshot(
+        // Adopted rather than merely returned: this is the same authority
+        // [refresh] reads, so it caches and it announces. A plan that changed
+        // while the billing screen was closed is learned here without a second
+        // request, and there is still exactly one path by which a plan reaches
+        // the app.
+        entitlement: _adopt(
+          Entitlement.fromJson(body['entitlement']),
+          accountId,
+        ),
+        payments: PaymentRecord.listFrom(body['orders']),
+      );
+    } on PostgrestException catch (error) {
+      throw _translateRpc(error);
+    } on TimeoutException {
+      throw const BillingFailure(
+        BillingProblem.offline,
+        'The server did not answer in time.',
+      );
+    } catch (error) {
+      if (_looksOffline(error)) {
+        throw const BillingFailure(BillingProblem.offline);
+      }
+      throw BillingFailure(BillingProblem.unknown, error.toString());
+    }
+  }
+
+  @override
+  Future<Entitlement> cancelSubscription() => _renewal('cancel_subscription');
+
+  @override
+  Future<Entitlement> resumeSubscription() => _renewal('resume_subscription');
+
+  /// Deliberately unlike [refresh], which swallows: there the last known answer
+  /// is a good answer, and here there is a person waiting on a button. Leaving
+  /// the old entitlement in place silently would read as the tap having worked.
+  Future<Entitlement> _renewal(String function) async {
+    final accountId = _accountId;
+    if (accountId == null) {
+      throw const BillingFailure(BillingProblem.unavailable, 'Signed out.');
+    }
+    try {
+      final answer = await _client.rpc<dynamic>(function).timeout(_timeout);
+      if (_accountId != accountId) return _current;
+      return _adopt(Entitlement.fromJson(answer), accountId);
+    } on PostgrestException catch (error) {
+      throw _translateRpc(error);
+    } on TimeoutException {
+      throw const BillingFailure(
+        BillingProblem.offline,
+        'The server did not answer in time.',
+      );
+    } catch (error) {
+      if (_looksOffline(error)) {
+        throw const BillingFailure(BillingProblem.offline);
+      }
+      throw BillingFailure(BillingProblem.unknown, error.toString());
+    }
+  }
+
+  /// The RPC counterpart of [_translate].
+  ///
+  /// `PGRST202` is the one that actually happens: a build that knows about
+  /// these functions running against a project where `billing_setup.sql` has
+  /// not been re-run. Saying which file to run beats a generic failure, and it
+  /// is the same courtesy `SupabaseAuthService` extends for `delete_account`.
+  static BillingFailure _translateRpc(PostgrestException error) =>
+      switch (error.code) {
+        'PGRST202' || 'PGRST205' => const BillingFailure(
+          BillingProblem.unavailable,
+          'Billing is not set up on the server yet. Run '
+              'supabase/billing_setup.sql in the SQL editor.',
+        ),
+        '42501' || '28000' => const BillingFailure(
+          BillingProblem.unavailable,
+          'Sign in again.',
+        ),
+        _ => BillingFailure(BillingProblem.unknown, error.message),
+      };
+
+  @override
   Future<CheckoutIntent> startCheckout(BillingPlan plan) async {
     if (_accountId == null) {
       throw const BillingFailure(
@@ -238,6 +332,10 @@ class SupabaseBillingService extends BillingService {
       }
     }
 
+    // No receipts are dropped here because none are held: this service keeps
+    // entitlement on the device and the payment history only in the store's
+    // memory. If a cache is ever added for receipts, it has to be forgotten
+    // here too.
     if (forget && accountId != null) {
       await _prefs.remove('$_cachePrefix$accountId');
       _current = Entitlement.free;
