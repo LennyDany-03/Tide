@@ -15,13 +15,23 @@ class PricingTierCard extends StatelessWidget {
     required this.note,
     required this.selected,
     required this.onTap,
+    this.badge,
   });
 
   final String title;
   final String price;
   final String note;
+
+  /// A figure worth putting on the card — "Save 37%". Only ever on the plan
+  /// it is true of: a badge on both tiers is decoration, and a badge on the
+  /// one that saves nothing is a lie.
+  final String? badge;
+
   final bool selected;
-  final VoidCallback onTap;
+
+  /// Null while a payment is in flight, so the tier cannot be switched under
+  /// an order that has already been opened for the other one.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +57,12 @@ class PricingTierCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(title, style: TideType.labelMuted),
+            Row(
+              children: [
+                Expanded(child: Text(title, style: TideType.labelMuted)),
+                if (badge != null) _Badge(label: badge!, lit: selected),
+              ],
+            ),
             const SizedBox(height: 8),
             Text(
               price,
@@ -59,6 +74,36 @@ class PricingTierCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(note, style: TideType.labelMuted.copyWith(fontSize: 11.5)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The saving, in the one place it is true.
+class _Badge extends StatelessWidget {
+  const _Badge({required this.label, required this.lit});
+
+  final String label;
+  final bool lit;
+
+  @override
+  Widget build(BuildContext context) {
+    // Lantern, because it is the app's one accent and this is the only
+    // chromatic mark on the sheet outside the button. It dims rather than
+    // disappears when the tier is not selected: the saving is true either
+    // way, and a badge that vanishes on tap looks like a bug.
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: TideColors.lantern.withValues(alpha: lit ? 0.18 : 0.10),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TideType.gauge(
+          10,
+          color: TideColors.lantern.withValues(alpha: lit ? 1 : 0.62),
         ),
       ),
     );

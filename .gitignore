@@ -48,3 +48,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Supabase CLI link state. Written by `supabase link` into the directory it is
+# run from, and specific to one machine and one project — never shared.
+supabase/.temp/

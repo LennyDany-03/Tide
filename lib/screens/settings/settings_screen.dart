@@ -3,11 +3,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
 import '../../config/app_routes.dart';
+import '../../config/pro_features.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/tide_scope.dart';
+import '../../services/tide_store.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/hold_to_fill.dart';
+import '../../widgets/pro_lock.dart';
 import '../../widgets/stagger_list.dart';
 import '../../widgets/tide_mark.dart';
 import '../../widgets/tide_switch.dart';
@@ -60,6 +63,20 @@ class SettingsScreen extends StatelessWidget {
     return 'Email and password';
   }
 
+  /// What Settings says about the plan in one line — the date on Pro,
+  /// the ceiling on free.
+  static String _planLine(TideStore store) {
+    final plan = store.entitlement;
+    if (!plan.isPro) {
+      return store.entitlement.lapsed
+          ? 'Your plan has ended'
+          : '${store.activeHabitCount} of ${AppConstants.freeHabitLimit} '
+                'habits on the free plan';
+    }
+    final days = plan.daysRemaining;
+    return '$days ${days == 1 ? 'day' : 'days'} left';
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = TideScope.of(context);
@@ -87,7 +104,7 @@ class SettingsScreen extends StatelessWidget {
               name: store.accountName,
               email: store.accountEmail,
               avatarUrl: store.account?.avatarUrl,
-              isPro: store.isPro,
+              entitlement: store.entitlement,
               habitCount: store.activeHabitCount,
               onUpgrade: () => context.push(Routes.upgrade),
             ),
@@ -117,16 +134,30 @@ class SettingsScreen extends StatelessWidget {
                         store.setPreference(quietHours: value),
                   ),
                 ),
-                SettingsRow(
-                  label: 'Weekly recap',
-                  subtitle: 'Sunday evening, the week in one line',
-                  icon: Icons.summarize_outlined,
-                  trailing: TideSwitch(
-                    value: store.weeklyRecap,
-                    onChanged: (value) =>
-                        store.setPreference(weeklyRecap: value),
+                // The one Pro row in Notifications. It keeps its shape — a
+                // row with something on the right — rather than vanishing on
+                // the free plan: a setting nobody can see is a setting nobody
+                // knows they could have. The badge takes the switch's place
+                // and the whole row opens the paywall.
+                if (store.locked(ProFeature.weeklyRecap))
+                  SettingsRow(
+                    label: 'Weekly recap',
+                    subtitle: ProFeatures.of(ProFeature.weeklyRecap).blurb,
+                    icon: Icons.summarize_outlined,
+                    trailing: const ProBadge(compact: true),
+                    onTap: () => askForPro(context, ProFeature.weeklyRecap),
+                  )
+                else
+                  SettingsRow(
+                    label: 'Weekly recap',
+                    subtitle: 'Sunday evening, the week in one line',
+                    icon: Icons.summarize_outlined,
+                    trailing: TideSwitch(
+                      value: store.weeklyRecap,
+                      onChanged: (value) =>
+                          store.setPreference(weeklyRecap: value),
+                    ),
                   ),
-                ),
               ],
             ),
 
@@ -165,6 +196,18 @@ class SettingsScreen extends StatelessWidget {
                   label: 'Signed in with',
                   subtitle: _waysIn(store.account),
                   icon: Icons.verified_user_outlined,
+                ),
+                // The plan, reachable from the one screen people look for it
+                // on. It is still not a sales row: on Pro it says what is
+                // held and when it ends, and on free it says the ceiling —
+                // the *pitch* only ever happens where the ceiling is actually
+                // in somebody's way.
+                SettingsRow(
+                  label: '${AppConstants.appName} Pro',
+                  subtitle: _planLine(store),
+                  icon: Icons.workspace_premium_outlined,
+                  showChevron: true,
+                  onTap: () => context.push(Routes.upgrade),
                 ),
                 Padding(
                   padding: const EdgeInsets.all(14),

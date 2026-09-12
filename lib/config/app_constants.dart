@@ -32,6 +32,27 @@ abstract final class AppConstants {
   static const int defaultFreezeAllowance = 2;
   static const int maxFreezeAllowance = 7;
 
+  /// The most freezes a free habit may be given. Pro raises the ceiling to
+  /// [maxFreezeAllowance]; the editor's stepper stops here without it.
+  ///
+  /// Deliberately the same as [defaultFreezeAllowance], so nothing a free
+  /// account already has is taken away when the gate arrives — the free plan
+  /// keeps exactly what a new habit has always started with, and Pro is what
+  /// lets the number go up.
+  static const int freeFreezeAllowance = defaultFreezeAllowance;
+
+  // --- Tide Pro ----------------------------------------------------------
+
+  /// How long Razorpay's checkout is left open before it gives up, in
+  /// seconds. Long enough for a UPI approval in another app and back; short
+  /// enough that a sheet somebody walked away from does not hold its order
+  /// open all afternoon.
+  static const int checkoutTimeoutSeconds = 300;
+
+  /// Inside this many days of a period ending, Settings says so rather than
+  /// only showing the date. Matches `Entitlement.lapsesSoon`.
+  static const int renewalNoticeDays = 7;
+
   static const List<String> weekdayInitials = [
     'M',
     'T',

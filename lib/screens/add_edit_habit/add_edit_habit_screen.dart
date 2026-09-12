@@ -318,7 +318,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
               Column(
                 children: [
                   _header(),
-                  Expanded(child: _form()),
+                  Expanded(child: _form(context)),
                   _footer(bottom),
                 ],
               ),
@@ -401,7 +401,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
     );
   }
 
-  Widget _form() {
+  Widget _form(BuildContext context) {
     // A scroll view over a column rather than a ListView: a lazy list does
     // not build the fields scrolled far out of view, and a failed save has to
     // be able to scroll to any of them.
@@ -467,6 +467,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
 
           FreezeStepper(
             value: _freezes,
+            ceiling: TideScope.of(context).freezeCeiling,
             onChanged: (value) => _edit(() => _freezes = value),
           ),
 

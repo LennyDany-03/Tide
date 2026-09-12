@@ -9,6 +9,10 @@ import 'config/supabase_config.dart';
 import 'services/auth/auth_service.dart';
 import 'services/auth/demo_auth_service.dart';
 import 'services/auth/supabase_auth_service.dart';
+import 'services/billing/billing_service.dart';
+import 'services/billing/demo_billing_service.dart';
+import 'services/billing/razorpay_gateway.dart';
+import 'services/billing/supabase_billing_service.dart';
 import 'services/device_flags.dart';
 import 'services/habits/demo_habit_repository.dart';
 import 'services/habits/habit_repository.dart';
@@ -37,6 +41,7 @@ Future<void> main() async {
 
   final AuthService auth;
   final HabitRepository habits;
+  final BillingService billing;
   if (SupabaseConfig.isConfigured) {
     await Supabase.initialize(
       url: SupabaseConfig.url,
@@ -44,17 +49,34 @@ Future<void> main() async {
     );
     auth = SupabaseAuthService(Supabase.instance.client);
     habits = await SupabaseHabitRepository.load(Supabase.instance.client);
+    // The Razorpay key id is not passed in here. It comes back with the order
+    // from `razorpay-create-order`, so rotating keys is a dashboard change and
+    // a secrets change rather than an app release — and the app has one fewer
+    // piece of merchant configuration it can be shipped without.
+    billing = await SupabaseBillingService.load(
+      Supabase.instance.client,
+      gateway: RazorpayGateway(),
+    );
   } else {
     debugPrint(
       'Tide: SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY not set — run with '
-      '--dart-define-from-file=.env. Accounts and habits are kept in memory '
-      'for this run.',
+      '--dart-define-from-file=.env. Accounts, habits and plans are kept in '
+      'memory for this run, and no payment is ever taken.',
     );
     auth = DemoAuthService();
     habits = DemoHabitRepository();
+    billing = DemoBillingService();
   }
 
-  runApp(TideApp(showSplash: true, auth: auth, flags: flags, habits: habits));
+  runApp(
+    TideApp(
+      showSplash: true,
+      auth: auth,
+      flags: flags,
+      habits: habits,
+      billing: billing,
+    ),
+  );
 }
 
 class TideApp extends StatefulWidget {
@@ -65,6 +87,7 @@ class TideApp extends StatefulWidget {
     this.auth,
     this.flags,
     this.habits,
+    this.billing,
   });
 
   /// Tests and deep links can skip straight into the shell: onboarding
@@ -87,6 +110,12 @@ class TideApp extends StatefulWidget {
   /// in memory and a returning account opens on the demo history.
   final HabitRepository? habits;
 
+  /// Who says whether an account is Pro, and who takes the money. `main`
+  /// passes Supabase and Razorpay; left null, plans are kept in memory and
+  /// every payment succeeds without one being taken — which is what every
+  /// widget test runs on.
+  final BillingService? billing;
+
   @override
   State<TideApp> createState() => _TideAppState();
 }
@@ -98,6 +127,7 @@ class _TideAppState extends State<TideApp> {
         widget.flags ??
         DeviceFlags.memory(onboardingSeen: widget.startOnboarded),
     repository: widget.habits,
+    billing: widget.billing,
   );
 
   late final GoRouter _router = AppRoutes.build(

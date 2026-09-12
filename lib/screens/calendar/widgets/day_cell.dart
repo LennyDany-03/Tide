@@ -29,6 +29,7 @@ class DayCell extends StatelessWidget {
     this.outsideMonth = false,
     this.isToday = false,
     this.isFuture = false,
+    this.beyondReach = false,
   });
 
   final int day;
@@ -42,9 +43,15 @@ class DayCell extends StatelessWidget {
   final bool isToday;
   final bool isFuture;
 
+  /// Outside the free plan's window. Drawn empty and dim like a day from the
+  /// neighbouring month — the day is not gone, it is just not this plan's to
+  /// look at — but still tappable, because the tap is what opens the paywall.
+  /// Distinct from [isFuture], which is dead on every plan.
+  final bool beyondReach;
+
   @override
   Widget build(BuildContext context) {
-    final dim = outsideMonth ? 0.4 : 1.0;
+    final dim = outsideMonth || beyondReach ? 0.4 : 1.0;
 
     return PressScale(
       onTap: isFuture ? null : onTap,
@@ -107,7 +114,7 @@ class DayCell extends StatelessWidget {
                         // to the ground colour.
                         color: level > 0.55
                             ? TideColors.onLantern
-                            : outsideMonth || isFuture
+                            : outsideMonth || isFuture || beyondReach
                             ? TideColors.silt
                             : TideColors.bone,
                       ),

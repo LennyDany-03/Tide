@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
+import 'package:tide/services/billing/demo_billing_service.dart';
 import 'package:tide/screens/settings/settings_screen.dart';
 import 'package:tide/theme/tide_colors.dart';
 import 'package:tide/theme/tide_palette.dart';
@@ -78,7 +79,12 @@ void main() {
     addTearDown(tester.view.reset);
     addTearDown(() => TideColors.use(TidePalettes.standard));
 
-    await tester.pumpWidget(const TideApp(startOnboarded: true));
+    // Signed in as somebody who has paid. Midnight is the only palette on the
+    // free plan, so a free account tapping Paper opens the paywall instead of
+    // repainting the app — and this test is about the repaint.
+    await tester.pumpWidget(
+      TideApp(startOnboarded: true, billing: DemoBillingService.pro()),
+    );
     // Fixed pumps rather than pumpAndSettle: several screens carry
     // deliberate ambient loops that never settle by design.
     await tester.pump(const Duration(milliseconds: 900));

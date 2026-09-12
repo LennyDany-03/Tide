@@ -45,5 +45,19 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+
+        <!-- UPI apps, for Tide Pro's checkout.
+
+             Android 11 hid the installed-app list behind package visibility,
+             and Razorpay's checkout builds its UPI list by asking which apps
+             answer `upi://pay`. Without this declaration that question comes
+             back empty on Android 11 and later: the sheet shows a card form
+             and no UPI apps at all, on the market where UPI is how most
+             people pay. It queries an intent rather than naming packages, so
+             a UPI app released next year appears without a release here. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
+        </intent>
     </queries>
 </manifest>

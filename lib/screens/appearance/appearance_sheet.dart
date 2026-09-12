@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/pro_features.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_elevation.dart';
@@ -8,6 +9,7 @@ import '../../theme/tide_motion.dart';
 import '../../theme/tide_palette.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/press_scale.dart';
+import '../../widgets/pro_lock.dart';
 import '../../widgets/tide_sheet.dart';
 
 /// The palette picker, raised from Settings → Appearance.
@@ -21,6 +23,11 @@ import '../../widgets/tide_sheet.dart';
 /// Each option carries a swatch drawn in its own palette, whatever palette
 /// is active, so all five can be compared side by side without trying each
 /// one on.
+///
+/// Four of the five are Pro. They are still drawn, still painted in their own
+/// colours, and still tappable — a locked palette you cannot see is a feature
+/// nobody knows they are missing, and the swatch is the whole argument for
+/// paying. The tap opens the paywall instead of repainting the app.
 class AppearanceSheet extends StatelessWidget {
   const AppearanceSheet({super.key});
 
@@ -28,12 +35,22 @@ class AppearanceSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = TideScope.of(context);
     final current = store.palette;
+    final locked = store.locked(ProFeature.palettes);
 
-    Widget option(TidePalette palette) => _PaletteOption(
-      palette: palette,
-      selected: identical(palette, current),
-      onTap: () => store.setPalette(palette),
-    );
+    Widget option(TidePalette palette) {
+      // Midnight stays free on every plan. It is the app's own palette — the
+      // one the splash, the icons and the email are drawn in — so a free
+      // account is on the design rather than on a stripped version of it.
+      final shut = locked && !identical(palette, TidePalettes.standard);
+      return _PaletteOption(
+        palette: palette,
+        selected: identical(palette, current),
+        locked: shut,
+        onTap: shut
+            ? () => askForPro(context, ProFeature.palettes)
+            : () => store.setPalette(palette),
+      );
+    }
 
     final dark = TidePalettes.all.where((p) => !p.isLight).toList();
     final light = TidePalettes.all.where((p) => p.isLight).toList();
@@ -53,7 +70,10 @@ class AppearanceSheet extends StatelessWidget {
         ),
         children: [
           Text(
-            'Every screen repaints in the one you pick.',
+            locked
+                ? 'Every screen repaints in the one you pick. '
+                      'Midnight is free; the rest come with Pro.'
+                : 'Every screen repaints in the one you pick.',
             style: TideType.bodyMuted,
           ),
           const SizedBox(height: 20),
@@ -80,11 +100,13 @@ class _PaletteOption extends StatelessWidget {
   const _PaletteOption({
     required this.palette,
     required this.selected,
+    required this.locked,
     required this.onTap,
   });
 
   final TidePalette palette;
   final bool selected;
+  final bool locked;
   final VoidCallback onTap;
 
   @override
@@ -138,7 +160,11 @@ class _PaletteOption extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              _Tick(selected: selected),
+              // The badge takes the tick's place rather than sitting beside
+              // it: a locked palette cannot be the selected one, so the two
+              // can never both be true.
+              if (locked) const ProBadge(compact: true)
+              else _Tick(selected: selected),
             ],
           ),
         ),
