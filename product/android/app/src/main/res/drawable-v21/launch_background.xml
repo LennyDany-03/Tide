@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ground only, no image: the Flutter splash draws the mark in from
+     empty, and a static logo here would appear, vanish and then be drawn
+     again. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/tide_ground" />
+</layer-list>

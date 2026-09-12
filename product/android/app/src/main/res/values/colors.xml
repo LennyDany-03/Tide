@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Midnight's page colour. The window is painted this before Flutter
+         draws its first frame, so launch goes dark to dark into the splash
+         with no white flash. It is also the adaptive icon's background. -->
+    <color name="tide_ground">#FF05080B</color>
+</resources>
