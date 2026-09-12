@@ -12,6 +12,7 @@ void main() {
     required EntitlementStatus status,
     Duration? endsIn,
     Duration skew = Duration.zero,
+    bool autoRenews = false,
   }) {
     final now = DateTime.now();
     return Entitlement(
@@ -19,6 +20,9 @@ void main() {
       planId: 'pro_yearly',
       periodStart: endsIn == null ? null : now.subtract(const Duration(days: 1)),
       periodEnd: endsIn == null ? null : now.add(endsIn),
+      autoRenews: autoRenews,
+      nextChargeAt: autoRenews && endsIn != null ? now.add(endsIn) : null,
+      mandateStatus: autoRenews ? 'active' : null,
       skew: skew,
     );
   }
@@ -49,6 +53,49 @@ void main() {
           endsIn: const Duration(days: 5),
         ).isPro,
         isTrue,
+      );
+    });
+
+    test('a failed renewal does not undo the month that was paid for', () {
+      // The case auto-pay added, and the one most easily got wrong. A card
+      // that fails on the 30th has nothing to do with the month bought on the
+      // 1st. Taking Pro away mid-retry is how somebody pays twice for the
+      // same days — and `entitlement_of` treats both of these as Pro, so this
+      // is also where the two implementations would drift apart.
+      for (final status in const [
+        EntitlementStatus.pastDue,
+        EntitlementStatus.halted,
+      ]) {
+        final failing = plan(
+          status: status,
+          endsIn: const Duration(days: 9),
+          autoRenews: true,
+        );
+        expect(failing.isPro, isTrue, reason: status.name);
+        expect(failing.renewalFailing, isTrue, reason: status.name);
+      }
+    });
+
+    test('a failed renewal still ends when the period does', () {
+      expect(
+        plan(
+          status: EntitlementStatus.pastDue,
+          endsIn: const Duration(days: -1),
+        ).isPro,
+        isFalse,
+        reason: 'a retry is not an extension',
+      );
+    });
+
+    test('a refund is not Pro even inside a period', () {
+      // revoke_payment nulls both period columns as well as setting 'none',
+      // so this fails twice over on the server. Here it is the status.
+      expect(
+        plan(
+          status: EntitlementStatus.none,
+          endsIn: const Duration(days: 30),
+        ).isPro,
+        isFalse,
       );
     });
 
@@ -143,6 +190,19 @@ void main() {
         isFalse,
       );
     });
+
+    test('a plan that renews itself never lapses soon', () {
+      // What stops Settings offering to renew a plan that is about to charge
+      // the card on its own — the version of this bug where somebody pays for
+      // the same month twice in a week.
+      final renewing = plan(
+        status: EntitlementStatus.active,
+        endsIn: const Duration(days: 3),
+        autoRenews: true,
+      );
+      expect(renewing.lapsesSoon, isFalse);
+      expect(renewing.renewsSoon, isTrue);
+    });
   });
 
   group('the wire', () {
@@ -168,6 +228,29 @@ void main() {
       expect(parsed.plan?.title, 'Yearly');
     });
 
+    test('a mandate comes back off the wire whole', () {
+      final end = DateTime.now().add(const Duration(days: 12));
+      final parsed = Entitlement.fromJson({
+        'status': 'past_due',
+        'plan': 'pro_monthly',
+        'current_period_start': DateTime.now().toIso8601String(),
+        'current_period_end': end.toIso8601String(),
+        'auto_renews': true,
+        'next_charge_at': end.toIso8601String(),
+        'mandate_status': 'pending',
+        'server_time': DateTime.now().toIso8601String(),
+      });
+
+      // 'past_due' is the one status whose wire spelling is not its Dart name,
+      // and reading it as anything else would drop somebody to free.
+      expect(parsed.status, EntitlementStatus.pastDue);
+      expect(parsed.isPro, isTrue);
+      expect(parsed.autoRenews, isTrue);
+      expect(parsed.renewalFailing, isTrue);
+      expect(parsed.cancelsThroughProvider, isTrue);
+      expect(parsed.nextChargeAt, isNotNull);
+    });
+
     test('an answer the app does not recognise falls back to free', () {
       // Forgiving on purpose: a field added to the function later must not
       // stop an older build reading the rest.
@@ -181,8 +264,9 @@ void main() {
 
     test('the device copy survives a round trip', () {
       final original = plan(
-        status: EntitlementStatus.active,
+        status: EntitlementStatus.pastDue,
         endsIn: const Duration(days: 120),
+        autoRenews: true,
       );
       final restored = Entitlement.fromJson(original.toJson());
 

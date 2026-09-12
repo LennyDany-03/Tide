@@ -37,6 +37,16 @@ enum BillingProblem {
   /// This build cannot take a payment: no Razorpay plugin on this platform.
   unsupportedPlatform,
 
+  /// The mandate behind this plan is gone, so there is nothing to resume and
+  /// the only way back to Pro is a fresh checkout. Not an error either — it is
+  /// an answer, and the screen turns it into a button.
+  resubscribeNeeded,
+
+  /// A live mandate already exists for this account. Raised rather than
+  /// silently opening a second one, because two standing instructions on one
+  /// account is two debits a month.
+  alreadySubscribed,
+
   unknown,
 }
 
@@ -57,8 +67,25 @@ class BillingFailure implements Exception {
       'BillingFailure(${problem.name}${detail == null ? '' : ': $detail'})';
 }
 
-/// An order opened on the server, with everything the checkout needs to
-/// collect money against it.
+/// Which rail a checkout is running on.
+enum CheckoutKind {
+  /// A Razorpay order: one payment, one period, and then nothing.
+  order,
+
+  /// A Razorpay Subscription: the checkout registers a mandate and takes the
+  /// first charge, and every charge after it arrives without the app being
+  /// involved — or, usually, installed and open.
+  subscription,
+}
+
+/// A checkout opened on the server, with everything needed to collect money
+/// against it.
+///
+/// One type with two named constructors rather than two types: everything
+/// between here and the payment sheet — the gateway, the sheet's phases, the
+/// failure paths — is identical on both rails, and the only fork is the single
+/// id handed to Razorpay. The constructors are what make an intent with both
+/// ids, or neither, unconstructable.
 ///
 /// The amount comes back from the server rather than being taken from
 /// [PlanCatalog]: the sheet shows what will actually be charged, so a price
@@ -66,17 +93,37 @@ class BillingFailure implements Exception {
 /// shipped before it changed.
 @immutable
 class CheckoutIntent {
-  const CheckoutIntent({
-    required this.orderId,
+  /// A period bought outright.
+  const CheckoutIntent.order({
+    required String this.orderId,
     required this.keyId,
     required this.planId,
     required this.amountMinor,
     required this.currency,
     this.email,
     this.contact,
-  });
+  }) : subscriptionId = null,
+       kind = CheckoutKind.order;
 
-  final String orderId;
+  /// A mandate registered, and a plan that renews on its own afterwards.
+  const CheckoutIntent.subscription({
+    required String this.subscriptionId,
+    required this.keyId,
+    required this.planId,
+    required this.amountMinor,
+    required this.currency,
+    this.email,
+    this.contact,
+  }) : orderId = null,
+       kind = CheckoutKind.subscription;
+
+  final CheckoutKind kind;
+
+  /// Set on [CheckoutKind.order] and null otherwise.
+  final String? orderId;
+
+  /// Set on [CheckoutKind.subscription] and null otherwise.
+  final String? subscriptionId;
 
   /// The public Razorpay key id. Handed down from the server so rotating keys
   /// is a dashboard change, not an app release.
@@ -93,24 +140,42 @@ class CheckoutIntent {
 
   BillingPlan? get plan => PlanCatalog.byId(planId);
 
+  bool get isSubscription => kind == CheckoutKind.subscription;
+
+  /// Whichever id Razorpay is being asked to collect against. Exactly one of
+  /// the two is set, by construction.
+  String get reference => orderId ?? subscriptionId!;
+
   String get amountLabel =>
       '${BillingPlan.symbolFor(currency)}${amountMinor ~/ 100}';
 }
 
-/// What the checkout hands back on success — the three fields Razorpay
-/// returns, and nothing else. None of them is trusted here; they are relayed
-/// to the server, which checks the signature against its own order.
+/// What the checkout hands back on success — the fields Razorpay returns, and
+/// nothing else. None of them is trusted here; they are relayed to the server,
+/// which checks the signature against its own row.
+///
+/// Which id comes back depends on the rail, and so does the signature itself:
+/// an order is signed over `order_id|payment_id` and a subscription over
+/// `payment_id|subscription_id` — the same two fields the other way round. The
+/// server is where that distinction is handled; here they are just strings.
 @immutable
 class PaymentReceipt {
   const PaymentReceipt({
-    required this.orderId,
     required this.paymentId,
     required this.signature,
+    this.orderId,
+    this.subscriptionId,
   });
 
-  final String orderId;
   final String paymentId;
   final String signature;
+  final String? orderId;
+  final String? subscriptionId;
+
+  bool get isSubscription => subscriptionId != null;
+
+  /// Whichever id this payment was collected against.
+  String get reference => orderId ?? subscriptionId ?? '';
 }
 
 /// Entitlement and the account's payment history, from one request — the
@@ -202,7 +267,7 @@ abstract class BillingService {
       // Closing the order is bookkeeping, not part of the outcome: whatever
       // happened to the payment has already happened, and the person is owed
       // an answer now rather than after a second round trip.
-      unawaited(abandon(intent.orderId, error: error));
+      unawaited(abandon(intent, error: error));
       rethrow;
     }
 
@@ -238,21 +303,32 @@ abstract class BillingService {
   /// Throws [BillingFailure].
   Future<BillingSnapshot> snapshot({int limit = AppConstants.receiptLimit});
 
-  /// Marks the plan as not renewing, keeping every day already paid for.
+  /// Stops the plan renewing, keeping every day already paid for.
   ///
-  /// Nothing auto-renews on a Tide plan and there is no mandate behind it, so
-  /// this stops no charge — there is no charge to stop. What it changes is
-  /// that the app stops offering to renew. Pro stays on until
-  /// [Entitlement.periodEnd] either way, and the screen says so before the
-  /// tap as well as after it.
+  /// **What this does depends on the rail, and the difference is money.** On a
+  /// prepaid period there is no charge to stop and this is a local write: all
+  /// it changes is that the app stops offering to renew. On a plan with a
+  /// mandate behind it there very much is a charge to stop, and stopping it
+  /// means telling Razorpay — so the call goes to an Edge Function, and the
+  /// row is only marked cancelled once Razorpay has confirmed. Pro stays on
+  /// until [Entitlement.periodEnd] in both cases, which is what was paid for.
   ///
   /// Throws [BillingFailure]. Unlike [refresh], a failure here has to be
   /// seen: a button that silently does nothing is worse than one that admits
-  /// it could not reach the server.
+  /// it could not reach the server — and on this rail, silence would mean
+  /// somebody believing a debit had been stopped when it had not.
   Future<Entitlement> cancelSubscription();
 
-  /// Undo of [cancelSubscription] — 'cancelled' back to 'active', and only
-  /// while the period is still running. Anything else resolves unchanged.
+  /// Undo of [cancelSubscription], and only on the prepaid rail —
+  /// 'cancelled' back to 'active' while the period is still running.
+  ///
+  /// **A cancelled mandate cannot be resumed.** Razorpay treats a cancelled
+  /// subscription as finished and offers no un-cancel, so there is nothing
+  /// left to put back: starting again means authorising a new mandate, which
+  /// is a checkout rather than a button. Throws
+  /// [BillingProblem.resubscribeNeeded] for that case, which is what the
+  /// billing screen turns into an offer to subscribe again.
+  ///
   /// Throws [BillingFailure].
   Future<Entitlement> resumeSubscription();
 
@@ -269,7 +345,11 @@ abstract class BillingService {
   /// Tells the server a checkout attempt failed, so the order stops being open
   /// and the reason is recorded. Never throws: a failed payment that also
   /// fails to be written down is still just a failed payment.
-  Future<void> abandon(String orderId, {Object? error});
+  ///
+  /// Takes the whole intent because there is nothing to close on the
+  /// subscription rail — no order row was ever opened — and the
+  /// implementations need to know which they are looking at.
+  Future<void> abandon(CheckoutIntent intent, {Object? error});
 
   /// Stops following the open account. [forget] also drops this device's copy —
   /// for a log out, where the next person to pick up the phone should not find

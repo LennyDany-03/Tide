@@ -289,4 +289,28 @@ abstract final class TideMotion {
   /// that keeps glinting turns a rare object into an idle animation.
   static const Duration proSheen = Duration(milliseconds: 900);
   static const Curve proSheenCurve = Curves.easeInOutCubic;
+
+  /// A plan changing state on the billing card: the cancelled notice opening
+  /// under the plan, and the action below it turning from Cancel into Resume.
+  ///
+  /// **The first [planChangeLeadIn] of the forward pass is deliberately
+  /// still.** Cancelling is a hold inside a dialog, and that dialog takes
+  /// [tabSwitch] plus a frame to leave. Without the wait, every structural
+  /// beat — the note opening, the mark drawing down its edge — plays out
+  /// behind the scrim, and the screen is simply *different* when it clears
+  /// rather than having changed in front of somebody. A plan that arrives on
+  /// a realtime broadcast instead spends that lead-in doing nothing, which
+  /// costs a fifth of a second nobody is watching.
+  ///
+  /// Each beat eases inside its own window rather than being a slice of one
+  /// eased whole: an easeOutCubic sliced at 62% has spent 73% of its travel
+  /// in the first quarter of the time, which is how a 310ms opening became a
+  /// 150ms one.
+  static const Duration planChange = Duration(milliseconds: 780);
+  static const Duration planChangeLeadIn = Duration(milliseconds: 220);
+
+  /// Closing it again. Resuming is a tap on the card itself with nothing
+  /// covering it, so there is nothing to wait for and the pass runs shorter.
+  static const Duration planChangeBack = Duration(milliseconds: 420);
+  static const Curve planChangeCurve = Curves.easeOutCubic;
 }

@@ -171,11 +171,53 @@ class SupabaseBillingService extends BillingService {
     }
   }
 
+  /// **Which of the two this is depends on whether a mandate is standing.**
+  ///
+  /// On a prepaid period it is the RPC, which writes one row and stops — there
+  /// is no charge to stop. On a plan with a mandate it is an Edge Function,
+  /// because stopping a debit means telling Razorpay, and the SQL refuses a
+  /// local write for exactly that reason: a row marked cancelled while the
+  /// instruction is still registered is the app saying nothing more will be
+  /// taken while the money keeps going out.
+  ///
+  /// The mandate is read off entitlement rather than asked for: the answer is
+  /// already on the device, and a round trip to find out how to make a round
+  /// trip is a round trip nobody needs.
   @override
-  Future<Entitlement> cancelSubscription() => _renewal('cancel_subscription');
+  Future<Entitlement> cancelSubscription() =>
+      _current.cancelsThroughProvider
+      ? _mandate('razorpay-cancel-subscription')
+      : _renewal('cancel_subscription');
 
+  /// There is no resuming a mandate — Razorpay has no un-cancel — so this
+  /// refuses before it reaches the network and the screen offers a new
+  /// checkout instead. See [BillingProblem.resubscribeNeeded].
   @override
-  Future<Entitlement> resumeSubscription() => _renewal('resume_subscription');
+  Future<Entitlement> resumeSubscription() {
+    if (_current.cancelsThroughProvider) {
+      return Future<Entitlement>.error(
+        const BillingFailure(
+          BillingProblem.resubscribeNeeded,
+          'This plan was cancelled at the payment provider and cannot be '
+              'restarted. Subscribing again sets up a new payment method.',
+        ),
+      );
+    }
+    return _renewal('resume_subscription');
+  }
+
+  /// Cancelling through Razorpay: the function cancels the subscription there
+  /// first and marks the row second, so a failure at their end leaves nothing
+  /// claimed here.
+  Future<Entitlement> _mandate(String function) async {
+    final accountId = _accountId;
+    if (accountId == null) {
+      throw const BillingFailure(BillingProblem.unavailable, 'Signed out.');
+    }
+    final body = await _invoke(function, const <String, dynamic>{});
+    if (_accountId != accountId) return _current;
+    return _adopt(Entitlement.fromJson(body['entitlement']), accountId);
+  }
 
   /// Deliberately unlike [refresh], which swallows: there the last known answer
   /// is a good answer, and here there is a person waiting on a button. Leaving
@@ -239,33 +281,55 @@ class SupabaseBillingService extends BillingService {
       );
     }
 
-    // Only the plan id is sent. The amount is read from `billing_plans` inside
-    // the function, so a request that made up its own price would be charged
-    // the real one.
-    final body = await _invoke('razorpay-create-order', {'plan': plan.id});
+    // Only the plan id is sent, on either rail. The amount — and, for a
+    // subscription, the Razorpay plan id, which differs between test mode and
+    // live and so lives in the function's secrets — is read on the server. A
+    // request that made up its own price would be charged the real one.
+    final subscription = plan.autoRenews;
+    final body = await _invoke(
+      subscription ? 'razorpay-create-subscription' : 'razorpay-create-order',
+      {'plan': plan.id},
+    );
 
-    final orderId = body['order_id'];
     final keyId = body['key_id'];
-    if (orderId is! String || keyId is! String || keyId.isEmpty) {
-      throw const BillingFailure(
+    final reference = body[subscription ? 'subscription_id' : 'order_id'];
+    if (reference is! String || keyId is! String || keyId.isEmpty) {
+      throw BillingFailure(
         BillingProblem.unavailable,
-        'The order did not come back complete.',
+        'The ${subscription ? 'subscription' : 'order'} did not come back '
+            'complete.',
       );
     }
 
     final user = _client.auth.currentUser;
-    return CheckoutIntent(
-      orderId: orderId,
-      keyId: keyId,
-      planId: body['plan'] as String? ?? plan.id,
-      // The server's figure, not the catalogue's: the sheet shows what will
-      // actually be charged even on a build that shipped before a price
-      // changed.
-      amountMinor: (body['amount_minor'] as num?)?.toInt() ?? plan.amountMinor,
-      currency: body['currency'] as String? ?? plan.currency,
-      email: user?.email,
-      contact: user?.phone?.isEmpty ?? true ? null : user?.phone,
-    );
+    final planId = body['plan'] as String? ?? plan.id;
+    // The server's figure, not the catalogue's: the sheet shows what will
+    // actually be charged even on a build that shipped before a price changed.
+    final amountMinor =
+        (body['amount_minor'] as num?)?.toInt() ?? plan.amountMinor;
+    final currency = body['currency'] as String? ?? plan.currency;
+    final email = user?.email;
+    final contact = user?.phone?.isEmpty ?? true ? null : user?.phone;
+
+    return subscription
+        ? CheckoutIntent.subscription(
+            subscriptionId: reference,
+            keyId: keyId,
+            planId: planId,
+            amountMinor: amountMinor,
+            currency: currency,
+            email: email,
+            contact: contact,
+          )
+        : CheckoutIntent.order(
+            orderId: reference,
+            keyId: keyId,
+            planId: planId,
+            amountMinor: amountMinor,
+            currency: currency,
+            email: email,
+            contact: contact,
+          );
   }
 
   @override
@@ -275,8 +339,15 @@ class SupabaseBillingService extends BillingService {
       throw const BillingFailure(BillingProblem.unavailable, 'Signed out.');
     }
 
+    // Both ids are sent as they came back and neither is trusted: the
+    // function reads the authoritative one off its own row and checks the
+    // signature against that. Which pair is hashed differs by rail — an order
+    // signs `order_id|payment_id`, a subscription signs
+    // `payment_id|subscription_id` — and that is handled there, not here.
     final body = await _invoke('razorpay-verify-payment', {
-      'razorpay_order_id': receipt.orderId,
+      if (receipt.orderId != null) 'razorpay_order_id': receipt.orderId,
+      if (receipt.subscriptionId != null)
+        'razorpay_subscription_id': receipt.subscriptionId,
       'razorpay_payment_id': receipt.paymentId,
       'razorpay_signature': receipt.signature,
     });
@@ -296,12 +367,14 @@ class SupabaseBillingService extends BillingService {
   }
 
   @override
-  Future<void> abandon(String orderId, {Object? error}) async {
+  Future<void> abandon(CheckoutIntent intent, {Object? error}) async {
     if (_accountId == null) return;
     final failure = error is BillingFailure ? error : null;
     try {
       await _invoke('razorpay-verify-payment', {
-        'razorpay_order_id': orderId,
+        if (intent.orderId != null) 'razorpay_order_id': intent.orderId,
+        if (intent.subscriptionId != null)
+          'razorpay_subscription_id': intent.subscriptionId,
         'error': {
           'code': failure?.problem.name ?? 'unknown',
           'description': failure?.detail ?? error?.toString(),

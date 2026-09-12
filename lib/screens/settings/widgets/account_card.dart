@@ -166,14 +166,13 @@ class _Period extends StatelessWidget {
     final plan = PlanCatalog.byId(entitlement.planId);
     final days = entitlement.daysRemaining;
 
-    // Cancelling has exactly one visible consequence, and this is it: the app
-    // stops offering to renew. Without that, a prepaid plan with no mandate
-    // gives a cancel button nothing to do — which is how you end up with
-    // "I cancelled, did it work?" in the inbox.
-    //
     // Keyed off the status, never off `cancelledAt`: revoke_payment sets that
     // on a refund, so it does not mean the person cancelled.
     final cancelled = entitlement.status == EntitlementStatus.cancelled;
+    // `lapsesSoon` is already false on a plan that renews itself — see
+    // Entitlement — so this offer never appears in front of somebody whose
+    // card is about to be charged anyway. Nagging them to renew is how an
+    // account pays for the same month twice.
     final soon = entitlement.lapsesSoon && !cancelled;
 
     return Column(
@@ -186,7 +185,9 @@ class _Period extends StatelessWidget {
                 end == null
                     ? '${AppConstants.appName} Pro'
                     : '${cancelled ? 'Cancelled' : plan?.title ?? 'Pro'}'
-                          ' · until ${_date(end)}',
+                          ' · ${cancelled || !entitlement.autoRenews
+                              ? 'until'
+                              : 'renews'} ${_date(end)}',
                 style: TideType.labelMuted,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

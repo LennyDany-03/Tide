@@ -21,6 +21,22 @@ import 'package:tide/services/tide_store.dart';
 /// signature check, the amount check, and the webhook. Those live in
 /// `supabase/functions/` and are verified against Razorpay's test mode, which
 /// is written down in `supabase/functions/README.md`.
+/// A prepaid plan, for the rail that no longer sells itself.
+///
+/// Everything in [PlanCatalog] renews now, but the order path is still live
+/// code and every account from before auto-pay is on one: `apply_payment`, the
+/// `cancel_subscription` RPC and `resume_subscription` all still have to work.
+/// The id matches a real plan so `Entitlement.plan` still resolves.
+const prepaid = BillingPlan(
+  id: 'pro_monthly',
+  title: 'Monthly',
+  interval: PlanInterval.month,
+  amountMinor: 10000,
+  periodDays: 30,
+  note: 'bought outright',
+  mode: BillingMode.oneTime,
+);
+
 void main() {
   TideStore signedIn({
     DemoBillingService? billing,
@@ -87,7 +103,10 @@ void main() {
       // order with nobody signed in — the same rule the Edge Function has.
       signedIn(billing: billing);
 
-      final intent = await billing.startCheckout(PlanCatalog.monthly);
+      // The order rail, deliberately: this is about `apply_payment`'s
+      // idempotency, and its key is an order reaching 'captured'. The renewal
+      // rail has its own key and its own test further down.
+      final intent = await billing.startCheckout(prepaid);
       const receipt = PaymentReceipt(
         orderId: 'order_demo_1',
         paymentId: 'pay_once',
@@ -289,8 +308,10 @@ void main() {
     });
 
     test('resume goes back to active without moving the date', () async {
+      // The prepaid rail. Resume exists there because nothing was ever
+      // stopped: the row said 'cancelled' and now it does not.
       final store = signedIn();
-      await store.purchase(PlanCatalog.monthly);
+      await store.purchase(prepaid);
       final until = store.entitlement.periodEnd;
 
       await store.cancelPlan();
@@ -331,6 +352,180 @@ void main() {
 
       expect(store.isPro, isFalse);
       expect(store.entitlement.status, isNot(EntitlementStatus.active));
+    });
+  });
+
+  group('auto-pay', () {
+    test('buying a plan that renews registers a mandate', () async {
+      final billing = DemoBillingService();
+      final store = signedIn(billing: billing);
+
+      final intent = await billing.startCheckout(PlanCatalog.monthly);
+      expect(
+        intent.isSubscription,
+        isTrue,
+        reason: 'an auto plan is bought as a subscription, not an order',
+      );
+      expect(intent.orderId, isNull);
+      expect(intent.subscriptionId, isNotNull);
+
+      await store.purchase(PlanCatalog.monthly);
+
+      expect(store.isPro, isTrue);
+      expect(store.entitlement.autoRenews, isTrue);
+      expect(store.entitlement.nextChargeAt, store.entitlement.periodEnd);
+      expect(store.entitlement.cancelsThroughProvider, isTrue);
+      expect(
+        store.entitlement.lapsesSoon,
+        isFalse,
+        reason: 'a plan that renews itself never needs renewing by hand',
+      );
+    });
+
+    test('a renewal that lands while nobody is looking stacks a period', () async {
+      final billing = DemoBillingService();
+      final store = signedIn(billing: billing);
+      await store.purchase(PlanCatalog.monthly);
+      final first = store.entitlement.periodEnd!;
+
+      // No device callback for this: the mandate came due, Razorpay debited
+      // the card, and `subscription.charged` arrived at the webhook.
+      billing.charge(paymentId: 'pay_renewal_1');
+      await settle();
+
+      expect(store.entitlement.periodEnd!.isAfter(first), isTrue);
+      expect(store.isPro, isTrue);
+      expect(store.entitlement.autoRenews, isTrue);
+    });
+
+    test('the same renewal delivered twice buys one period', () async {
+      final billing = DemoBillingService();
+      final store = signedIn(billing: billing);
+      await store.purchase(PlanCatalog.monthly);
+
+      billing.charge(paymentId: 'pay_renewal_1');
+      await settle();
+      final once = store.entitlement.periodEnd;
+
+      billing.charge(paymentId: 'pay_renewal_1');
+      await settle();
+
+      expect(
+        store.entitlement.periodEnd,
+        once,
+        reason: 'Razorpay replays webhooks; a replay is not a payment',
+      );
+    });
+
+    test('a failed debit does not take away days already paid for', () async {
+      final billing = DemoBillingService();
+      final store = signedIn(billing: billing);
+      await store.purchase(PlanCatalog.yearly);
+      final until = store.entitlement.periodEnd;
+
+      billing.renewalFailed();
+      await settle();
+
+      expect(
+        store.isPro,
+        isTrue,
+        reason: 'the period was paid for; the renewal is what failed',
+      );
+      expect(store.entitlement.status, EntitlementStatus.pastDue);
+      expect(store.entitlement.renewalFailing, isTrue);
+      expect(store.entitlement.periodEnd, until);
+      for (final feature in ProFeature.values) {
+        expect(store.allows(feature), isTrue, reason: feature.name);
+      }
+    });
+
+    test('a halted mandate keeps the period and stops renewing', () async {
+      final billing = DemoBillingService();
+      final store = signedIn(billing: billing);
+      await store.purchase(PlanCatalog.monthly);
+      final until = store.entitlement.periodEnd;
+
+      billing.renewalFailed(halted: true);
+      await settle();
+
+      expect(store.isPro, isTrue);
+      expect(store.entitlement.status, EntitlementStatus.halted);
+      expect(store.entitlement.periodEnd, until);
+      expect(
+        store.entitlement.autoRenews,
+        isFalse,
+        reason: 'Razorpay has given up, so nothing is coming',
+      );
+    });
+
+    test('cancelling stops the renewal and keeps the period', () async {
+      final store = signedIn();
+      await store.purchase(PlanCatalog.monthly);
+      final until = store.entitlement.periodEnd;
+
+      await store.cancelPlan();
+
+      expect(store.isPro, isTrue, reason: 'cancelling is not surrendering');
+      expect(store.entitlement.status, EntitlementStatus.cancelled);
+      expect(store.entitlement.periodEnd, until);
+      expect(
+        store.entitlement.autoRenews,
+        isFalse,
+        reason: 'the whole point: no further debit',
+      );
+      expect(store.entitlement.nextChargeAt, isNull);
+    });
+
+    test('a cancelled mandate cannot be resumed', () async {
+      // Razorpay has no un-cancel, so there is nothing to put back and the
+      // only honest answer is a fresh checkout. Failing loudly here is what
+      // keeps the app from flipping a row to 'active' and promising a renewal
+      // that nothing is going to perform.
+      final store = signedIn();
+      await store.purchase(PlanCatalog.monthly);
+      await store.cancelPlan();
+
+      await expectLater(
+        store.resumePlan(),
+        throwsA(
+          isA<BillingFailure>().having(
+            (failure) => failure.problem,
+            'problem',
+            BillingProblem.resubscribeNeeded,
+          ),
+        ),
+      );
+      expect(store.entitlement.status, EntitlementStatus.cancelled);
+      expect(store.isPro, isTrue);
+    });
+
+    test('a mandate that failed can still be cancelled', () async {
+      // The most likely moment somebody wants to: the card is being retried
+      // and they would rather it stopped.
+      final billing = DemoBillingService();
+      final store = signedIn(billing: billing);
+      await store.purchase(PlanCatalog.monthly);
+      billing.renewalFailed();
+      await settle();
+
+      await store.cancelPlan();
+
+      expect(store.entitlement.status, EntitlementStatus.cancelled);
+      expect(store.entitlement.autoRenews, isFalse);
+      expect(store.isPro, isTrue);
+    });
+
+    test('the receipt list shows a renewal', () async {
+      final billing = DemoBillingService();
+      final store = signedIn(billing: billing);
+      await store.purchase(PlanCatalog.monthly);
+      billing.charge(paymentId: 'pay_renewal_1');
+      await settle();
+
+      await store.refreshReceipts();
+
+      expect(store.payments, hasLength(2));
+      expect(store.payments.first.paymentId, 'pay_renewal_1');
     });
   });
 

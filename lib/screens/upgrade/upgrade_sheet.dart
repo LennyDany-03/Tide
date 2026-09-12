@@ -217,18 +217,36 @@ class _UpgradeSheetState extends State<UpgradeSheet> {
     return 'Start Pro — $price';
   }
 
+  /// The line under the button, and the only place the *shape* of the charge
+  /// is stated before somebody agrees to it.
+  ///
+  /// It has to name three things for an auto-debit, because a mandate nobody
+  /// was told about is a chargeback: what is taken, how often, and how to
+  /// stop it. A plan that renews cannot be sold with the old prepaid line —
+  /// "ends on its own, nothing renews" was true of every payment Tide had
+  /// taken until auto-pay, and is now the opposite of what happens.
   String _footnote(bool canPay, bool pro) {
     if (!canPay) return 'Tide Pro can be bought in the phone app.';
-    if (pro) return 'Payments add to the end of your period. No auto-renewal.';
-    // Truthful about the model. These are prepaid periods, not a mandate:
-    // there is nothing to cancel, and saying "cancel any time" about a
-    // subscription that never charges again would be the wrong reassurance.
-    return 'Ends on its own — nothing renews. Your data stays yours.';
+    if (!_plan.autoRenews) {
+      return pro
+          ? 'Payments add to the end of your period. No auto-renewal.'
+          : 'Ends on its own — nothing renews. Your data stays yours.';
+    }
+    final every = _plan.interval == PlanInterval.month ? 'month' : 'year';
+    return pro
+        ? '${_plan.price} every $every from the end of your period. '
+              'Cancel any time.'
+        : '${_plan.price} every $every, automatically. '
+              'Cancel any time in Settings.';
   }
 
   static String _renewalLine(TideStore store) {
-    final days = store.entitlement.daysRemaining;
+    final plan = store.entitlement;
+    final days = plan.daysRemaining;
     if (days <= 0) return 'You are already on Pro.';
+    if (plan.autoRenews) {
+      return 'Pro, renewing in $days ${days == 1 ? 'day' : 'days'}.';
+    }
     return 'Pro for $days more ${days == 1 ? 'day' : 'days'}.';
   }
 }

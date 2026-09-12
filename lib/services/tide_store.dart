@@ -856,16 +856,19 @@ class TideStore extends ChangeNotifier {
   Future<void> refreshEntitlement() async =>
       _applyEntitlement(await billing.refresh());
 
-  /// Stops the plan renewing. Every day already paid for stays: Pro runs to
-  /// the end of the period either way, which is what the screen has to say
-  /// before the tap as well as after it.
+  /// Stops the plan renewing, and on a mandate stops the charge with it.
+  /// Every day already paid for stays: Pro runs to the end of the period
+  /// either way, which is what the screen has to say before the tap as well
+  /// as after it.
   ///
   /// Throws [BillingFailure] — the screen draws it. Nothing here decides
   /// anything; the entitlement applied came back from the server.
   Future<void> cancelPlan() async =>
       _applyEntitlement(await billing.cancelSubscription());
 
-  /// Undo of [cancelPlan].
+  /// Undo of [cancelPlan], and only on a prepaid period. A cancelled mandate
+  /// throws [BillingProblem.resubscribeNeeded]: there is nothing at Razorpay
+  /// left to resume, so the screen offers a fresh checkout instead.
   Future<void> resumePlan() async =>
       _applyEntitlement(await billing.resumeSubscription());
 

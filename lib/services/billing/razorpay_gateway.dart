@@ -37,7 +37,15 @@ class RazorpayGateway implements PaymentGateway {
 
   Razorpay? _razorpay;
   Completer<PaymentReceipt>? _pending;
-  String? _openOrderId;
+
+  /// The intent the open sheet belongs to.
+  ///
+  /// Kept because the success callback cannot be relied on to say. The plugin
+  /// lifts `razorpay_order_id` into a field of its own but has no field for
+  /// `razorpay_subscription_id` — it only survives in the raw `data` map — and
+  /// on some rails it does not come back at all. This is what the subscription
+  /// id falls back to, and it is the id the server will check against anyway.
+  CheckoutIntent? _open;
 
   @override
   bool get available => razorpaySupportsThisPlatform;
@@ -69,17 +77,27 @@ class RazorpayGateway implements PaymentGateway {
 
     final completer = Completer<PaymentReceipt>();
     _pending = completer;
-    _openOrderId = intent.orderId;
+    _open = intent;
 
     razorpay.open({
       'key': intent.keyId,
-      'order_id': intent.orderId,
-      // Sent for display only. The order is what is charged, and Razorpay
-      // refuses a mismatch — which is the behaviour wanted: a build quoting a
-      // stale price fails loudly rather than charging one figure and showing
-      // another.
-      'amount': intent.amountMinor,
-      'currency': intent.currency,
+      if (intent.isSubscription)
+        // A subscription checkout is told the subscription and nothing about
+        // money: Razorpay reads the amount and the cycle off the plan the
+        // subscription was created against, and the sheet it draws is the
+        // mandate authorisation rather than a one-off payment. Sending an
+        // `amount` alongside it is how you get a sheet that charges once and
+        // registers nothing.
+        'subscription_id': intent.subscriptionId
+      else ...{
+        'order_id': intent.orderId,
+        // Sent for display only. The order is what is charged, and Razorpay
+        // refuses a mismatch — which is the behaviour wanted: a build quoting
+        // a stale price fails loudly rather than charging one figure and
+        // showing another.
+        'amount': intent.amountMinor,
+        'currency': intent.currency,
+      },
       'name': title,
       'description': description,
       if (themeColor != null)
@@ -89,6 +107,10 @@ class RazorpayGateway implements PaymentGateway {
         if (intent.contact != null) 'contact': intent.contact,
       },
       'notes': {'plan': intent.planId},
+      // Both rails: the sheet says what it is registering, and on the
+      // subscription rail that sentence is the thing the person is consenting
+      // to. An auto-debit that was never described is a chargeback.
+      if (intent.isSubscription) 'recurring': true,
       // Long enough for a UPI approval on another app, short enough that an
       // abandoned sheet does not sit open on the order all afternoon.
       'timeout': AppConstants.checkoutTimeoutSeconds,
@@ -100,11 +122,26 @@ class RazorpayGateway implements PaymentGateway {
   }
 
   void _onSuccess(PaymentSuccessResponse response) {
-    final orderId = response.orderId ?? _openOrderId;
+    final intent = _open;
     final paymentId = response.paymentId;
     final signature = response.signature;
+    final subscription = intent?.isSubscription ?? false;
 
-    if (orderId == null || paymentId == null || signature == null) {
+    // The plugin lifts `razorpay_order_id` into a field of its own and leaves
+    // everything else in the raw map, so the subscription id is read from
+    // there — and from the open intent when it is absent, which it is on some
+    // rails.
+    final reported = response.data?['razorpay_subscription_id'];
+    final subscriptionId = subscription
+        ? (reported is String && reported.isNotEmpty
+              ? reported
+              : intent?.subscriptionId)
+        : null;
+    final orderId = subscription ? null : response.orderId ?? intent?.orderId;
+
+    if ((orderId == null && subscriptionId == null) ||
+        paymentId == null ||
+        signature == null) {
       // The money may well have moved; what did not arrive is the proof. The
       // webhook is what settles it, so this is a wait, not a failure.
       _settleError(
@@ -119,6 +156,7 @@ class RazorpayGateway implements PaymentGateway {
     _settle(
       PaymentReceipt(
         orderId: orderId,
+        subscriptionId: subscriptionId,
         paymentId: paymentId,
         signature: signature,
       ),
@@ -174,14 +212,14 @@ class RazorpayGateway implements PaymentGateway {
   void _settle(PaymentReceipt receipt) {
     final pending = _pending;
     _pending = null;
-    _openOrderId = null;
+    _open = null;
     if (pending != null && !pending.isCompleted) pending.complete(receipt);
   }
 
   void _settleError(BillingFailure failure) {
     final pending = _pending;
     _pending = null;
-    _openOrderId = null;
+    _open = null;
     if (pending != null && !pending.isCompleted) {
       pending.completeError(failure);
     } else {

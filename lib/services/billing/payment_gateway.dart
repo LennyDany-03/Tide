@@ -74,9 +74,12 @@ class DemoPaymentGateway implements PaymentGateway {
     if (delay > Duration.zero) await Future<void>.delayed(delay);
     final failure = fail;
     if (failure != null) throw failure;
+    // Whichever rail it was handed, echoed back the way the real checkout
+    // does: an order id for an order, a subscription id for a mandate.
     return PaymentReceipt(
       orderId: intent.orderId,
-      paymentId: 'pay_demo_${intent.orderId.hashCode.abs()}',
+      subscriptionId: intent.subscriptionId,
+      paymentId: 'pay_demo_${intent.reference.hashCode.abs()}',
       // The demo billing service does not check this; the real server does,
       // and would refuse it.
       signature: 'demo-signature',

@@ -23,6 +23,27 @@ export interface RazorpayOrder {
   status: string;
 }
 
+export interface RazorpaySubscription {
+  id: string;
+  plan_id: string;
+  /// `created` · `authenticated` · `active` · `pending` · `halted` ·
+  /// `paused` · `cancelled` · `completed` · `expired`
+  status: string;
+  /// Unix seconds. `charge_at` is the next debit; `current_end` is the end of
+  /// the cycle that has been paid for — the date entitlement follows, because
+  /// Razorpay owns this calendar and a date computed here would drift off the
+  /// one the money actually moves on.
+  charge_at?: number | null;
+  current_start?: number | null;
+  current_end?: number | null;
+  paid_count?: number;
+  total_count?: number;
+  /// The hosted authorisation page. The only way to rescue a mandate the app
+  /// failed to finish registering.
+  short_url?: string | null;
+  notes?: Record<string, string>;
+}
+
 export interface RazorpayPayment {
   id: string;
   order_id: string | null;
@@ -101,6 +122,57 @@ export function createOrder(input: {
   });
 }
 
+/// Auto-pay, step 1. The Razorpay plan id is *not* sent by the app and is not
+/// in `billing_plans` either: plan ids differ between test mode and live, the
+/// same way the key id does, so they live in this function's own secrets.
+///
+/// `total_count` is required by the API — there is no "until cancelled" — so it
+/// is a number large enough to be one in practice. `customer_notify: 1` hands
+/// Razorpay the pre-debit notification, which is not optional under RBI's
+/// e-mandate rules and is not something this project should be reimplementing.
+export function createSubscription(input: {
+  planId: string;
+  totalCount: number;
+  notes: Record<string, string>;
+}): Promise<RazorpaySubscription> {
+  return call<RazorpaySubscription>('/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify({
+      plan_id: input.planId,
+      total_count: input.totalCount,
+      customer_notify: 1,
+      notes: input.notes,
+    }),
+  });
+}
+
+export function fetchSubscription(id: string): Promise<RazorpaySubscription> {
+  return call<RazorpaySubscription>(
+    `/subscriptions/${encodeURIComponent(id)}`,
+  );
+}
+
+/// **Not reversible.** Razorpay treats a cancelled subscription as finished and
+/// offers no un-cancel, which is why the app's Resume button does not exist for
+/// a mandate and why `resume_subscription()` refuses one.
+///
+/// `cancelAtCycleEnd` is the default here on purpose: it stops the next debit
+/// and leaves the cycle already paid for running, which is exactly the promise
+/// the cancel dialog makes. Cancelling immediately would end a period somebody
+/// has paid for and produce a refund request.
+export function cancelSubscription(
+  id: string,
+  { cancelAtCycleEnd = true }: { cancelAtCycleEnd?: boolean } = {},
+): Promise<RazorpaySubscription> {
+  return call<RazorpaySubscription>(
+    `/subscriptions/${encodeURIComponent(id)}/cancel`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0 }),
+    },
+  );
+}
+
 export function fetchPayment(paymentId: string): Promise<RazorpayPayment> {
   return call<RazorpayPayment>(`/payments/${encodeURIComponent(paymentId)}`);
 }
@@ -136,6 +208,36 @@ export async function verifyPaymentSignature(input: {
     `${input.orderId}|${input.paymentId}`,
   );
   return timingSafeEqual(expected, input.signature.toLowerCase());
+}
+
+/// The subscription signature — and **the field order is reversed** from
+/// [verifyPaymentSignature]. An order is signed over `order_id|payment_id`; a
+/// subscription is signed over `payment_id|subscription_id`. Same two kinds of
+/// id, opposite order, and no error message from Razorpay that says so: a
+/// mandate integration that reuses the order helper simply rejects every
+/// authorisation it is ever sent.
+///
+/// `subscriptionId` must be the one read from `billing_mandates`, never the one
+/// the device sent, for the same reason the order flow insists on that: it is
+/// the difference between proving a payment happened and letting somebody prove
+/// their own claim about it.
+export async function verifySubscriptionSignature(input: {
+  subscriptionId: string;
+  paymentId: string;
+  signature: string;
+}): Promise<boolean> {
+  const expected = await hmacSha256Hex(
+    requireEnv('RAZORPAY_KEY_SECRET'),
+    `${input.paymentId}|${input.subscriptionId}`,
+  );
+  return timingSafeEqual(expected, input.signature.toLowerCase());
+}
+
+/// Unix seconds to an ISO string, or null. Razorpay sends every date as a
+/// number of seconds and Postgres wants a timestamptz.
+export function atTime(seconds: number | null | undefined): string | null {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return null;
+  return new Date(seconds * 1000).toISOString();
 }
 
 /// The webhook signature: HMAC-SHA256 of the **raw** request body, signed with

@@ -49,12 +49,21 @@ void main() {
     group(plan.id, () {
       test('is on sale at the same price on both sides', () {
         final row = rowFor(plan.id);
-        // (id, name, interval, period_days, amount_minor, currency, sort)
-        // minus the id the pattern already consumed.
+        // (id, name, interval, period_days, amount_minor, currency, sort,
+        // billing_mode) minus the id the pattern already consumed.
         expect(row[1], plan.interval.name, reason: 'interval');
         expect(int.parse(row[2]), plan.periodDays, reason: 'period_days');
         expect(int.parse(row[3]), plan.amountMinor, reason: 'amount_minor');
         expect(row[4], plan.currency, reason: 'currency');
+      });
+
+      test('is bought on the same rail on both sides', () {
+        // Which rail is not cosmetic: it decides whether the app opens an
+        // order or a subscription, whether cancelling is a local write or a
+        // call to Razorpay, and what the paywall is allowed to promise about
+        // money. A plan the app thinks renews and the server thinks does not
+        // would take one payment and then silently stop.
+        expect(rowFor(plan.id)[6], plan.mode.wire, reason: 'billing_mode');
       });
     });
   }

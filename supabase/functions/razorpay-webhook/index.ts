@@ -19,6 +19,19 @@
 // Subscribe in Dashboard → Account & Settings → Webhooks:
 //   payment.authorized · payment.captured · payment.failed · order.paid
 //   refund.processed · refund.created · payment.dispute.created
+//   subscription.authenticated · subscription.activated · subscription.charged
+//   subscription.pending · subscription.halted · subscription.cancelled
+//   subscription.paused · subscription.resumed · subscription.completed
+//
+// **A subscription charge arrives twice, under two names, and only one of them
+// may grant.** Razorpay creates an order of its own for every debit a mandate
+// makes, so `payment.captured` turns up carrying an `order_id` that this
+// project never created — and `apply_payment` would raise `no order on this
+// project` for it, the handler would 500, and the retry would be swallowed as
+// a duplicate by the ledger insert below. Money taken, no period granted, no
+// alarm. So the payment cases skip anything with a subscription id on it and
+// leave it to `subscription.charged`, which is the delivery that knows which
+// mandate it belongs to.
 
 import { fail, json, preflight } from '../_shared/http.ts';
 import {
@@ -60,11 +73,17 @@ Deno.serve(async (req: Request) => {
   const payment = pick(event, 'payload.payment.entity');
   const order = pick(event, 'payload.order.entity');
   const refund = pick(event, 'payload.refund.entity');
+  const subscription = pick(event, 'payload.subscription.entity');
 
   const orderId = String(
     payment?.order_id ?? order?.id ?? refund?.payment_id ?? '',
   );
   const paymentId = String(payment?.id ?? refund?.payment_id ?? '');
+  // A payment made by a mandate names it. Present on the `subscription.*`
+  // deliveries, and on the `payment.*` ones that belong to a debit.
+  const subscriptionId = String(
+    subscription?.id ?? payment?.subscription_id ?? '',
+  );
 
   const db = adminClient();
 
@@ -75,7 +94,10 @@ Deno.serve(async (req: Request) => {
   const { error: seen } = await db.from('billing_events').insert({
     id: deliveryId,
     event: name,
-    order_id: orderId || null,
+    // The subscription id goes in the order column for a mandate delivery:
+    // this table is a log to be read by a human when something has gone wrong,
+    // and "which thing was this about" is the question it has to answer.
+    order_id: orderId || subscriptionId || null,
     payment_id: paymentId || null,
     payload: event,
   });
@@ -95,6 +117,9 @@ Deno.serve(async (req: Request) => {
       // failure costs real money and is silent for days.
       case 'payment.authorized': {
         if (!orderId || !paymentId) break;
+        // A mandate's own debit. Razorpay captures it and tells us again as
+        // `subscription.charged`, which is the only case allowed to grant.
+        if (subscriptionId) break;
         const { data: row } = await db
           .from('payment_orders')
           .select('amount_minor, currency, status')
@@ -114,6 +139,10 @@ Deno.serve(async (req: Request) => {
       case 'payment.captured':
       case 'order.paid': {
         if (!orderId || !paymentId) break;
+        // See the note at the top of the file: this is the delivery that would
+        // otherwise try to apply a renewal against an order row that does not
+        // exist, fail, and be retried into silence.
+        if (subscriptionId) break;
         const { error } = await db.rpc('apply_payment', {
           p_razorpay_order_id: orderId,
           p_razorpay_payment_id: paymentId,
@@ -127,6 +156,11 @@ Deno.serve(async (req: Request) => {
       }
 
       case 'payment.failed': {
+        // A failed debit is `subscription.pending`'s business, not a failed
+        // order: there is no order of ours to mark, and writing a 'failed'
+        // receipt for it would put "Payment failed" in the history of somebody
+        // whose card Razorpay is about to retry successfully.
+        if (subscriptionId) break;
         if (!orderId) break;
         await db
           .from('payment_orders')
@@ -156,6 +190,68 @@ Deno.serve(async (req: Request) => {
           p_reason: name,
         });
         if (error) throw new Error(error.message);
+        break;
+      }
+
+      // --- Auto-pay ---------------------------------------------------------
+
+      // Money arriving on a mandate. **The only case that grants a period on
+      // this rail**, and the one the whole flow is built on: by definition
+      // nobody was holding the phone when a renewal went through.
+      //
+      // `apply_subscription_charge` is idempotent on the payment id, so a
+      // second delivery of the same charge under a new event id — which the
+      // ledger below cannot catch — buys nothing.
+      case 'subscription.charged': {
+        if (!subscriptionId || !paymentId) break;
+        const { error } = await db.rpc('apply_subscription_charge', {
+          p_razorpay_subscription_id: subscriptionId,
+          p_razorpay_payment_id: paymentId,
+          p_razorpay_invoice_id: payment?.invoice_id ?? null,
+          p_amount_minor: payment?.amount ?? null,
+          p_method: payment?.method ?? null,
+          p_current_end: at(subscription?.current_end),
+          p_charge_at: at(subscription?.charge_at),
+          p_paid_count: subscription?.paid_count ?? null,
+        });
+        if (error) throw new Error(error.message);
+        break;
+      }
+
+      // Everything else a subscription does. All of it lands on one function
+      // that can change a status and nothing else — see `sync_mandate_state`
+      // — which is what makes this list safe to extend without re-reasoning
+      // about entitlement every time Razorpay adds an event.
+      //
+      // `pending` and `halted` are the two worth naming: a debit failed, and
+      // the period already paid for keeps running regardless. Taking Pro away
+      // from somebody mid-retry is how they end up paying twice.
+      case 'subscription.authenticated':
+      case 'subscription.activated':
+      case 'subscription.pending':
+      case 'subscription.halted':
+      case 'subscription.paused':
+      case 'subscription.resumed':
+      case 'subscription.cancelled':
+      case 'subscription.completed':
+      case 'subscription.updated': {
+        if (!subscriptionId) break;
+        const { error } = await db.rpc('sync_mandate_state', {
+          p_razorpay_subscription_id: subscriptionId,
+          // Razorpay's own status rather than one derived from the event name:
+          // the two can differ, and the entity is the newer of the two.
+          p_status: subscription?.status ?? statusFor(name),
+          p_charge_at: at(subscription?.charge_at),
+          p_current_end: at(subscription?.current_end),
+          p_paid_count: subscription?.paid_count ?? null,
+          p_auth_payment_id: paymentId || null,
+        });
+        // A delivery for a subscription this project has no row for is not an
+        // error to retry — it is a mandate created against another
+        // environment's database, and retrying it forever achieves nothing.
+        if (error && !/no mandate/.test(error.message)) {
+          throw new Error(error.message);
+        }
         break;
       }
 
@@ -190,6 +286,38 @@ Deno.serve(async (req: Request) => {
 // deno-lint-ignore no-explicit-any
 function pick(source: any, path: string): any {
   return path.split('.').reduce((node, key) => node?.[key], source) ?? null;
+}
+
+/// Unix seconds to ISO, for the timestamptz parameters.
+function at(seconds: unknown): string | null {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return null;
+  return new Date(seconds * 1000).toISOString();
+}
+
+/// The status an event name implies, for the rare delivery whose entity does
+/// not carry one. `subscription.activated` says 'active' rather than
+/// 'activated' — the event names and the status vocabulary are close enough to
+/// be confused and are not the same list.
+function statusFor(event: string): string {
+  switch (event) {
+    case 'subscription.activated':
+    case 'subscription.resumed':
+      return 'active';
+    case 'subscription.authenticated':
+      return 'authenticated';
+    case 'subscription.pending':
+      return 'pending';
+    case 'subscription.halted':
+      return 'halted';
+    case 'subscription.paused':
+      return 'paused';
+    case 'subscription.cancelled':
+      return 'cancelled';
+    case 'subscription.completed':
+      return 'completed';
+    default:
+      return 'active';
+  }
 }
 
 async function digest(bytes: Uint8Array): Promise<string> {

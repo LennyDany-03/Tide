@@ -3,12 +3,28 @@ import 'package:flutter/foundation.dart';
 /// How long one payment buys.
 enum PlanInterval { month, year }
 
+/// How the money arrives, matching `billing_plans.billing_mode`.
+///
+/// The two rails are genuinely different products, not a setting: [auto]
+/// registers a mandate and debits on its own, [oneTime] buys a period outright
+/// and then stops. They differ in how they are bought (a subscription versus an
+/// order), how they are cancelled (a call to Razorpay versus a local write),
+/// and what the screen is allowed to promise.
+enum BillingMode {
+  oneTime,
+  auto;
+
+  /// The server's spelling, which is snake_case. `test/plan_catalog_test.dart`
+  /// holds the two sides to each other through this.
+  String get wire => this == BillingMode.oneTime ? 'one_time' : 'auto';
+}
+
 /// One thing that can be bought.
 ///
 /// The app quotes these; the server charges from `billing_plans` in
 /// `supabase/billing_setup.sql`. Two copies of a price is one copy too many,
-/// and the mismatch would be invisible — the sheet would say ₹199 and the
-/// bank would take ₹299 — so `test/plan_catalog_test.dart` reads the SQL and
+/// and the mismatch would be invisible — the sheet would say ₹100 and the
+/// bank would take ₹199 — so `test/plan_catalog_test.dart` reads the SQL and
 /// fails when the two drift apart.
 ///
 /// Amounts are in paise, the same unit Razorpay takes, because a price that
@@ -22,11 +38,14 @@ class BillingPlan {
     required this.amountMinor,
     required this.periodDays,
     required this.note,
+    this.mode = BillingMode.auto,
     this.currency = 'INR',
   });
 
   /// Matches `billing_plans.id` on the server. The only thing the app sends
-  /// when it asks for an order — never the amount.
+  /// when it asks for a checkout — never the amount, and never the Razorpay
+  /// plan id, which lives in the Edge Function's secrets because it differs
+  /// between test mode and live.
   final String id;
 
   /// What the tier card says: "Monthly", "Yearly".
@@ -34,21 +53,29 @@ class BillingPlan {
 
   final PlanInterval interval;
 
-  /// Paise. ₹199 is 19900.
+  /// Paise. ₹100 is 10000.
   final int amountMinor;
 
+  /// What one payment buys, in days, and what the prepaid rail extends a
+  /// period by. On [BillingMode.auto] the authority is Razorpay's own cycle
+  /// end — their calendar month is 28 to 31 days, and a period worked out from
+  /// this number would drift off the date the money actually moves.
   final int periodDays;
 
   /// The line under the price.
   final String note;
 
+  final BillingMode mode;
+
   final String currency;
 
-  /// "₹199". Whole rupees, because both plans are priced in them; a plan with
+  bool get autoRenews => mode == BillingMode.auto;
+
+  /// "₹100". Whole rupees, because both plans are priced in them; a plan with
   /// paise would need the two decimal places and does not exist.
   String get price => '${symbolFor(currency)}${amountMinor ~/ 100}';
 
-  /// What the CTA says money-wise: "₹199 / month".
+  /// What the CTA says money-wise: "₹100 / month".
   String get perPeriod =>
       '$price / ${interval == PlanInterval.month ? 'month' : 'year'}';
 
@@ -68,27 +95,26 @@ class BillingPlan {
 
 /// The price list, as data.
 ///
-/// Two plans and no lifetime tier. The sheet used to offer "$39 once", which
-/// a prepaid-period model cannot honour: there is no mandate behind these
-/// payments and no way to charge again, so a lifetime price is a promise the
-/// billing table has no column for.
+/// Two plans and no lifetime tier. A lifetime price is a promise the billing
+/// table has no column for: every period here has an end, and the only thing
+/// that carries one past it is a mandate charging again.
 abstract final class PlanCatalog {
   static const BillingPlan monthly = BillingPlan(
     id: 'pro_monthly',
     title: 'Monthly',
     interval: PlanInterval.month,
-    amountMinor: 19900,
+    amountMinor: 10000,
     periodDays: 30,
-    note: 'billed every 30 days',
+    note: 'renews every month',
   );
 
   static const BillingPlan yearly = BillingPlan(
     id: 'pro_yearly',
     title: 'Yearly',
     interval: PlanInterval.year,
-    amountMinor: 149900,
+    amountMinor: 49900,
     periodDays: 365,
-    note: 'billed once a year',
+    note: 'renews once a year',
   );
 
   static const List<BillingPlan> all = [monthly, yearly];

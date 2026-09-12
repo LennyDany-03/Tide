@@ -44,6 +44,30 @@ class DemoBillingService extends BillingService {
     );
   }
 
+  /// Pro on a standing mandate, the way an account that subscribed looks.
+  ///
+  /// Distinct from [DemoBillingService.pro], which is a prepaid period and so
+  /// has nothing renewing it. The difference is not cosmetic: it decides
+  /// whether the screen says "ends" or "renews", whether cancelling is a local
+  /// write or a call to Razorpay, and whether Resume exists at all.
+  factory DemoBillingService.subscribed({BillingPlan? plan}) {
+    final on = plan ?? PlanCatalog.preferred;
+    final now = DateTime.now();
+    final until = now.add(Duration(days: on.periodDays));
+    return DemoBillingService(
+      entitlement: Entitlement(
+        status: EntitlementStatus.active,
+        planId: on.id,
+        periodStart: now,
+        periodEnd: until,
+        source: 'razorpay',
+        autoRenews: true,
+        nextChargeAt: until,
+        mandateStatus: 'active',
+      ),
+    );
+  }
+
   /// What stands in for a card reader. Swappable so a test can make the next
   /// payment fail without a declined card anywhere near it.
   final PaymentGateway gateway;
@@ -71,8 +95,10 @@ class DemoBillingService extends BillingService {
   Entitlement _current;
   String? _accountId;
   int _orders = 0;
+  int _renewals = 0;
 
-  /// Which plan each open order is for — the demo's `payment_orders` table.
+  /// Which plan each open checkout is for, keyed by order id or subscription
+  /// id — the demo's `payment_orders` and `billing_mandates` in one map.
   /// [confirm] reads the plan off this rather than being told, which is how
   /// the server does it and why a caller cannot buy a year by asking for one.
   final Map<String, BillingPlan> _open = {};
@@ -120,21 +146,109 @@ class DemoBillingService extends BillingService {
   // Cancel only moves a running 'active' plan; resume only moves a running
   // 'cancelled' one. Neither can extend anything.
 
+  /// Cancelling stops the mandate as well as marking the row, which is the
+  /// whole difference between the two rails — so `autoRenews` goes false and
+  /// the mandate's own status follows. [Entitlement.cancelsThroughProvider]
+  /// stays true afterwards, because it is asking "was there ever a mandate
+  /// here", and that is what decides whether Resume is offered.
   @override
   Future<Entitlement> cancelSubscription() async {
-    if (_current.status == EntitlementStatus.active && _current.isPro) {
-      _current = _restated(EntitlementStatus.cancelled, DateTime.now());
+    final cancellable =
+        _current.status == EntitlementStatus.active ||
+        _current.status == EntitlementStatus.pastDue ||
+        _current.status == EntitlementStatus.halted;
+    if (cancellable && _current.isPro) {
+      _current = _restated(
+        status: EntitlementStatus.cancelled,
+        cancelledAt: DateTime.now(),
+        autoRenews: false,
+        nextChargeAt: null,
+        mandateStatus: _current.cancelsThroughProvider ? 'cancelled' : null,
+      );
       _announce();
     }
     return _current;
   }
 
+  /// Refuses a mandate the same way the real service does, and before the
+  /// network rather than after it: there is nothing at Razorpay left to put
+  /// back, so the only honest answer is that subscribing again is a checkout.
   @override
   Future<Entitlement> resumeSubscription() async {
+    if (_current.cancelsThroughProvider) {
+      throw const BillingFailure(
+        BillingProblem.resubscribeNeeded,
+        'This plan was cancelled at the payment provider and cannot be '
+            'restarted.',
+      );
+    }
     if (_current.status == EntitlementStatus.cancelled && _current.isPro) {
-      _current = _restated(EntitlementStatus.active, null);
+      _current = _restated(status: EntitlementStatus.active);
       _announce();
     }
+    return _current;
+  }
+
+  /// A renewal landing, the way `subscription.charged` does on the server:
+  /// nobody was holding the phone, the mandate came due, and a period is
+  /// stacked onto whatever is left of the current one.
+  ///
+  /// The test hook for the half of auto-pay that has no UI at all.
+  /// A [paymentId] given twice is the second delivery of one charge, and it
+  /// changes nothing — the same guarantee `apply_subscription_charge` gets from
+  /// the unique payment id on `payment_orders`. Razorpay replays webhooks, so
+  /// a renewal path without this is one that buys two months for one debit.
+  Entitlement charge({DateTime? until, String? paymentId}) {
+    if (paymentId != null && paymentId == _current.lastPaymentId) {
+      return _current;
+    }
+    final plan = _current.plan ?? PlanCatalog.preferred;
+    final now = DateTime.now();
+    final from = _current.isPro ? _current.periodEnd! : now;
+    final end = until ?? from.add(Duration(days: plan.periodDays));
+    _renewals++;
+    final charged = paymentId ?? 'pay_demo_renewal_$_renewals';
+
+    _payments.insert(
+      0,
+      PaymentRecord(
+        id: 'sub_demo_charge_$_renewals',
+        planId: plan.id,
+        amountMinor: plan.amountMinor,
+        currency: plan.currency,
+        status: PaymentStatus.captured,
+        method: 'card',
+        paymentId: charged,
+        createdAt: now,
+      ),
+    );
+
+    _current = Entitlement(
+      status: EntitlementStatus.active,
+      planId: plan.id,
+      periodStart: _current.isPro ? _current.periodStart : now,
+      periodEnd: end,
+      source: 'razorpay',
+      lastPaymentId: charged,
+      autoRenews: true,
+      nextChargeAt: end,
+      mandateStatus: 'active',
+    );
+    _announce();
+    return _current;
+  }
+
+  /// A debit that did not go through. Pro stays on — the period already paid
+  /// for is still running — and the renewal is what is in trouble.
+  ///
+  /// [halted] is Razorpay having given up retrying rather than still trying.
+  Entitlement renewalFailed({bool halted = false}) {
+    _current = _restated(
+      status: halted ? EntitlementStatus.halted : EntitlementStatus.pastDue,
+      autoRenews: !halted,
+      mandateStatus: halted ? 'halted' : 'pending',
+    );
+    _announce();
     return _current;
   }
 
@@ -142,17 +256,28 @@ class DemoBillingService extends BillingService {
   /// purpose, and widening it to carry a status would put `copyWith(status:
   /// active)` — the app deciding somebody is Pro — one line from every screen
   /// that can see an Entitlement.
-  Entitlement _restated(EntitlementStatus status, DateTime? cancelledAt) =>
-      Entitlement(
-        status: status,
-        planId: _current.planId,
-        periodStart: _current.periodStart,
-        periodEnd: _current.periodEnd,
-        cancelledAt: cancelledAt,
-        source: _current.source,
-        lastPaymentId: _current.lastPaymentId,
-        skew: _current.skew,
-      );
+  ///
+  /// The nullable fields are cleared by being left out, so every caller has to
+  /// say what it means rather than inheriting a stale renewal date.
+  Entitlement _restated({
+    required EntitlementStatus status,
+    DateTime? cancelledAt,
+    bool? autoRenews,
+    DateTime? nextChargeAt,
+    String? mandateStatus,
+  }) => Entitlement(
+    status: status,
+    planId: _current.planId,
+    periodStart: _current.periodStart,
+    periodEnd: _current.periodEnd,
+    cancelledAt: cancelledAt,
+    source: _current.source,
+    lastPaymentId: _current.lastPaymentId,
+    autoRenews: autoRenews ?? _current.autoRenews,
+    nextChargeAt: nextChargeAt,
+    mandateStatus: mandateStatus ?? _current.mandateStatus,
+    skew: _current.skew,
+  );
 
   @override
   Future<Entitlement> refresh() async => _current;
@@ -179,9 +304,20 @@ class DemoBillingService extends BillingService {
       );
     }
     _orders++;
+    if (plan.autoRenews) {
+      final subscriptionId = 'sub_demo_$_orders';
+      _open[subscriptionId] = plan;
+      return CheckoutIntent.subscription(
+        subscriptionId: subscriptionId,
+        keyId: 'rzp_test_demo',
+        planId: plan.id,
+        amountMinor: plan.amountMinor,
+        currency: plan.currency,
+      );
+    }
     final orderId = 'order_demo_$_orders';
     _open[orderId] = plan;
-    return CheckoutIntent(
+    return CheckoutIntent.order(
       orderId: orderId,
       keyId: 'rzp_test_demo',
       planId: plan.id,
@@ -192,9 +328,10 @@ class DemoBillingService extends BillingService {
 
   @override
   Future<Entitlement> confirm(PaymentReceipt receipt) async {
-    // The plan comes back through the order id the same way the server reads
-    // it off the row: nothing the caller passes decides what was bought.
-    final plan = _open[receipt.orderId];
+    // The plan comes back through the id the checkout was opened against, the
+    // same way the server reads it off the row: nothing the caller passes
+    // decides what was bought.
+    final plan = _open[receipt.reference];
     if (plan == null) {
       throw const BillingFailure(
         BillingProblem.rejected,
@@ -210,12 +347,12 @@ class DemoBillingService extends BillingService {
     _payments.insert(
       0,
       PaymentRecord(
-        id: receipt.orderId,
+        id: receipt.reference,
         planId: plan.id,
         amountMinor: plan.amountMinor,
         currency: plan.currency,
         status: PaymentStatus.captured,
-        method: 'upi',
+        method: receipt.isSubscription ? 'card' : 'upi',
         paymentId: receipt.paymentId,
         createdAt: DateTime.now(),
       ),
@@ -223,13 +360,20 @@ class DemoBillingService extends BillingService {
 
     final now = DateTime.now();
     final running = _current.isPro ? _current.periodEnd! : now;
+    final end = running.add(Duration(days: plan.periodDays));
+    // A subscription checkout registers the mandate as well as taking the
+    // first charge, so what comes out of it is a plan that renews — which is a
+    // different object from a prepaid period of the same length.
     _current = Entitlement(
       status: EntitlementStatus.active,
       planId: plan.id,
       periodStart: _current.isPro ? _current.periodStart : now,
-      periodEnd: running.add(Duration(days: plan.periodDays)),
+      periodEnd: end,
       source: 'razorpay',
       lastPaymentId: receipt.paymentId,
+      autoRenews: receipt.isSubscription,
+      nextChargeAt: receipt.isSubscription ? end : null,
+      mandateStatus: receipt.isSubscription ? 'active' : null,
     );
     _announce();
     return _current;
@@ -239,8 +383,8 @@ class DemoBillingService extends BillingService {
   /// `billing_snapshot` filters a dismissed sheet out of the history, so a
   /// demo that recorded one would reproduce a bug into every test.
   @override
-  Future<void> abandon(String orderId, {Object? error}) async {
-    _open.remove(orderId);
+  Future<void> abandon(CheckoutIntent intent, {Object? error}) async {
+    _open.remove(intent.reference);
   }
 
   @override

@@ -13,10 +13,12 @@ import '../../theme/tide_elevation.dart';
 import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/press_scale.dart';
+import '../../widgets/rise.dart';
 import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_button.dart';
 import '../../widgets/tide_surface.dart';
 import 'widgets/cancel_plan_dialog.dart';
+import 'widgets/cancelled_notice.dart';
 import 'widgets/receipt_row.dart';
 
 /// Plan and receipts.
@@ -63,8 +65,17 @@ class _BillingScreenState extends State<BillingScreen> {
       if (mounted) setState(() => _busy = false);
     } on BillingFailure catch (failure) {
       if (!mounted) return;
+      setState(() => _busy = false);
+      // Not an error, an answer: the mandate is gone and the way back to Pro
+      // is a checkout. The card should not have offered Resume at all here, so
+      // reaching this is a race — a cancellation that landed on the broadcast
+      // between the frame being drawn and the tap. Opening the paywall is the
+      // same thing the button would now say.
+      if (failure.problem == BillingProblem.resubscribeNeeded) {
+        context.push(Routes.upgrade);
+        return;
+      }
       setState(() {
-        _busy = false;
         _error = failure.detail ?? 'That did not go through. Try again.';
       });
     }
@@ -128,8 +139,11 @@ class _BillingScreenState extends State<BillingScreen> {
                   error: _error,
                   onUpgrade: () => context.push(Routes.upgrade),
                   onViewPass: () => context.push(Routes.proPass),
-                  onCancel: () =>
-                      confirmCancelPlan(context, until: plan.periodEnd),
+                  onCancel: () => confirmCancelPlan(
+                    context,
+                    until: plan.periodEnd,
+                    autoRenews: plan.autoRenews,
+                  ),
                   onResume: _resume,
                 ),
                 const SizedBox(height: 30),
@@ -339,7 +353,18 @@ class _Notice extends StatelessWidget {
 }
 
 /// The plan itself: what is held, until when, and the ways to change it.
-class _PlanCard extends StatelessWidget {
+///
+/// **Cancelling is animated, and by one controller rather than three.** The
+/// note opening, the mark drawing down its edge and Cancel becoming Resume are
+/// all windows on the same pass ([TideMotion.planChange]), because they are one
+/// event: the plan changed. Three widgets each animating themselves would let
+/// the button arrive before the sentence explaining it.
+///
+/// The controller starts *settled* — `value: 1` for a plan that is already
+/// cancelled — so the pass only ever plays on a change. Opening this screen on
+/// a cancelled plan draws it as a fact, not as news; `didUpdateWidget` is what
+/// runs it, forward on cancel and in reverse on resume.
+class _PlanCard extends StatefulWidget {
   const _PlanCard({
     required this.plan,
     required this.busy,
@@ -358,15 +383,58 @@ class _PlanCard extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onResume;
 
+  @override
+  State<_PlanCard> createState() => _PlanCardState();
+}
+
+class _PlanCardState extends State<_PlanCard>
+    with SingleTickerProviderStateMixin {
+  /// Uneased on purpose: every beat of the pass eases its own window out of
+  /// this, through `planBeat`. See that function for why.
+  late final AnimationController _controller = AnimationController(
+    duration: TideMotion.planChange,
+    reverseDuration: TideMotion.planChangeBack,
+    vsync: this,
+    value: _cancelled ? 1 : 0,
+  );
+
   /// Keyed off the status, never off `cancelledAt` — a refund sets that too,
   /// so it does not mean "the person cancelled".
-  bool get _cancelled => plan.status == EntitlementStatus.cancelled;
+  bool get _cancelled =>
+      widget.plan.status == EntitlementStatus.cancelled;
+
+  @override
+  void didUpdateWidget(_PlanCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final was = oldWidget.plan.status == EntitlementStatus.cancelled;
+    if (was == _cancelled) return;
+    if (_cancelled) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   static String _date(DateTime when) =>
       '${when.day} ${AppConstants.monthNames[when.month - 1]} ${when.year}';
 
   @override
   Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => _card(_controller.value),
+    );
+  }
+
+  Widget _card(double t) {
+    final plan = widget.plan;
+    final error = widget.error;
     final end = plan.periodEnd;
 
     return TideSurface(
@@ -393,7 +461,13 @@ class _PlanCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       plan.isPro && end != null
-                          ? '${plan.plan?.title ?? 'Pro'} · until ${_date(end)}'
+                          // "renews 12 October" and "until 12 October" are the
+                          // same date and opposite facts. Cancelled reads as
+                          // "until" whatever the plan was, because that is now
+                          // what it is.
+                          ? '${plan.plan?.title ?? 'Pro'} · '
+                                '${plan.autoRenews ? 'renews' : 'until'} '
+                                '${_date(end)}'
                           : plan.lapsed && end != null
                           ? 'Ended ${_date(end)}'
                           : 'Up to ${AppConstants.freeHabitLimit} habits',
@@ -410,20 +484,33 @@ class _PlanCard extends StatelessWidget {
             ],
           ),
 
-          if (_cancelled) ...[
+          // Only drawn while the plan is, or is becoming, cancelled — the
+          // widget takes no height at t == 0.
+          CancelledNotice(progress: t, until: end),
+
+          // A debit that did not go through. Pro is still on and says so, so
+          // this is drawn as a thing to fix rather than as a loss: the days
+          // already paid for are not in question, the next month is.
+          if (plan.renewalFailing) ...[
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
               decoration: BoxDecoration(
-                color: TideColors.lantern.withValues(alpha: 0.08),
+                color: TideColors.coral.withValues(alpha: 0.10),
                 borderRadius: TideElevation.radius12,
               ),
               child: Text(
-                'Cancelled. You keep Pro until '
-                '${end == null ? 'the end of your period' : _date(end)}, '
-                'and nothing will be charged.',
+                plan.status == EntitlementStatus.halted
+                    ? 'We could not take the renewal, and we have stopped '
+                          'trying. Pro runs to '
+                          '${end == null ? 'the end of your period' : _date(end)}'
+                          ' — subscribe again to keep it after that.'
+                    : 'The renewal did not go through. We will try again '
+                          'before '
+                          '${end == null ? 'your period ends' : _date(end)}'
+                          ' — Pro is on until then either way.',
                 style: TideType.label.copyWith(
-                  color: TideColors.lantern,
+                  color: TideColors.coral,
                   height: 1.35,
                 ),
               ),
@@ -433,7 +520,7 @@ class _PlanCard extends StatelessWidget {
           if (error != null) ...[
             const SizedBox(height: 12),
             Text(
-              error!,
+              error,
               style: TideType.label.copyWith(color: TideColors.coral),
             ),
           ],
@@ -444,20 +531,30 @@ class _PlanCard extends StatelessWidget {
             _Outlined(
               label: 'View my pass',
               icon: Icons.confirmation_number_outlined,
-              onTap: onViewPass,
+              onTap: widget.onViewPass,
             ),
             const SizedBox(height: 10),
-            if (_cancelled)
-              _Outlined(
-                label: busy ? 'Resuming…' : 'Resume Pro',
-                icon: Icons.refresh_rounded,
-                onTap: busy ? null : onResume,
-              )
-            else
-              PressScale(
-                onTap: onCancel,
+            _ActionSwap(
+              progress: t,
+              // A cancelled mandate has nothing to resume — Razorpay offers no
+              // un-cancel — so the slot says what is actually on offer. Same
+              // shape, same place, different verb: hiding it would leave a
+              // cancelled account with no way back to Pro from this screen.
+              resume: plan.cancelsThroughProvider
+                  ? _Outlined(
+                      label: 'Subscribe again',
+                      icon: Icons.autorenew_rounded,
+                      onTap: widget.onUpgrade,
+                    )
+                  : _Outlined(
+                      label: widget.busy ? 'Resuming…' : 'Resume Pro',
+                      icon: Icons.refresh_rounded,
+                      onTap: widget.busy ? null : widget.onResume,
+                    ),
+              cancel: PressScale(
+                onTap: widget.onCancel,
                 child: SizedBox(
-                  height: 44,
+                  height: 46,
                   child: Center(
                     child: Text(
                       'Cancel Pro',
@@ -469,10 +566,62 @@ class _PlanCard extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
           ] else
             TideButton(
               label: plan.lapsed ? 'Renew Pro' : 'Go Pro',
-              onPressed: onUpgrade,
+              onPressed: widget.onUpgrade,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Cancel becoming Resume, on the card's one pass.
+///
+/// Both controls occupy the same 46px slot and are stacked rather than swapped,
+/// so the card's height never changes under the finger that just left the
+/// dialog. Nothing moves during the lead-in — the dialog is still on top —
+/// then Cancel leaves upward and is gone by the time Resume starts arriving
+/// from below, so the two never read as one control mid-morph. Nothing is
+/// tappable while it is half faded either: whichever is under 50% is ignored,
+/// so a tap during the pass cannot cancel a plan it is trying to resume.
+class _ActionSwap extends StatelessWidget {
+  const _ActionSwap({
+    required this.progress,
+    required this.cancel,
+    required this.resume,
+  });
+
+  final double progress;
+  final Widget cancel;
+  final Widget resume;
+
+  @override
+  Widget build(BuildContext context) {
+    final leaving = 1 - planBeat(progress, planLeadIn, 0.5);
+    final arriving = planBeat(progress, 0.48, 0.82);
+
+    return SizedBox(
+      height: 46,
+      child: Stack(
+        children: [
+          // `lift` is negative so the same widget that raises things into
+          // place carries this one out the way it came.
+          if (leaving > 0)
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: leaving < 0.5,
+                child: Rise(progress: leaving, lift: -4, child: cancel),
+              ),
+            ),
+          if (arriving > 0)
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: arriving < 0.5,
+                child: Rise(progress: arriving, lift: 6, child: resume),
+              ),
             ),
         ],
       ),
