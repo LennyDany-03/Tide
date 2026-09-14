@@ -229,7 +229,7 @@ void main() {
       await settle(tester);
       expect(
         tester.widget<TideTabBar>(find.byType(TideTabBar)).currentIndex,
-        1,
+        2,
       );
 
       await pressSystemBack(tester);

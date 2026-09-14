@@ -32,6 +32,19 @@ enum ProFeature {
 
   /// The Sunday evening recap.
   weeklyRecap,
+
+  /// To-do repeats on a custom cycle of months.
+  taskCustomRepeat,
+
+  /// More than [AppConstants.freeTaskReminders] reminder on a task, and the
+  /// snooze action on the notification.
+  taskReminders,
+
+  /// Tags on tasks, and filtering the list by one.
+  taskTags,
+
+  /// Archiving completed tasks, and the archive view.
+  taskArchive,
 }
 
 /// One line of the paywall, and one gate in the app. The same object, because
@@ -88,6 +101,26 @@ abstract final class ProFeatures {
       label: 'Sunday recap',
       freeAllowance: '—',
       blurb: 'Pro sends the week in one line.',
+    ),
+    ProFeature.taskCustomRepeat: ProFeatureSpec(
+      label: 'Custom and seasonal repeats',
+      freeAllowance: 'Daily · weekly · monthly',
+      blurb: 'Pro repeats a task every few months, or once a year.',
+    ),
+    ProFeature.taskReminders: ProFeatureSpec(
+      label: 'Several reminders, with snooze',
+      freeAllowance: '${AppConstants.freeTaskReminders} / task',
+      blurb: 'Pro sets as many reminders as a task needs, and snoozes them.',
+    ),
+    ProFeature.taskTags: ProFeatureSpec(
+      label: 'Tags and filters for to-dos',
+      freeAllowance: '—',
+      blurb: 'Pro tags tasks and filters the list by tag.',
+    ),
+    ProFeature.taskArchive: ProFeatureSpec(
+      label: 'Completed-task archive',
+      freeAllowance: '—',
+      blurb: 'Pro keeps finished tasks in an archive you can look back on.',
     ),
   };
 

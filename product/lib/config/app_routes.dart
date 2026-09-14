@@ -17,6 +17,9 @@ import '../screens/pro_welcome/pro_welcome_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/shell/tide_shell.dart';
 import '../screens/splash/splash_screen.dart';
+import '../screens/task_archive/task_archive_screen.dart';
+import '../screens/task_editor/task_editor_screen.dart';
+import '../screens/tasks/tasks_screen.dart';
 import '../screens/upgrade/upgrade_sheet.dart';
 import '../screens/verify_email/verify_email_screen.dart';
 import '../screens/welcome/welcome_screen.dart';
@@ -33,6 +36,8 @@ abstract final class Routes {
   static const welcome = '/welcome';
   static const accountDeleted = '/account-deleted';
   static const today = '/today';
+  static const tasks = '/tasks';
+  static const taskArchive = '/tasks/archive';
   static const history = '/history';
   static const insights = '/insights';
   static const settings = '/settings';
@@ -46,6 +51,7 @@ abstract final class Routes {
 
   static String habit(String id) => '/today/habit/$id';
   static String editHabit(String id) => '/habit/$id/edit';
+  static String task(String id) => '/task/$id';
 }
 
 abstract final class AppRoutes {
@@ -98,7 +104,8 @@ abstract final class AppRoutes {
         // reason the mark appeared to jump size on its way across.
         GoRoute(
           path: Routes.onboarding,
-          pageBuilder: (context, state) => _fade(state, const OnboardingScreen()),
+          pageBuilder: (context, state) =>
+              _fade(state, const OnboardingScreen()),
         ),
 
         // Sign-up and log-in. A `go` rather than a push in both directions:
@@ -152,7 +159,7 @@ abstract final class AppRoutes {
               _fade(state, const AccountDeletedScreen()),
         ),
 
-        // The four tabs. A branch keeps its own navigator, so pushing habit
+        // The five tabs. A branch keeps its own navigator, so pushing habit
         // detail from Today and then switching tabs and back returns to the
         // detail screen rather than resetting the tab.
         StatefulShellRoute(
@@ -178,6 +185,24 @@ abstract final class AppRoutes {
                       builder: (context, state) => HabitDetailScreen(
                         habitId: state.pathParameters['id']!,
                       ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            // The to-do list, beside Today. A side module, so it is one
+            // screen and one pushed page, and the editor covers the tab bar
+            // the way the habit editor does.
+            StatefulShellBranch(
+              preload: true,
+              routes: [
+                GoRoute(
+                  path: Routes.tasks,
+                  builder: (context, state) => const TasksScreen(),
+                  routes: [
+                    GoRoute(
+                      path: 'archive',
+                      builder: (context, state) => const TaskArchiveScreen(),
                     ),
                   ],
                 ),
@@ -238,6 +263,15 @@ abstract final class AppRoutes {
           pageBuilder: (context, state) => _page(
             state,
             AddEditHabitScreen(habitId: state.pathParameters['id']),
+          ),
+        ),
+
+        GoRoute(
+          path: '/task/:id',
+          parentNavigatorKey: _rootKey,
+          pageBuilder: (context, state) => _page(
+            state,
+            TaskEditorScreen(taskId: state.pathParameters['id']!),
           ),
         ),
 

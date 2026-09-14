@@ -329,14 +329,13 @@ class HoldToConfirmButton extends StatelessWidget {
 
   final String label;
 
-  /// No resting fill or outline — coral words on the surface, and the fill
-  /// and edge arrive only while it is held.
+  /// A faint coral wash and a thin edge at rest instead of the full slab.
   ///
   /// For surfaces where delete is one option among several rather than the
-  /// point of the screen. A coral slab at rest is the loudest object in any
-  /// panel it sits in, which put the least-used action in the most visible
-  /// place. The gesture and its feedback are unchanged: it is still learned
-  /// once.
+  /// point of the screen. It used to have no resting shape at all — coral
+  /// words floating on the panel — and the box only appeared under the
+  /// finger, so the control changed shape mid-gesture and read as a glitch.
+  /// The outline is always there now; holding only fills it.
   final bool quiet;
 
   /// Shown while the ring is filling — "Keep holding".
@@ -362,12 +361,12 @@ class HoldToConfirmButton extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               decoration: BoxDecoration(
                 color: quiet
-                    ? color.withValues(alpha: 0.18 * progress)
+                    ? color.withValues(alpha: 0.06)
                     : color.withValues(alpha: 0.12 + 0.18 * progress),
                 borderRadius: TideElevation.radius12,
                 border: Border.all(
                   color: quiet
-                      ? color.withValues(alpha: 0.6 * progress)
+                      ? color.withValues(alpha: 0.2 + 0.4 * progress)
                       : color.withValues(alpha: 0.3 + 0.5 * progress),
                 ),
               ),
@@ -388,7 +387,7 @@ class HoldToConfirmButton extends StatelessWidget {
                     child: FractionallySizedBox(
                       widthFactor: progress,
                       child: ColoredBox(
-                        color: color.withValues(alpha: 0.22),
+                        color: color.withValues(alpha: quiet ? 0.18 : 0.22),
                         child: const SizedBox.expand(),
                       ),
                     ),

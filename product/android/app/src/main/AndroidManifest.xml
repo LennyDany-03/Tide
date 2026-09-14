@@ -3,6 +3,19 @@
          debug and profile manifests already grant this; release did not. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- To-do reminders. Local notifications, so they fire with no network.
+         POST_NOTIFICATIONS is asked for the first time somebody sets a
+         reminder, not at launch. SCHEDULE_EXACT_ALARM is requested on Android
+         14+ and may be refused, in which case reminders fall back to inexact
+         timing rather than failing. BOOT_COMPLETED lets the plugin put the
+         reminders back after a restart. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
+    <!-- Syncing the to-do list when the connection comes back. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
     <application
         android:label="Tide"
         android:name="${applicationName}"
@@ -29,6 +42,26 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- flutter_local_notifications: delivers scheduled task reminders,
+             and reschedules them after a reboot or an app update. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+        <!-- The snooze button on a reminder, handled with the app closed. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"/>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

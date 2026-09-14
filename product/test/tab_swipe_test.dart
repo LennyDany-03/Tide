@@ -35,11 +35,12 @@ List<({double opacity, double dx})> branchStates(WidgetTester tester) {
   ];
 }
 
-/// Starts the drag high on the page, clear of the habit rows — those carry
-/// their own horizontal gesture, which the conflict test below covers
-/// deliberately rather than by accident.
+/// Starts the drag across the screen titles, clear of anything that carries
+/// its own horizontal gesture — habit rows on Today, the quick-add field and
+/// task rows on To-do. The conflict tests below cover those deliberately
+/// rather than by accident.
 Future<void> swipePage(WidgetTester tester, double dx) async {
-  await tester.flingFrom(const Offset(400, 120), Offset(dx, 0), 900);
+  await tester.flingFrom(const Offset(400, 40), Offset(dx, 0), 900);
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 500));
 }
@@ -56,7 +57,7 @@ void main() {
     await openShell(tester);
     expect(selectedTab(tester), 0);
 
-    for (final expected in [1, 2, 3]) {
+    for (final expected in [1, 2, 3, 4]) {
       await swipePage(tester, -320);
       expect(selectedTab(tester), expected);
     }
@@ -68,12 +69,12 @@ void main() {
 
   testWidgets('swiping right walks back through the tabs', (tester) async {
     await openShell(tester);
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < 4; i++) {
       await swipePage(tester, -320);
     }
-    expect(selectedTab(tester), 3);
+    expect(selectedTab(tester), 4);
 
-    for (final expected in [2, 1, 0]) {
+    for (final expected in [3, 2, 1, 0]) {
       await swipePage(tester, 320);
       expect(selectedTab(tester), expected);
     }
@@ -86,12 +87,12 @@ void main() {
     await swipePage(tester, 320);
     expect(selectedTab(tester), 0);
 
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < 4; i++) {
       await swipePage(tester, -320);
     }
     // ...or after Settings.
     await swipePage(tester, -320);
-    expect(selectedTab(tester), 3);
+    expect(selectedTab(tester), 4);
   });
 
   testWidgets('a short drag springs back instead of changing tab', (

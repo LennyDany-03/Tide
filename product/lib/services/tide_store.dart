@@ -827,9 +827,11 @@ class TideStore extends ChangeNotifier {
   /// gone by then is let go with the rest of the account's copy on this
   /// device.
   Future<void> logOut() async {
-    if (repository.hasPendingWrites) {
-      await repository.flush().timeout(_flushTimeout, onTimeout: () {});
-    }
+    await Future.wait<void>([
+      if (repository.hasPendingWrites)
+        repository.flush().timeout(_flushTimeout, onTimeout: () {}),
+      for (final hook in List.of(_logOutHooks)) hook(),
+    ]);
     try {
       await auth.logOut();
     } catch (error) {
@@ -837,6 +839,16 @@ class TideStore extends ChangeNotifier {
     }
     _release();
   }
+
+  /// Work another module needs to finish while the session can still reach
+  /// the server — the to-do list sending what it has queued. Each hook must
+  /// bound its own wait; log out waits for all of them.
+  final List<Future<void> Function()> _logOutHooks = [];
+
+  void addLogOutHook(Future<void> Function() hook) => _logOutHooks.add(hook);
+
+  void removeLogOutHook(Future<void> Function() hook) =>
+      _logOutHooks.remove(hook);
 
   /// Deletes the account on the server for good, then leaves it the way
   /// [logOut] does.

@@ -102,8 +102,9 @@ abstract final class TourCatalog {
       stop: TourStop.tabs,
       title: 'Everything else is behind these',
       body:
-          'History for the calendar, Insights for the pattern, Settings for '
-          'the rest. Swipe between them, or tap.',
+          'To-do for everything that is not a habit, History for the '
+          'calendar, Insights for the pattern, Settings for the rest. Swipe '
+          'between them, or tap.',
       inset: 6,
       radius: 22,
     ),

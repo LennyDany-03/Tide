@@ -1,6 +1,10 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quick_actions/quick_actions.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/app_constants.dart';
@@ -17,6 +21,13 @@ import 'services/device_flags.dart';
 import 'services/habits/demo_habit_repository.dart';
 import 'services/habits/habit_repository.dart';
 import 'services/habits/supabase_habit_repository.dart';
+import 'services/tasks/local_task_reminders.dart';
+import 'services/tasks/reconnects.dart';
+import 'services/tasks/task_local.dart';
+import 'services/tasks/task_remote.dart';
+import 'services/tasks/task_reminders.dart';
+import 'services/tasks/task_scope.dart';
+import 'services/tasks/task_store.dart';
 import 'services/tide_scope.dart';
 import 'services/tide_store.dart';
 import 'theme/tide_colors.dart';
@@ -42,6 +53,7 @@ Future<void> main() async {
   final AuthService auth;
   final HabitRepository habits;
   final BillingService billing;
+  TaskRemote? taskRemote;
   if (SupabaseConfig.isConfigured) {
     await Supabase.initialize(
       url: SupabaseConfig.url,
@@ -57,6 +69,7 @@ Future<void> main() async {
       Supabase.instance.client,
       gateway: RazorpayGateway(),
     );
+    taskRemote = SupabaseTaskRemote(Supabase.instance.client);
   } else {
     debugPrint(
       'Tide: SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY not set — run with '
@@ -68,6 +81,15 @@ Future<void> main() async {
     billing = DemoBillingService();
   }
 
+  // The to-do list lives on the device first and the server second, so it is
+  // set up whether or not a project is configured.
+  final taskLocal = await PrefsTaskLocal.open();
+  final taskReminders = await LocalTaskReminders.create();
+  final mobile =
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
   runApp(
     TideApp(
       showSplash: true,
@@ -75,6 +97,11 @@ Future<void> main() async {
       flags: flags,
       habits: habits,
       billing: billing,
+      taskLocal: taskLocal,
+      taskRemote: taskRemote,
+      taskReminders: taskReminders,
+      reconnects: mobile ? connectionRestored() : null,
+      homeShortcuts: mobile,
     ),
   );
 }
@@ -88,6 +115,11 @@ class TideApp extends StatefulWidget {
     this.flags,
     this.habits,
     this.billing,
+    this.taskLocal,
+    this.taskRemote,
+    this.taskReminders,
+    this.reconnects,
+    this.homeShortcuts = false,
   });
 
   /// Tests and deep links can skip straight into the shell: onboarding
@@ -116,6 +148,23 @@ class TideApp extends StatefulWidget {
   /// widget test runs on.
   final BillingService? billing;
 
+  /// Where the to-do list is kept on the device. Left null, in memory.
+  final TaskLocal? taskLocal;
+
+  /// The server behind the to-do list. Left null, tasks never leave the
+  /// device — which is what every widget test runs on.
+  final TaskRemote? taskRemote;
+
+  /// Task reminders. Left null, they stay on the task and never fire.
+  final TaskReminders? taskReminders;
+
+  /// One event each time the connection comes back, to sync the list.
+  final Stream<void>? reconnects;
+
+  /// Registers the launcher's "New task" shortcut. Off in tests, which have
+  /// no launcher to register with.
+  final bool homeShortcuts;
+
   @override
   State<TideApp> createState() => _TideAppState();
 }
@@ -129,6 +178,16 @@ class _TideAppState extends State<TideApp> {
     repository: widget.habits,
     billing: widget.billing,
   );
+
+  late final TaskStore _tasks = TaskStore(
+    tide: _store,
+    local: widget.taskLocal,
+    remote: widget.taskRemote,
+    reminders: widget.taskReminders,
+    reconnects: widget.reconnects,
+  );
+
+  StreamSubscription<String>? _openedReminders;
 
   late final GoRouter _router = AppRoutes.build(
     store: _store,
@@ -161,6 +220,40 @@ class _TideAppState extends State<TideApp> {
     TideColors.use(_palette);
     _store.addListener(_onStore);
     _router.routerDelegate.addListener(_trackRoute);
+    _openedReminders = _tasks.reminders.opened.listen(_openTask);
+    if (widget.homeShortcuts) _registerShortcuts();
+  }
+
+  /// A reminder was tapped: open its task, if it is still on this account.
+  void _openTask(String taskId) {
+    if (!_store.signedIn || _tasks.byId(taskId) == null) return;
+    _router.go(Routes.tasks);
+    unawaited(_router.push(Routes.task(taskId)));
+  }
+
+  static const String _newTaskShortcut = 'new_task';
+
+  /// The launcher's long-press menu: "New task", straight into the field.
+  ///
+  /// A launcher shortcut rather than a home-screen widget. A widget is a
+  /// separate native extension on each platform — a Kotlin app-widget
+  /// provider on Android, a WidgetKit target on iOS — which is a lot of
+  /// machinery for a side module; the shortcut is one long-press from the
+  /// same place and needs nothing native at all.
+  void _registerShortcuts() {
+    const actions = QuickActions();
+    unawaited(
+      actions.initialize((type) {
+        if (type != _newTaskShortcut || !_store.signedIn) return;
+        _router.go(Routes.tasks);
+        _tasks.requestQuickAdd();
+      }),
+    );
+    unawaited(
+      actions.setShortcutItems(const [
+        ShortcutItem(type: _newTaskShortcut, localizedTitle: 'New task'),
+      ]),
+    );
   }
 
   /// Rebuilds the MaterialApp only when the palette actually changed, not on
@@ -178,6 +271,8 @@ class _TideAppState extends State<TideApp> {
   @override
   void dispose() {
     _router.routerDelegate.removeListener(_trackRoute);
+    unawaited(_openedReminders?.cancel());
+    _tasks.dispose();
     _onToday.dispose();
     _store
       ..removeListener(_onStore)
@@ -191,42 +286,45 @@ class _TideAppState extends State<TideApp> {
     // pushed on the root navigator — reads the same store.
     return TideScope(
       store: _store,
-      child: TourAnchorScope(
-        registry: _anchors,
-        child: MaterialApp.router(
-          title: AppConstants.appName,
-          debugShowCheckedModeBanner: false,
-          theme: TideTheme.current,
-          routerConfig: _router,
-          builder: (context, child) {
-            // Lock text scaling to a sane band: the gauge readouts are a
-            // fixed-width instrument panel and fall apart past this.
-            final scale = MediaQuery.textScalerOf(
-              context,
-            ).clamp(minScaleFactor: 0.9, maxScaleFactor: 1.2);
-            return MediaQuery(
-              data: MediaQuery.of(context).copyWith(textScaler: scale),
-              // Completion may be logged from Today, the calendar, a detail
-              // screen or a sheet. Keeping this above the router gives all
-              // of them the same reward without duplicating UI glue in four
-              // interaction paths.
-              //
-              // The tour sits under the celebration rather than over it:
-              // the tour's last step opens the add sheet and ends itself, so
-              // the only way the two could overlap is a reward earned while
-              // a scrim is up, and a reward must never be dimmed.
-              child: CelebrationHost(
-                child: TourHost(
-                  // The router is not reachable from this builder's own
-                  // context — it lives below the app — so the one action the
-                  // tour can take is handed in from out here.
-                  onAddHabit: () => _router.push(Routes.newHabit),
-                  onToday: _onToday,
-                  child: child ?? const SizedBox.shrink(),
+      child: TaskScope(
+        store: _tasks,
+        child: TourAnchorScope(
+          registry: _anchors,
+          child: MaterialApp.router(
+            title: AppConstants.appName,
+            debugShowCheckedModeBanner: false,
+            theme: TideTheme.current,
+            routerConfig: _router,
+            builder: (context, child) {
+              // Lock text scaling to a sane band: the gauge readouts are a
+              // fixed-width instrument panel and fall apart past this.
+              final scale = MediaQuery.textScalerOf(
+                context,
+              ).clamp(minScaleFactor: 0.9, maxScaleFactor: 1.2);
+              return MediaQuery(
+                data: MediaQuery.of(context).copyWith(textScaler: scale),
+                // Completion may be logged from Today, the calendar, a detail
+                // screen or a sheet. Keeping this above the router gives all
+                // of them the same reward without duplicating UI glue in four
+                // interaction paths.
+                //
+                // The tour sits under the celebration rather than over it:
+                // the tour's last step opens the add sheet and ends itself, so
+                // the only way the two could overlap is a reward earned while
+                // a scrim is up, and a reward must never be dimmed.
+                child: CelebrationHost(
+                  child: TourHost(
+                    // The router is not reachable from this builder's own
+                    // context — it lives below the app — so the one action the
+                    // tour can take is handed in from out here.
+                    onAddHabit: () => _router.push(Routes.newHabit),
+                    onToday: _onToday,
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
