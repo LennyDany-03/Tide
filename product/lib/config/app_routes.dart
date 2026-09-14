@@ -9,6 +9,7 @@ import '../screens/auth/auth_screen.dart';
 import '../screens/calendar/calendar_screen.dart';
 import '../screens/habit_detail/habit_detail_screen.dart';
 import '../screens/home/home_screen.dart';
+import '../screens/home_widgets/home_widgets_screen.dart';
 import '../screens/insights/insights_screen.dart';
 import '../screens/billing/billing_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
@@ -48,6 +49,7 @@ abstract final class Routes {
   static const proWelcome = '/pro/welcome';
   static const proPass = '/pro/pass';
   static const billing = '/billing';
+  static const homeWidgets = '/settings/widgets';
 
   static String habit(String id) => '/today/habit/$id';
   static String editHabit(String id) => '/habit/$id/edit';
@@ -308,6 +310,15 @@ abstract final class AppRoutes {
           path: Routes.billing,
           parentNavigatorKey: _rootKey,
           pageBuilder: (context, state) => _page(state, const BillingScreen()),
+        ),
+
+        // The widget gallery. A full page for the same reason billing is —
+        // somewhere you go and look, not a contextual sheet.
+        GoRoute(
+          path: Routes.homeWidgets,
+          parentNavigatorKey: _rootKey,
+          pageBuilder: (context, state) =>
+              _page(state, const HomeWidgetsScreen()),
         ),
 
         // The palette picker. A sheet over Settings rather than a page, so

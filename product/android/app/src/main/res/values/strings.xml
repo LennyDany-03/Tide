@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_today_title">TODAY\'S HABITS</string>
+    <string name="widget_dashboard_title">HABIT DASHBOARD</string>
+    <string name="widget_upgrade_to_pro">Upgrade to Pro</string>
+    <string name="widget_open_tide">Open Tide to get started</string>
+    <string name="widget_today_description">A checklist of today\'s due habits.</string>
+    <string name="widget_dashboard_description">Every habit, and the streak behind it.</string>
+</resources>

@@ -19,6 +19,7 @@ import 'billing/payment_record.dart';
 import 'device_flags.dart';
 import 'habits/demo_habit_repository.dart';
 import 'habits/habit_repository.dart';
+import 'home_widget/home_widget_bridge.dart';
 import 'models/celebration_cue.dart';
 import 'models/day_summary.dart';
 import 'models/habit.dart';
@@ -45,6 +46,7 @@ class TideStore extends ChangeNotifier {
     DeviceFlags? flags,
     HabitRepository? repository,
     BillingService? billing,
+    this.widgetBridge,
   }) : auth = auth ?? DemoAuthService(),
        flags = flags ?? DeviceFlags.memory(),
        repository = repository ?? DemoHabitRepository(),
@@ -78,6 +80,11 @@ class TideStore extends ChangeNotifier {
   /// Who says whether this account is Pro. Never this class: [billing] relays
   /// the server's answer and nothing here can overrule it.
   final BillingService billing;
+
+  /// Pushes habits to the Android home-screen widgets. Null on every
+  /// non-mobile build and in every existing test — a no-op, not a
+  /// rearchitecture of how those construct a [TideStore].
+  final HomeWidgetBridge? widgetBridge;
 
   late final StreamSubscription<TideAccount?> _accountChanges;
   late final StreamSubscription<HabitChange> _remoteChanges;
@@ -950,6 +957,7 @@ class TideStore extends ChangeNotifier {
     if (was && !next.isPro && weeklyRecap) weeklyRecap = false;
 
     notifyListeners();
+    _syncWidgets();
   }
 
   void finishTour() {
@@ -1058,6 +1066,7 @@ class TideStore extends ChangeNotifier {
 
     _session.value = next.id;
     notifyListeners();
+    _syncWidgets();
   }
 
   Future<void> _armTourIfOwed(TideAccount account) async {
@@ -1088,6 +1097,7 @@ class TideStore extends ChangeNotifier {
     unawaited(billing.close(forget: true));
     _session.value = null;
     notifyListeners();
+    _syncWidgets();
   }
 
   Future<void> _saveTour(TideAccount account) async {
@@ -1190,7 +1200,20 @@ class TideStore extends ChangeNotifier {
   void _changed() {
     repository.remember(_habits);
     notifyListeners();
+    _syncWidgets();
   }
+
+  /// Pushes the current habits to both Android home-screen widgets, if the
+  /// app has a bridge to push them through (mobile builds only).
+  void _syncWidgets() => widgetBridge?.scheduleSync(
+    signedIn: signedIn,
+    habits: _habits,
+    isPro: isPro,
+  );
+
+  /// Re-pushes the widget payload with nothing changed in the store — used
+  /// on app resume, since the day may have rolled over while backgrounded.
+  void refreshWidgets() => _syncWidgets();
 
   void _saveHabit(String habitId) {
     final habit = habitById(habitId);
@@ -1209,6 +1232,7 @@ class TideStore extends ChangeNotifier {
     unawaited(_planChanges.cancel());
     unawaited(repository.close());
     unawaited(billing.close());
+    widgetBridge?.dispose();
     _session.dispose();
     super.dispose();
   }

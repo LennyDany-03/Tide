@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 5 fixed row slots (AppConstants.freeHabitLimit) rather than a
+     RemoteViewsService list — the free plan never has more habits than
+     rows here, so a static layout with unused rows set to View.GONE is
+     enough; see TodayHabitsWidgetProvider.kt. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/today_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_card_background"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="14dp">
+
+    <TextView
+        android:id="@+id/today_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:fontFamily="@font/manrope_medium"
+        android:text="@string/widget_today_title"
+        android:textColor="@color/tide_silt"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/today_empty_state"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/manrope_regular"
+        android:text="@string/widget_open_tide"
+        android:textColor="@color/tide_bone"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/today_row_1"
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/today_status_1"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/widget_status_due" />
+        <TextView
+            android:id="@+id/today_name_1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:maxLines="1"
+            android:textColor="@color/tide_bone"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/today_row_2"
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/today_status_2"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/widget_status_due" />
+        <TextView
+            android:id="@+id/today_name_2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:maxLines="1"
+            android:textColor="@color/tide_bone"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/today_row_3"
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/today_status_3"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/widget_status_due" />
+        <TextView
+            android:id="@+id/today_name_3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:maxLines="1"
+            android:textColor="@color/tide_bone"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/today_row_4"
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/today_status_4"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/widget_status_due" />
+        <TextView
+            android:id="@+id/today_name_4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:maxLines="1"
+            android:textColor="@color/tide_bone"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/today_row_5"
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/today_status_5"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/widget_status_due" />
+        <TextView
+            android:id="@+id/today_name_5"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:maxLines="1"
+            android:textColor="@color/tide_bone"
+            android:textSize="14sp" />
+    </LinearLayout>
+</LinearLayout>

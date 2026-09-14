@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pro, unlocked: up to 6 habits ranked by current streak. See
+     HabitDashboardWidgetProvider.kt for why this is a separate tree from
+     widget_habit_dashboard_locked.xml rather than one layout with rows
+     hidden behind a scrim. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/dashboard_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_card_background"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="14dp">
+
+    <TextView
+        android:id="@+id/dashboard_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:fontFamily="@font/manrope_medium"
+        android:text="@string/widget_dashboard_title"
+        android:textColor="@color/tide_silt"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/dashboard_empty_state"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/manrope_regular"
+        android:text="@string/widget_open_tide"
+        android:textColor="@color/tide_bone"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/dashboard_row_1"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/dashboard_status_1"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/widget_status_due" />
+        <TextView
+            android:id="@+id/dashboard_name_1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:maxLines="1"
+            android:textColor="@color/tide_bone"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/dashboard_streak_1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/space_grotesk_medium"
+            android:textColor="@color/tide_lantern"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/dashboard_row_2"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/dashboard_status_2"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/widget_status_due" />
+        <TextView
+            android:id="@+id/dashboard_name_2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:maxLines="1"
+            android:textColor="@color/tide_bone"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/dashboard_streak_2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/space_grotesk_medium"
+            android:textColor="@color/tide_lantern"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/dashboard_row_3"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/dashboard_status_3"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/widget_status_due" />
+        <TextView
+            android:id="@+id/dashboard_name_3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:maxLines="1"
+            android:textColor="@color/tide_bone"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/dashboard_streak_3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/space_grotesk_medium"
+            android:textColor="@color/tide_lantern"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/dashboard_row_4"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/dashboard_status_4"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/widget_status_due" />
+        <TextView
+            android:id="@+id/dashboard_name_4"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:maxLines="1"
+            android:textColor="@color/tide_bone"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/dashboard_streak_4"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/space_grotesk_medium"
+            android:textColor="@color/tide_lantern"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/dashboard_row_5"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/dashboard_status_5"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/widget_status_due" />
+        <TextView
+            android:id="@+id/dashboard_name_5"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:maxLines="1"
+            android:textColor="@color/tide_bone"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/dashboard_streak_5"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/space_grotesk_medium"
+            android:textColor="@color/tide_lantern"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/dashboard_row_6"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <ImageView
+            android:id="@+id/dashboard_status_6"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/widget_status_due" />
+        <TextView
+            android:id="@+id/dashboard_name_6"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:maxLines="1"
+            android:textColor="@color/tide_bone"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/dashboard_streak_6"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/space_grotesk_medium"
+            android:textColor="@color/tide_lantern"
+            android:textSize="13sp" />
+    </LinearLayout>
+</LinearLayout>

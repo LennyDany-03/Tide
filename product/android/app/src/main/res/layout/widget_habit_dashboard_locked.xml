@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Free plan: a single static tile, not a dimmed version of the unlocked
+     rows. The whole tile is one tap target that opens the Upgrade paywall,
+     where the app's real (animated) unlock moment already lives — see
+     HabitDashboardWidgetProvider.kt. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/dashboard_locked_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_card_background"
+    android:gravity="center"
+    android:padding="16dp">
+
+    <ImageView
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:layout_marginBottom="8dp"
+        android:src="@drawable/ic_widget_lock" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/manrope_medium"
+        android:text="@string/widget_dashboard_title"
+        android:textColor="@color/tide_bone"
+        android:textSize="13sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:fontFamily="@font/manrope_regular"
+        android:text="@string/widget_upgrade_to_pro"
+        android:textColor="@color/tide_lantern"
+        android:textSize="12sp" />
+</LinearLayout>

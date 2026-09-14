@@ -41,7 +41,42 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- A home-screen widget tap opens this Activity directly
+                 (HomeWidgetLaunchIntent targets it by component, not by
+                 this action), but the home_widget plugin's own reference
+                 setup registers the filter too, so it's kept here rather
+                 than relying only on the explicit intent. -->
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.LAUNCH"/>
+            </intent-filter>
         </activity>
+
+        <!-- Today's Habits and Habit Dashboard home-screen widgets. See
+             lib/services/home_widget/ for what writes their data, and
+             TodayHabitsWidgetProvider.kt / HabitDashboardWidgetProvider.kt
+             for how each renders it. -->
+        <receiver
+            android:name=".TodayHabitsWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/today_habits_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".HabitDashboardWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/habit_dashboard_widget_info"/>
+        </receiver>
+
         <!-- flutter_local_notifications: delivers scheduled task reminders,
              and reschedules them after a reboot or an app update. -->
         <receiver

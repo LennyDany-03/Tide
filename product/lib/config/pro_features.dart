@@ -45,6 +45,9 @@ enum ProFeature {
 
   /// Archiving completed tasks, and the archive view.
   taskArchive,
+
+  /// The Habit Dashboard home-screen widget.
+  habitDashboardWidget,
 }
 
 /// One line of the paywall, and one gate in the app. The same object, because
@@ -121,6 +124,11 @@ abstract final class ProFeatures {
       label: 'Completed-task archive',
       freeAllowance: '—',
       blurb: 'Pro keeps finished tasks in an archive you can look back on.',
+    ),
+    ProFeature.habitDashboardWidget: ProFeatureSpec(
+      label: 'Habit Dashboard widget',
+      freeAllowance: "Today's Habits widget",
+      blurb: 'Pro adds the streak dashboard to your home screen.',
     ),
   };
 

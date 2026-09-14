@@ -4,4 +4,15 @@
          draws its first frame, so launch goes dark to dark into the splash
          with no white flash. It is also the adaptive icon's background. -->
     <color name="tide_ground">#FF05080B</color>
+
+    <!-- Home-screen widgets render outside the Flutter engine, so they can't
+         read TideColors at runtime — these five are copied verbatim from
+         TidePalettes.midnight (lib/theme/tide_palette.dart) and always draw
+         in Midnight, whatever palette is active in the app. Palette-matched
+         widgets are a known follow-up, not solved here. -->
+    <color name="tide_shelf">#FF0C1217</color>
+    <color name="tide_bone">#FFE8F1F6</color>
+    <color name="tide_silt">#FF7F8E99</color>
+    <color name="tide_lantern">#FF45D0FF</color>
+    <color name="tide_on_lantern">#FF02121A</color>
 </resources>

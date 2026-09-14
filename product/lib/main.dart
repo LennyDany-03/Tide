@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:quick_actions/quick_actions.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -21,6 +22,7 @@ import 'services/device_flags.dart';
 import 'services/habits/demo_habit_repository.dart';
 import 'services/habits/habit_repository.dart';
 import 'services/habits/supabase_habit_repository.dart';
+import 'services/home_widget/home_widget_bridge.dart';
 import 'services/tasks/local_task_reminders.dart';
 import 'services/tasks/reconnects.dart';
 import 'services/tasks/task_local.dart';
@@ -102,6 +104,7 @@ Future<void> main() async {
       taskReminders: taskReminders,
       reconnects: mobile ? connectionRestored() : null,
       homeShortcuts: mobile,
+      widgetBridge: mobile ? HomeWidgetBridge() : null,
     ),
   );
 }
@@ -120,6 +123,7 @@ class TideApp extends StatefulWidget {
     this.taskReminders,
     this.reconnects,
     this.homeShortcuts = false,
+    this.widgetBridge,
   });
 
   /// Tests and deep links can skip straight into the shell: onboarding
@@ -165,11 +169,15 @@ class TideApp extends StatefulWidget {
   /// no launcher to register with.
   final bool homeShortcuts;
 
+  /// Pushes habits to the Android home-screen widgets. Left null, nothing is
+  /// — which is every non-mobile build and every test.
+  final HomeWidgetBridge? widgetBridge;
+
   @override
   State<TideApp> createState() => _TideAppState();
 }
 
-class _TideAppState extends State<TideApp> {
+class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
   late final TideStore _store = TideStore(
     auth: widget.auth ?? DemoAuthService(signedIn: widget.startOnboarded),
     flags:
@@ -177,6 +185,7 @@ class _TideAppState extends State<TideApp> {
         DeviceFlags.memory(onboardingSeen: widget.startOnboarded),
     repository: widget.habits,
     billing: widget.billing,
+    widgetBridge: widget.widgetBridge,
   );
 
   late final TaskStore _tasks = TaskStore(
@@ -188,6 +197,7 @@ class _TideAppState extends State<TideApp> {
   );
 
   StreamSubscription<String>? _openedReminders;
+  StreamSubscription<Uri?>? _widgetTaps;
 
   late final GoRouter _router = AppRoutes.build(
     store: _store,
@@ -221,7 +231,19 @@ class _TideAppState extends State<TideApp> {
     _store.addListener(_onStore);
     _router.routerDelegate.addListener(_trackRoute);
     _openedReminders = _tasks.reminders.opened.listen(_openTask);
-    if (widget.homeShortcuts) _registerShortcuts();
+    if (widget.homeShortcuts) {
+      _registerShortcuts();
+      _registerHomeWidgetTaps();
+      WidgetsBinding.instance.addObserver(this);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The day may have rolled over, or a widget tap may have changed
+    // something, while the app sat backgrounded — push a fresh payload
+    // rather than waiting on the next habit mutation.
+    if (state == AppLifecycleState.resumed) _store.refreshWidgets();
   }
 
   /// A reminder was tapped: open its task, if it is still on this account.
@@ -234,12 +256,6 @@ class _TideAppState extends State<TideApp> {
   static const String _newTaskShortcut = 'new_task';
 
   /// The launcher's long-press menu: "New task", straight into the field.
-  ///
-  /// A launcher shortcut rather than a home-screen widget. A widget is a
-  /// separate native extension on each platform — a Kotlin app-widget
-  /// provider on Android, a WidgetKit target on iOS — which is a lot of
-  /// machinery for a side module; the shortcut is one long-press from the
-  /// same place and needs nothing native at all.
   void _registerShortcuts() {
     const actions = QuickActions();
     unawaited(
@@ -256,6 +272,37 @@ class _TideAppState extends State<TideApp> {
     );
   }
 
+  /// Both Android home-screen widgets are deep-link only for now: a tap
+  /// opens the app rather than acting natively, so there is no in-widget
+  /// business logic to keep in sync with [TideStore]. See
+  /// TodayHabitsWidgetProvider.kt / HabitDashboardWidgetProvider.kt for the
+  /// other half — each row's `PendingIntent` carries one of these URIs.
+  void _registerHomeWidgetTaps() {
+    _widgetTaps = HomeWidget.widgetClicked.listen(_openFromWidget);
+    unawaited(HomeWidget.initiallyLaunchedFromHomeWidget().then(_openFromWidget));
+  }
+
+  void _openFromWidget(Uri? uri) {
+    if (uri == null || !_store.signedIn) return;
+    switch (uri.host) {
+      case 'habit':
+        final id = uri.queryParameters['id'];
+        if (id == null || _store.habitById(id) == null) return;
+        _router.go(Routes.today);
+        _store.log(id);
+      case 'habit-detail':
+        final id = uri.queryParameters['id'];
+        if (id == null || _store.habitById(id) == null) return;
+        _router.go(Routes.today);
+        unawaited(_router.push(Routes.habit(id)));
+      case 'dashboard':
+        _router.go(Routes.insights);
+      case 'dashboard-locked':
+        _router.go(Routes.today);
+        unawaited(_router.push(Routes.upgrade));
+    }
+  }
+
   /// Rebuilds the MaterialApp only when the palette actually changed, not on
   /// every habit logged.
   void _onStore() {
@@ -270,8 +317,10 @@ class _TideAppState extends State<TideApp> {
 
   @override
   void dispose() {
+    if (widget.homeShortcuts) WidgetsBinding.instance.removeObserver(this);
     _router.routerDelegate.removeListener(_trackRoute);
     unawaited(_openedReminders?.cancel());
+    unawaited(_widgetTaps?.cancel());
     _tasks.dispose();
     _onToday.dispose();
     _store
