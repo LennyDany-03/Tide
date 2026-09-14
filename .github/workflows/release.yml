@@ -81,7 +81,10 @@ jobs:
     outputs:
       sha256: ${{ steps.apk.outputs.sha256 }}
       size: ${{ steps.apk.outputs.size }}
-      file: ${{ steps.apk.outputs.file }}
+      # No `file` output on purpose. GitHub drops any job output that
+      # contains the text of a secret, and the APK name contains "tide",
+      # which is also the key alias secret. The publish job rebuilds the
+      # name from the version instead.
     steps:
       - uses: actions/checkout@v5
         with:
@@ -190,9 +193,14 @@ jobs:
           TAG: ${{ needs.prepare.outputs.tag }}
           VERSION: ${{ needs.prepare.outputs.version }}
           SHA: ${{ needs.prepare.outputs.sha }}
-          FILE: ${{ needs.build.outputs.file }}
           SHA256: ${{ needs.build.outputs.sha256 }}
         run: |
+          FILE="tide-$VERSION.apk"
+          if [ ! -f "$FILE" ]; then
+            echo "::error::$FILE was not in the downloaded artifact."
+            ls -la
+            exit 1
+          fi
           {
             node scripts/release.mjs notes "$VERSION"
             echo
@@ -208,11 +216,11 @@ jobs:
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
           VERSION: ${{ needs.prepare.outputs.version }}
-          FILE: ${{ needs.build.outputs.file }}
           SHA256: ${{ needs.build.outputs.sha256 }}
           SIZE: ${{ needs.build.outputs.size }}
           APK_BASE_URL: ${{ vars.APK_BASE_URL }}
         run: |
+          FILE="tide-$VERSION.apk"
           base="${APK_BASE_URL:-${{ github.server_url }}/${{ github.repository }}/releases/download/$TAG}"
           node scripts/release.mjs manifest --url "$base/$FILE" --sha256 "$SHA256" --size "$SIZE"
 
