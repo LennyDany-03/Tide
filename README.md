@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Tide
 
-## Getting Started
+Habits that move like water. This repository holds two things:
 
-First, run the development server:
+- **`product/`** is the Tide app (Flutter). See `product/CLAUDE.md`.
+- **The repo root** is the Tide website (Next.js 16): the landing page, the
+  thank-you page at `/thanks` and the changelog at `/changelog`.
+
+## Website
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
+npm run build
+npm run lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- The version number and download link come from `public/version.json`,
+  which the release workflow rewrites.
+- `/changelog` is rendered from `CHANGELOG.md` at build time.
+- The phone screenshots in `public/screens/` are rendered from the real app:
+  `cd product && flutter test tool/site_screenshots_test.dart`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Releases
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Bump the version, write the changelog, merge to `main`. GitHub Actions builds
+the signed APK, publishes the GitHub Release and updates the manifest that
+the app's in-app updater reads. Full instructions and one-time setup:
+[`TRIGGER.md`](TRIGGER.md).

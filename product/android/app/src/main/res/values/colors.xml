@@ -4,4 +4,43 @@
          draws its first frame, so launch goes dark to dark into the splash
          with no white flash. It is also the adaptive icon's background. -->
     <color name="tide_ground">#FF05080B</color>
+
+    <!-- Home-screen widgets render outside the Flutter engine, so they can't
+         read TideColors at runtime — these are copied verbatim from
+         TidePalettes.midnight (lib/theme/tide_palette.dart) and always draw
+         in Midnight, whatever palette is active in the app. Palette-matched
+         widgets are a known follow-up, not solved here. -->
+    <color name="tide_shelf">#FF0C1217</color>
+    <color name="tide_shoal">#FF17272D</color>
+    <color name="tide_bone">#FFE8F1F6</color>
+    <color name="tide_silt">#FF7F8E99</color>
+    <color name="tide_lantern">#FF45D0FF</color>
+    <color name="tide_on_lantern">#FF02121A</color>
+    <color name="tide_coral">#FFE0675E</color>
+    <color name="tide_rest">#0AFFFFFF</color>
+
+    <!-- The flame's ramp: TidePalettes.midnight flare and ember. -->
+    <color name="tide_flare">#FFC8F3FF</color>
+    <color name="tide_ember">#FF1A9BF0</color>
+
+    <!-- The card's hairline edge, so a widget still has a silhouette on a
+         dark wallpaper. -->
+    <color name="tide_card_edge">#14E8F1F6</color>
+
+    <!-- A list row's raised tile, and the soft pill fills behind a lantern
+         or coral label. -->
+    <color name="tide_tile">#FF141E25</color>
+    <color name="tide_lantern_soft">#2645D0FF</color>
+    <color name="tide_coral_soft">#2EE0675E</color>
+
+    <!-- Heatmap tiers, shared by the native renderer (WidgetHeatmap.kt), the
+         dashboard's day squares and the picker's sample grid. An empty day
+         is a clearly visible tile, not near-black, so the grid reads as a
+         grid even for a habit started this week. -->
+    <color name="tide_cell_empty">#FF18222A</color>
+    <color name="tide_cell_rest">#FF121A20</color>
+    <color name="tide_cell_1">#FF174A5E</color>
+    <color name="tide_cell_2">#FF1F7899</color>
+    <color name="tide_cell_3">#FF30A9D6</color>
+    <color name="tide_cell_4">#FF45D0FF</color>
 </resources>

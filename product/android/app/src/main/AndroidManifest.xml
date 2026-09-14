@@ -3,6 +3,24 @@
          debug and profile manifests already grant this; release did not. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- To-do reminders. Local notifications, so they fire with no network.
+         POST_NOTIFICATIONS is asked for the first time somebody sets a
+         reminder, not at launch. SCHEDULE_EXACT_ALARM is requested on Android
+         14+ and may be refused, in which case reminders fall back to inexact
+         timing rather than failing. BOOT_COMPLETED lets the plugin put the
+         reminders back after a restart. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
+    <!-- Syncing the to-do list when the connection comes back. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
+    <!-- In-app updates. Tide is sideloaded, so a new release is an APK the
+         app downloads itself and hands to the system installer; Android 8+
+         also asks the person once, per app, before that is allowed. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
     <application
         android:label="Tide"
         android:name="${applicationName}"
@@ -28,7 +46,131 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- A home-screen widget tap opens this Activity directly
+                 (HomeWidgetLaunchIntent targets it by component, not by
+                 this action), but the home_widget plugin's own reference
+                 setup registers the filter too, so it's kept here rather
+                 than relying only on the explicit intent. -->
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.LAUNCH"/>
+            </intent-filter>
         </activity>
+
+        <!-- Today's Habits and Habit Dashboard home-screen widgets. See
+             lib/services/home_widget/ for what writes their data, and
+             TodayHabitsWidgetProvider.kt / HabitDashboardWidgetProvider.kt
+             for how each renders it. -->
+        <receiver
+            android:name=".TodayHabitsWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/today_habits_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".HabitDashboardWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/habit_dashboard_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".SingleHabitStreakWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/single_habit_streak_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".TodayTasksWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/today_tasks_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".QuickAddWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_add_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".HabitHeatmapWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/habit_heatmap_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".WeeklyRecapWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/weekly_recap_widget_info"/>
+        </receiver>
+
+        <!-- Rows for the scrolling Today, Tasks and Streaks widgets. Only the
+             launcher, holding BIND_REMOTEVIEWS, may bind it. -->
+        <service
+            android:name=".WidgetListService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <!-- flutter_local_notifications: delivers scheduled task reminders,
+             and reschedules them after a reboot or an app update. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+        <!-- The snooze button on a reminder, handled with the app closed. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"/>
+
+        <!-- Shares a downloaded update APK with the system installer. Only
+             the update cache is exposed (res/xml/update_paths.xml). -->
+        <provider
+            android:name=".UpdateFileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths"/>
+        </provider>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

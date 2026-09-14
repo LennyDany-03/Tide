@@ -7,6 +7,8 @@ import '../../config/pro_features.dart';
 import '../../services/auth/auth_service.dart';
 import '../../services/tide_scope.dart';
 import '../../services/tide_store.dart';
+import '../../services/updates/update_scope.dart';
+import '../../services/updates/update_store.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/hold_to_fill.dart';
@@ -15,6 +17,7 @@ import '../../widgets/stagger_list.dart';
 import '../../widgets/tide_mark.dart';
 import '../../widgets/tide_switch.dart';
 import '../../widgets/tide_tab_bar.dart';
+import '../update/update_dialog.dart';
 import 'widgets/account_card.dart';
 import 'widgets/delete_account_dialog.dart';
 import 'widgets/settings_group.dart';
@@ -77,9 +80,23 @@ class SettingsScreen extends StatelessWidget {
     return '$days ${days == 1 ? 'day' : 'days'} left';
   }
 
+  /// What the updates row says. A found release is named rather than
+  /// hinted at, so the row answers the question before it is tapped.
+  static String _updateLine(UpdateStore updates) => switch (updates.phase) {
+    UpdatePhase.checking => 'Checking for a new version',
+    UpdatePhase.downloading => 'Downloading the update',
+    UpdatePhase.failed when !updates.updateAvailable =>
+      'Could not check. Tap to try again',
+    _ when updates.updateAvailable =>
+      'Tide ${updates.latest!.version} is ready to install',
+    UpdatePhase.upToDate => 'You have the latest version',
+    _ => 'Tap to check for a new version',
+  };
+
   @override
   Widget build(BuildContext context) {
     final store = TideScope.of(context);
+    final updates = UpdateScope.maybeOf(context);
 
     return ListView(
       padding: EdgeInsets.fromLTRB(
@@ -91,10 +108,7 @@ class SettingsScreen extends StatelessWidget {
       children: [
         Text('Settings', style: TideType.screenTitle),
         const SizedBox(height: 6),
-        Text(
-          'Your account, and how Tide behaves.',
-          style: TideType.labelMuted,
-        ),
+        Text('Your account, and how Tide behaves.', style: TideType.labelMuted),
         const SizedBox(height: 24),
 
         StaggerColumn(
@@ -180,6 +194,23 @@ class SettingsScreen extends StatelessWidget {
                   showChevron: true,
                   onTap: () => context.push(Routes.appearance),
                 ),
+                SettingsRow(
+                  label: 'Home screen widgets',
+                  subtitle: 'Habits and to-dos, right on the home screen',
+                  icon: Icons.widgets_outlined,
+                  showChevron: true,
+                  onTap: () => context.push(Routes.homeWidgets),
+                ),
+                if (updates != null)
+                  SettingsRow(
+                    label: 'App updates',
+                    subtitle: _updateLine(updates),
+                    icon: Icons.system_update_outlined,
+                    showChevron: true,
+                    onTap: () => updates.updateAvailable
+                        ? showUpdateDialog(context, updates)
+                        : updates.check(),
+                  ),
                 SettingsRow(
                   label: 'Help and feedback',
                   icon: Icons.help_outline_rounded,
@@ -275,7 +306,13 @@ class _Colophon extends StatelessWidget {
         // Already whole: this is a signature, not an entrance.
         const TideMark(size: 52, strokeWidth: 2.8, drawIn: false),
         const SizedBox(height: 14),
-        Text('${AppConstants.appName} 1.0.0', style: TideType.labelMuted),
+        // The installed build's own versionName once the updater has read
+        // it, so the colophon cannot go on saying 1.0.0 after an update.
+        Text(
+          '${AppConstants.appName} '
+          '${UpdateScope.maybeOf(context)?.installed ?? '1.0.0'}',
+          style: TideType.labelMuted,
+        ),
         const SizedBox(height: 4),
         Text(
           AppConstants.tagline,

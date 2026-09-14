@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_today_title">Today</string>
+    <string name="widget_dashboard_title">Streaks</string>
+    <string name="widget_tasks_title">Tasks</string>
+    <string name="widget_recap_title">This week</string>
+    <string name="widget_heatmap_title">Heatmap</string>
+    <string name="widget_streak_title">Streak</string>
+    <string name="widget_upgrade_to_pro">Upgrade to Pro</string>
+    <string name="widget_open_tide">Open Tide to get started</string>
+    <string name="widget_choose_habit">Tap to choose a habit</string>
+    <string name="widget_tasks_empty">Nothing due</string>
+    <string name="widget_nothing_due">All clear for today</string>
+    <string name="widget_no_habits">No habits yet</string>
+    <string name="widget_day_streak">day streak</string>
+    <string name="widget_one_overdue">1 overdue</string>
+    <string name="widget_n_overdue">%d overdue</string>
+    <string name="widget_done_of">%1$d of %2$d done</string>
+    <string name="widget_all_done">All %d done</string>
+    <string name="widget_one_due">1 due</string>
+    <string name="widget_n_due">%d due</string>
+    <string name="widget_on_streak">%d on a streak</string>
+    <string name="widget_no_streaks">No streaks going yet</string>
+    <string name="widget_day_mon">M</string>
+    <string name="widget_day_tue">T</string>
+    <string name="widget_day_wed">W</string>
+    <string name="widget_day_thu">T</string>
+    <string name="widget_day_fri">F</string>
+    <string name="widget_day_sat">S</string>
+    <string name="widget_day_sun">S</string>
+    <string name="widget_vs_last_week">vs last week</string>
+    <string name="widget_check_ins">check-ins</string>
+    <string name="widget_recap_streak_label">best streak</string>
+    <string name="widget_new_habit">New habit</string>
+
+    <string name="widget_today_description">What\'s due today, and how much of it is kept.</string>
+    <string name="widget_dashboard_description">Every habit, its week, and the run behind it.</string>
+    <string name="widget_streak_description">One habit\'s streak. Tap to choose which.</string>
+    <string name="widget_tasks_description">What\'s due or overdue today.</string>
+    <string name="widget_quick_add_description">One tap into a new habit.</string>
+    <string name="widget_heatmap_description">Months of one habit, day by day. Tap to choose which.</string>
+    <string name="widget_recap_description">Your rate, last week to beat, and your best run.</string>
+</resources>

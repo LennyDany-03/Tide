@@ -9,6 +9,7 @@ import '../screens/auth/auth_screen.dart';
 import '../screens/calendar/calendar_screen.dart';
 import '../screens/habit_detail/habit_detail_screen.dart';
 import '../screens/home/home_screen.dart';
+import '../screens/home_widgets/home_widgets_screen.dart';
 import '../screens/insights/insights_screen.dart';
 import '../screens/billing/billing_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
@@ -17,9 +18,14 @@ import '../screens/pro_welcome/pro_welcome_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/shell/tide_shell.dart';
 import '../screens/splash/splash_screen.dart';
+import '../screens/task_archive/task_archive_screen.dart';
+import '../screens/task_editor/task_editor_screen.dart';
+import '../screens/tasks/tasks_screen.dart';
 import '../screens/upgrade/upgrade_sheet.dart';
 import '../screens/verify_email/verify_email_screen.dart';
 import '../screens/welcome/welcome_screen.dart';
+import '../screens/widget_setup/widget_setup_screen.dart';
+import '../services/home_widget/home_widget_bridge.dart';
 import '../services/tide_store.dart';
 import '../theme/tide_motion.dart';
 import '../widgets/tide_sheet.dart';
@@ -33,6 +39,8 @@ abstract final class Routes {
   static const welcome = '/welcome';
   static const accountDeleted = '/account-deleted';
   static const today = '/today';
+  static const tasks = '/tasks';
+  static const taskArchive = '/tasks/archive';
   static const history = '/history';
   static const insights = '/insights';
   static const settings = '/settings';
@@ -43,9 +51,14 @@ abstract final class Routes {
   static const proWelcome = '/pro/welcome';
   static const proPass = '/pro/pass';
   static const billing = '/billing';
+  static const homeWidgets = '/settings/widgets';
+  static const widgetSetupPath = '/widget-setup';
 
   static String habit(String id) => '/today/habit/$id';
+  static String widgetSetup(int widgetId, String kind) =>
+      '$widgetSetupPath?id=$widgetId&kind=$kind';
   static String editHabit(String id) => '/habit/$id/edit';
+  static String task(String id) => '/task/$id';
 }
 
 abstract final class AppRoutes {
@@ -98,7 +111,8 @@ abstract final class AppRoutes {
         // reason the mark appeared to jump size on its way across.
         GoRoute(
           path: Routes.onboarding,
-          pageBuilder: (context, state) => _fade(state, const OnboardingScreen()),
+          pageBuilder: (context, state) =>
+              _fade(state, const OnboardingScreen()),
         ),
 
         // Sign-up and log-in. A `go` rather than a push in both directions:
@@ -152,7 +166,7 @@ abstract final class AppRoutes {
               _fade(state, const AccountDeletedScreen()),
         ),
 
-        // The four tabs. A branch keeps its own navigator, so pushing habit
+        // The five tabs. A branch keeps its own navigator, so pushing habit
         // detail from Today and then switching tabs and back returns to the
         // detail screen rather than resetting the tab.
         StatefulShellRoute(
@@ -178,6 +192,24 @@ abstract final class AppRoutes {
                       builder: (context, state) => HabitDetailScreen(
                         habitId: state.pathParameters['id']!,
                       ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            // The to-do list, beside Today. A side module, so it is one
+            // screen and one pushed page, and the editor covers the tab bar
+            // the way the habit editor does.
+            StatefulShellBranch(
+              preload: true,
+              routes: [
+                GoRoute(
+                  path: Routes.tasks,
+                  builder: (context, state) => const TasksScreen(),
+                  routes: [
+                    GoRoute(
+                      path: 'archive',
+                      builder: (context, state) => const TaskArchiveScreen(),
                     ),
                   ],
                 ),
@@ -241,6 +273,15 @@ abstract final class AppRoutes {
           ),
         ),
 
+        GoRoute(
+          path: '/task/:id',
+          parentNavigatorKey: _rootKey,
+          pageBuilder: (context, state) => _page(
+            state,
+            TaskEditorScreen(taskId: state.pathParameters['id']!),
+          ),
+        ),
+
         // The paywall stays a sheet. It genuinely is contextual — it
         // interrupts an action and hands it back — and it is on screen for
         // a few seconds, not a few minutes.
@@ -274,6 +315,39 @@ abstract final class AppRoutes {
           path: Routes.billing,
           parentNavigatorKey: _rootKey,
           pageBuilder: (context, state) => _page(state, const BillingScreen()),
+        ),
+
+        // The widget gallery. A full page for the same reason billing is —
+        // somewhere you go and look, not a contextual sheet.
+        GoRoute(
+          path: Routes.homeWidgets,
+          parentNavigatorKey: _rootKey,
+          pageBuilder: (context, state) =>
+              _page(state, const HomeWidgetsScreen()),
+        ),
+
+        // The habit picker a Streak or Heatmap widget opens. Reached only
+        // from the home screen, and it hands back to the home screen itself.
+        GoRoute(
+          path: Routes.widgetSetupPath,
+          parentNavigatorKey: _rootKey,
+          redirect: (context, state) {
+            final query = state.uri.queryParameters;
+            final valid =
+                int.tryParse(query['id'] ?? '') != null &&
+                HabitWidgetKind.byName(query['kind']) != null;
+            return valid ? null : Routes.today;
+          },
+          pageBuilder: (context, state) {
+            final query = state.uri.queryParameters;
+            return _page(
+              state,
+              WidgetSetupScreen(
+                widgetId: int.parse(query['id']!),
+                kind: HabitWidgetKind.byName(query['kind'])!,
+              ),
+            );
+          },
         ),
 
         // The palette picker. A sheet over Settings rather than a page, so

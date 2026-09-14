@@ -50,13 +50,28 @@ create table if not exists public.habits (
   freezes_remaining smallint not null default 2
                       check (freezes_remaining between 0 and freeze_allowance),
   paused            boolean not null default false,
-  origin            text check (char_length(origin) <= 64),
+  -- Every pause the habit has had: [{ "start": "2026-09-10", "end": null }],
+  -- oldest first, start inclusive, end exclusive, only the last one open. A
+  -- paused day is a rest day for the streak. `paused` is kept equal to "the
+  -- last span is open" so builds from before this column still hide it.
+  pauses            jsonb not null default '[]'::jsonb
+                      check (jsonb_typeof(pauses) = 'array'),
+  origin           text check (char_length(origin) <= 64),
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now(),
   -- What habit_entries' foreign key points at. It is what ties every entry to
   -- a habit owned by the same user, without a lookup in a policy.
   constraint habits_id_user_key unique (id, user_id)
 );
+
+-- Columns added after the table first shipped. `create table if not exists`
+-- skips a table that is already there, so a project set up from an earlier
+-- version of this file gets them here. Until this has run, the app's habit
+-- writes are refused and held in its outbox — nothing is lost, but nothing
+-- syncs either.
+alter table public.habits
+  add column if not exists pauses jsonb not null default '[]'::jsonb
+    check (jsonb_typeof(pauses) = 'array');
 
 create index if not exists habits_user_created_idx
   on public.habits (user_id, created_at);

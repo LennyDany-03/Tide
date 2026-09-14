@@ -324,9 +324,19 @@ class HoldToConfirmButton extends StatelessWidget {
     this.holdingLabel,
     this.color,
     this.expand = true,
+    this.quiet = false,
   });
 
   final String label;
+
+  /// A faint coral wash and a thin edge at rest instead of the full slab.
+  ///
+  /// For surfaces where delete is one option among several rather than the
+  /// point of the screen. It used to have no resting shape at all — coral
+  /// words floating on the panel — and the box only appeared under the
+  /// finger, so the control changed shape mid-gesture and read as a glitch.
+  /// The outline is always there now; holding only fills it.
+  final bool quiet;
 
   /// Shown while the ring is filling — "Keep holding".
   final String? holdingLabel;
@@ -350,10 +360,14 @@ class HoldToConfirmButton extends StatelessWidget {
               width: expand ? double.infinity : null,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12 + 0.18 * progress),
+                color: quiet
+                    ? color.withValues(alpha: 0.06)
+                    : color.withValues(alpha: 0.12 + 0.18 * progress),
                 borderRadius: TideElevation.radius12,
                 border: Border.all(
-                  color: color.withValues(alpha: 0.3 + 0.5 * progress),
+                  color: quiet
+                      ? color.withValues(alpha: 0.2 + 0.4 * progress)
+                      : color.withValues(alpha: 0.3 + 0.5 * progress),
                 ),
               ),
               child: Center(
@@ -373,7 +387,7 @@ class HoldToConfirmButton extends StatelessWidget {
                     child: FractionallySizedBox(
                       widthFactor: progress,
                       child: ColoredBox(
-                        color: color.withValues(alpha: 0.22),
+                        color: color.withValues(alpha: quiet ? 0.18 : 0.22),
                         child: const SizedBox.expand(),
                       ),
                     ),

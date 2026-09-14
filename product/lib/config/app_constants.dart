@@ -58,6 +58,41 @@ abstract final class AppConstants {
   /// this is a receipt list, not an export.
   static const int receiptLimit = 20;
 
+  // --- App updates -------------------------------------------------------
+
+  /// The least time between two automatic update checks. Launch always
+  /// checks; a resume only checks once this much has passed, so switching
+  /// apps all afternoon does not fetch the manifest every time.
+  static const int updateCheckIntervalHours = 6;
+
+  /// How long the manifest request may take before the check gives up.
+  static const int updateManifestTimeoutSeconds = 15;
+
+  /// How long the APK download may go without a byte before it gives up.
+  static const int updateDownloadStallSeconds = 30;
+
+  // --- To-do ------------------------------------------------------------
+
+  /// Reminders a task may carry on the free plan. Pro has no ceiling.
+  static const int freeTaskReminders = 1;
+
+  /// What a notification's snooze action puts the reminder off by. Pro.
+  static const int taskSnoozeMinutes = 10;
+
+  /// How many upcoming task reminders are handed to the OS at once. iOS
+  /// keeps 64 per app and drops the rest silently; the margin leaves room
+  /// for snoozes already counting down.
+  static const int maxScheduledTaskReminders = 60;
+
+  /// How often an open app syncs tasks with nothing else prompting it.
+  static const int taskSyncIntervalMinutes = 15;
+
+  /// The longest a failed task sync waits before trying again.
+  static const int taskSyncMaxRetrySeconds = 300;
+
+  /// Longest months a custom repeat may run between occurrences.
+  static const int maxCustomRepeatMonths = 24;
+
   static const List<String> weekdayInitials = [
     'M',
     'T',
@@ -126,14 +161,21 @@ class TideTab {
 
   final String path;
 
-  /// Four tabs — Milestones and Upgrade are reached contextually rather
-  /// than taking a slot here.
+  /// Five tabs — Milestones and Upgrade are reached contextually rather
+  /// than taking a slot here. To-do sits beside Today because it is used on
+  /// the same errand, but it is the one tab that is not about habits.
   static const List<TideTab> all = [
     TideTab(
       label: 'Today',
       icon: Icons.wb_sunny_outlined,
       activeIcon: Icons.wb_sunny_rounded,
       path: '/today',
+    ),
+    TideTab(
+      label: 'To-do',
+      icon: Icons.check_circle_outline_rounded,
+      activeIcon: Icons.check_circle_rounded,
+      path: '/tasks',
     ),
     TideTab(
       label: 'History',

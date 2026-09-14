@@ -32,6 +32,31 @@ enum ProFeature {
 
   /// The Sunday evening recap.
   weeklyRecap,
+
+  /// To-do repeats on a custom cycle of months.
+  taskCustomRepeat,
+
+  /// More than [AppConstants.freeTaskReminders] reminder on a task, and the
+  /// snooze action on the notification.
+  taskReminders,
+
+  /// Tags on tasks, and filtering the list by one.
+  taskTags,
+
+  /// Archiving completed tasks, and the archive view.
+  taskArchive,
+
+  /// The Habit Dashboard home-screen widget.
+  habitDashboardWidget,
+
+  /// The Habit Heatmap home-screen widget.
+  habitHeatmapWidget,
+
+  /// The Weekly Recap home-screen widget.
+  weeklyRecapWidget,
+
+  /// More than one Streak widget on the home screen.
+  widgetInstances,
 }
 
 /// One line of the paywall, and one gate in the app. The same object, because
@@ -88,6 +113,46 @@ abstract final class ProFeatures {
       label: 'Sunday recap',
       freeAllowance: '—',
       blurb: 'Pro sends the week in one line.',
+    ),
+    ProFeature.taskCustomRepeat: ProFeatureSpec(
+      label: 'Custom and seasonal repeats',
+      freeAllowance: 'Daily · weekly · monthly',
+      blurb: 'Pro repeats a task every few months, or once a year.',
+    ),
+    ProFeature.taskReminders: ProFeatureSpec(
+      label: 'Several reminders, with snooze',
+      freeAllowance: '${AppConstants.freeTaskReminders} / task',
+      blurb: 'Pro sets as many reminders as a task needs, and snoozes them.',
+    ),
+    ProFeature.taskTags: ProFeatureSpec(
+      label: 'Tags and filters for to-dos',
+      freeAllowance: '—',
+      blurb: 'Pro tags tasks and filters the list by tag.',
+    ),
+    ProFeature.taskArchive: ProFeatureSpec(
+      label: 'Completed-task archive',
+      freeAllowance: '—',
+      blurb: 'Pro keeps finished tasks in an archive you can look back on.',
+    ),
+    ProFeature.habitDashboardWidget: ProFeatureSpec(
+      label: 'Habit Dashboard widget',
+      freeAllowance: "Today's Habits widget",
+      blurb: 'Pro adds the streak dashboard to your home screen.',
+    ),
+    ProFeature.habitHeatmapWidget: ProFeatureSpec(
+      label: 'A heatmap for every habit',
+      freeAllowance: '1 heatmap widget',
+      blurb: 'Pro pins a heatmap widget for every habit you keep.',
+    ),
+    ProFeature.weeklyRecapWidget: ProFeatureSpec(
+      label: 'Weekly Recap widget',
+      freeAllowance: '—',
+      blurb: 'Pro puts the week\'s numbers on your home screen.',
+    ),
+    ProFeature.widgetInstances: ProFeatureSpec(
+      label: 'A streak widget for every habit',
+      freeAllowance: '1 of each',
+      blurb: 'Pro pins a Streak or Heatmap widget for every habit you keep.',
     ),
   };
 

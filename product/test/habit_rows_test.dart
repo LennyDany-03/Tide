@@ -21,7 +21,10 @@ Habit _water() => Habit(
   reminderTime: const TimeOfDay(hour: 7, minute: 30),
   freezeAllowance: 3,
   freezesRemaining: 1,
-  paused: true,
+  pauses: [
+    PauseSpan(start: DateTime(2026, 6, 1), end: DateTime(2026, 6, 8)),
+    PauseSpan(start: DateTime(2026, 9, 12)),
+  ],
   createdAt: DateTime(2026, 3, 2, 9, 41),
   logs: {DateTime(2026, 9, 9): 8, DateTime(2026, 9, 11): 5.5},
   frozenDays: {DateTime(2026, 9, 10), DateTime(2026, 9, 11)},
@@ -50,6 +53,7 @@ void main() {
       expect(back.freezeAllowance, 3);
       expect(back.freezesRemaining, 1);
       expect(back.paused, isTrue);
+      expect(back.pauses, original.pauses);
       expect(back.createdAt, original.createdAt);
       expect(back.logs, original.logs);
       expect(back.frozenDays, original.frozenDays);
@@ -72,6 +76,21 @@ void main() {
       expect(back.target, isA<int>());
       expect(back.targetLabel, '8 glasses');
     });
+
+    test(
+      'a row from before pause spans stays paused, from its last change',
+      () {
+        final back = HabitRows.parseHabit({
+          ...HabitRows.habit(_water()),
+          'pauses': null,
+          'paused': true,
+          'updated_at': '2026-09-10T08:00:00Z',
+        })!;
+
+        expect(back.paused, isTrue);
+        expect(back.pausedSince, DateTime(2026, 9, 10));
+      },
+    );
 
     test('a glyph or kind from a newer build still opens', () {
       final back = HabitRows.parseHabit({

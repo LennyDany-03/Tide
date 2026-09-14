@@ -1,11 +1,19 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:home_widget/home_widget.dart';
+import 'package:quick_actions/quick_actions.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/app_constants.dart';
 import 'config/app_routes.dart';
 import 'config/supabase_config.dart';
+import 'config/update_config.dart';
+import 'screens/update/update_dialog.dart';
 import 'services/auth/auth_service.dart';
 import 'services/auth/demo_auth_service.dart';
 import 'services/auth/supabase_auth_service.dart';
@@ -17,8 +25,19 @@ import 'services/device_flags.dart';
 import 'services/habits/demo_habit_repository.dart';
 import 'services/habits/habit_repository.dart';
 import 'services/habits/supabase_habit_repository.dart';
+import 'services/home_widget/home_widget_bridge.dart';
+import 'services/tasks/local_task_reminders.dart';
+import 'services/tasks/reconnects.dart';
+import 'services/tasks/task_local.dart';
+import 'services/tasks/task_remote.dart';
+import 'services/tasks/task_reminders.dart';
+import 'services/tasks/task_scope.dart';
+import 'services/tasks/task_store.dart';
 import 'services/tide_scope.dart';
 import 'services/tide_store.dart';
+import 'services/updates/update_platform.dart';
+import 'services/updates/update_scope.dart';
+import 'services/updates/update_store.dart';
 import 'theme/tide_colors.dart';
 import 'theme/tide_palette.dart';
 import 'theme/tide_theme.dart';
@@ -42,6 +61,7 @@ Future<void> main() async {
   final AuthService auth;
   final HabitRepository habits;
   final BillingService billing;
+  TaskRemote? taskRemote;
   if (SupabaseConfig.isConfigured) {
     await Supabase.initialize(
       url: SupabaseConfig.url,
@@ -57,6 +77,7 @@ Future<void> main() async {
       Supabase.instance.client,
       gateway: RazorpayGateway(),
     );
+    taskRemote = SupabaseTaskRemote(Supabase.instance.client);
   } else {
     debugPrint(
       'Tide: SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY not set — run with '
@@ -68,15 +89,63 @@ Future<void> main() async {
     billing = DemoBillingService();
   }
 
+  // The to-do list lives on the device first and the server second, so it is
+  // set up whether or not a project is configured.
+  final taskLocal = await PrefsTaskLocal.open();
+  final taskReminders = await LocalTaskReminders.create();
+  final mobile =
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+  final launchUri = mobile ? await _widgetLaunchUri() : null;
+
+  // Only the sideloaded Android build updates itself; iOS and the web are
+  // updated by their stores and hosts. A build compiled without a manifest
+  // URL (every local run) has no updater at all.
+  final updates =
+      !kIsWeb &&
+          defaultTargetPlatform == TargetPlatform.android &&
+          UpdateConfig.isConfigured
+      ? UpdateStore(
+          manifestUrl: UpdateConfig.manifestUrl,
+          platform: const AndroidUpdatePlatform(),
+          prefs: await SharedPreferences.getInstance(),
+        )
+      : null;
+
   runApp(
     TideApp(
-      showSplash: true,
+      // A widget tap is an errand — "choose this widget's habit", "open that
+      // task" — and three seconds of logo in front of it reads as the tap
+      // not having worked.
+      showSplash: launchUri == null,
+      launchUri: launchUri,
       auth: auth,
       flags: flags,
       habits: habits,
       billing: billing,
+      taskLocal: taskLocal,
+      taskRemote: taskRemote,
+      taskReminders: taskReminders,
+      reconnects: mobile ? connectionRestored() : null,
+      homeShortcuts: mobile,
+      widgetBridge: mobile ? HomeWidgetBridge() : null,
+      updates: updates,
     ),
   );
+}
+
+/// The home-screen widget tap that started this process, if one did. Read
+/// before `runApp` — the activity and its intent are already attached by the
+/// time Dart's `main` runs — so the first frame already knows to skip the
+/// splash.
+Future<Uri?> _widgetLaunchUri() async {
+  try {
+    return await HomeWidget.initiallyLaunchedFromHomeWidget();
+  } catch (error) {
+    debugPrint('Could not read the widget launch: $error');
+    return null;
+  }
 }
 
 class TideApp extends StatefulWidget {
@@ -88,7 +157,25 @@ class TideApp extends StatefulWidget {
     this.flags,
     this.habits,
     this.billing,
+    this.taskLocal,
+    this.taskRemote,
+    this.taskReminders,
+    this.reconnects,
+    this.homeShortcuts = false,
+    this.widgetBridge,
+    this.launchUri,
+    this.updates,
   });
+
+  /// Checks for and installs new releases of the sideloaded Android build.
+  /// Left null, there is no updater — which is every test and every build
+  /// compiled without `UPDATE_MANIFEST_URL`.
+  final UpdateStore? updates;
+
+  /// The widget tap that launched the app, handled once the first frame is
+  /// up. Later taps, with the app already running, arrive on
+  /// [HomeWidget.widgetClicked] instead.
+  final Uri? launchUri;
 
   /// Tests and deep links can skip straight into the shell: onboarding
   /// counts as seen and the demo account is already signed in.
@@ -116,11 +203,32 @@ class TideApp extends StatefulWidget {
   /// widget test runs on.
   final BillingService? billing;
 
+  /// Where the to-do list is kept on the device. Left null, in memory.
+  final TaskLocal? taskLocal;
+
+  /// The server behind the to-do list. Left null, tasks never leave the
+  /// device — which is what every widget test runs on.
+  final TaskRemote? taskRemote;
+
+  /// Task reminders. Left null, they stay on the task and never fire.
+  final TaskReminders? taskReminders;
+
+  /// One event each time the connection comes back, to sync the list.
+  final Stream<void>? reconnects;
+
+  /// Registers the launcher's "New task" shortcut. Off in tests, which have
+  /// no launcher to register with.
+  final bool homeShortcuts;
+
+  /// Pushes habits to the Android home-screen widgets. Left null, nothing is
+  /// — which is every non-mobile build and every test.
+  final HomeWidgetBridge? widgetBridge;
+
   @override
   State<TideApp> createState() => _TideAppState();
 }
 
-class _TideAppState extends State<TideApp> {
+class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
   late final TideStore _store = TideStore(
     auth: widget.auth ?? DemoAuthService(signedIn: widget.startOnboarded),
     flags:
@@ -128,7 +236,19 @@ class _TideAppState extends State<TideApp> {
         DeviceFlags.memory(onboardingSeen: widget.startOnboarded),
     repository: widget.habits,
     billing: widget.billing,
+    widgetBridge: widget.widgetBridge,
   );
+
+  late final TaskStore _tasks = TaskStore(
+    tide: _store,
+    local: widget.taskLocal,
+    remote: widget.taskRemote,
+    reminders: widget.taskReminders,
+    reconnects: widget.reconnects,
+  );
+
+  StreamSubscription<String>? _openedReminders;
+  StreamSubscription<Uri?>? _widgetTaps;
 
   late final GoRouter _router = AppRoutes.build(
     store: _store,
@@ -151,6 +271,10 @@ class _TideAppState extends State<TideApp> {
   /// The palette Material's theme was last built for.
   late TidePalette _palette;
 
+  /// A widget tap that arrived before the session was restored. Opened on
+  /// the next [TideStore.sessionChanges] once somebody is signed in.
+  Uri? _pendingWidgetLaunch;
+
   @override
   void initState() {
     super.initState();
@@ -160,7 +284,166 @@ class _TideAppState extends State<TideApp> {
     _palette = _store.palette;
     TideColors.use(_palette);
     _store.addListener(_onStore);
+    _store.sessionChanges.addListener(_openPendingWidgetLaunch);
     _router.routerDelegate.addListener(_trackRoute);
+    _openedReminders = _tasks.reminders.opened.listen(_openTask);
+    if (widget.homeShortcuts) {
+      _registerShortcuts();
+      _registerHomeWidgetTaps();
+    }
+    final updates = widget.updates;
+    if (updates != null) {
+      updates.addListener(_announceUpdate);
+      _onToday.addListener(_announceUpdate);
+      unawaited(updates.check());
+    }
+    if (_observesLifecycle) WidgetsBinding.instance.addObserver(this);
+    final launch = widget.launchUri;
+    if (launch != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _openFromWidget(launch),
+      );
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The day may have rolled over, or a widget tap may have changed
+    // something, while the app sat backgrounded — push a fresh payload
+    // rather than waiting on the next habit mutation.
+    if (state != AppLifecycleState.resumed) return;
+    if (widget.homeShortcuts) _store.refreshWidgets();
+    unawaited(widget.updates?.check(ifStale: true));
+  }
+
+  bool get _observesLifecycle => widget.homeShortcuts || widget.updates != null;
+
+  /// Whether the update panel is on screen, so a second notification while
+  /// it is up does not stack another one on top.
+  bool _announcingUpdate = false;
+
+  /// Shows a newly found release once, on Today.
+  ///
+  /// Today rather than wherever the app happens to be: a panel arriving over
+  /// the habit editor or the paywall interrupts an errand, and Today is where
+  /// every launch lands anyway. After the first showing a release waits in
+  /// Settings; only a required update is raised again.
+  void _announceUpdate() {
+    final updates = widget.updates;
+    if (updates == null || _announcingUpdate) return;
+    if (!_onToday.value || !updates.shouldAnnounce) return;
+    // Listeners can fire mid-build (the route listener does), and a dialog
+    // cannot be pushed from there.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _router.routerDelegate.navigatorKey.currentContext;
+      if (!mounted || context == null || _announcingUpdate) return;
+      if (!_onToday.value || !updates.shouldAnnounce) return;
+      _announcingUpdate = true;
+      updates.markAnnounced();
+      showUpdateDialog(
+        context,
+        updates,
+      ).whenComplete(() => _announcingUpdate = false);
+    });
+  }
+
+  /// A reminder was tapped: open its task, if it is still on this account.
+  void _openTask(String taskId) {
+    if (!_store.signedIn || _tasks.byId(taskId) == null) return;
+    _router.go(Routes.tasks);
+    unawaited(_router.push(Routes.task(taskId)));
+  }
+
+  static const String _newTaskShortcut = 'new_task';
+
+  /// The launcher's long-press menu: "New task", straight into the field.
+  void _registerShortcuts() {
+    const actions = QuickActions();
+    unawaited(
+      actions.initialize((type) {
+        if (type != _newTaskShortcut || !_store.signedIn) return;
+        _router.go(Routes.tasks);
+        _tasks.requestQuickAdd();
+      }),
+    );
+    unawaited(
+      actions.setShortcutItems(const [
+        ShortcutItem(type: _newTaskShortcut, localizedTitle: 'New task'),
+      ]),
+    );
+  }
+
+  /// Every Android home-screen widget is deep-link only for now: a tap
+  /// opens the app rather than acting natively, so there is no in-widget
+  /// business logic to keep in sync with [TideStore]/[TaskStore]. See
+  /// `android/app/src/main/kotlin/com/example/tide/*WidgetProvider.kt` for
+  /// the other half — each tap target's `PendingIntent` carries one of
+  /// these URIs.
+  void _registerHomeWidgetTaps() {
+    _widgetTaps = HomeWidget.widgetClicked.listen(_openFromWidget);
+  }
+
+  void _openPendingWidgetLaunch() {
+    final pending = _pendingWidgetLaunch;
+    if (pending != null && _store.signedIn) _openFromWidget(pending);
+  }
+
+  void _openFromWidget(Uri? uri) {
+    if (uri == null) return;
+    if (!_store.signedIn) {
+      _pendingWidgetLaunch = uri;
+      return;
+    }
+    _pendingWidgetLaunch = null;
+    switch (WidgetLaunch.action(uri)) {
+      case 'habit':
+        final id = uri.queryParameters['id'];
+        if (id == null || _store.habitById(id) == null) return;
+        _router.go(Routes.today);
+        _store.log(id);
+      case 'habit-detail':
+        final id = uri.queryParameters['id'];
+        if (id == null || _store.habitById(id) == null) return;
+        _router.go(Routes.today);
+        unawaited(_router.push(Routes.habit(id)));
+      case 'today':
+        _router.go(Routes.today);
+      case 'tasks':
+        _router.go(Routes.tasks);
+      case 'dashboard':
+      case 'insights':
+        _router.go(Routes.insights);
+      case 'upgrade':
+        _router.go(Routes.today);
+        unawaited(_router.push(Routes.upgrade));
+      case 'task':
+        final id = uri.queryParameters['id'];
+        if (id != null) _openTask(id);
+      case 'quick-add':
+        _router.go(Routes.today);
+        unawaited(
+          _router.push(_store.canAddHabit ? Routes.newHabit : Routes.upgrade),
+        );
+      case 'heatmap':
+        final id = uri.queryParameters['id'];
+        if (id == null || _store.habitById(id) == null) return;
+        _router.go(Routes.today);
+        unawaited(_router.push(Routes.habit(id)));
+      case 'dashboard-locked':
+      case 'heatmap-locked':
+      case 'recap-locked':
+        _router.go(Routes.today);
+        unawaited(_router.push(Routes.upgrade));
+      case 'setup':
+        final id = int.tryParse(uri.queryParameters['id'] ?? '');
+        final kind = HabitWidgetKind.byName(uri.queryParameters['kind']);
+        if (id == null || kind == null) return;
+        _router.go(Routes.today);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          unawaited(_router.push(Routes.widgetSetup(id, kind.name)));
+        });
+    }
   }
 
   /// Rebuilds the MaterialApp only when the palette actually changed, not on
@@ -177,8 +460,15 @@ class _TideAppState extends State<TideApp> {
 
   @override
   void dispose() {
+    if (_observesLifecycle) WidgetsBinding.instance.removeObserver(this);
+    widget.updates?.removeListener(_announceUpdate);
+    _onToday.removeListener(_announceUpdate);
     _router.routerDelegate.removeListener(_trackRoute);
+    unawaited(_openedReminders?.cancel());
+    unawaited(_widgetTaps?.cancel());
+    _tasks.dispose();
     _onToday.dispose();
+    _store.sessionChanges.removeListener(_openPendingWidgetLaunch);
     _store
       ..removeListener(_onStore)
       ..dispose();
@@ -189,46 +479,52 @@ class _TideAppState extends State<TideApp> {
   Widget build(BuildContext context) {
     // The scope sits above the router so every route — including the sheets
     // pushed on the root navigator — reads the same store.
-    return TideScope(
+    final app = TideScope(
       store: _store,
-      child: TourAnchorScope(
-        registry: _anchors,
-        child: MaterialApp.router(
-          title: AppConstants.appName,
-          debugShowCheckedModeBanner: false,
-          theme: TideTheme.current,
-          routerConfig: _router,
-          builder: (context, child) {
-            // Lock text scaling to a sane band: the gauge readouts are a
-            // fixed-width instrument panel and fall apart past this.
-            final scale = MediaQuery.textScalerOf(
-              context,
-            ).clamp(minScaleFactor: 0.9, maxScaleFactor: 1.2);
-            return MediaQuery(
-              data: MediaQuery.of(context).copyWith(textScaler: scale),
-              // Completion may be logged from Today, the calendar, a detail
-              // screen or a sheet. Keeping this above the router gives all
-              // of them the same reward without duplicating UI glue in four
-              // interaction paths.
-              //
-              // The tour sits under the celebration rather than over it:
-              // the tour's last step opens the add sheet and ends itself, so
-              // the only way the two could overlap is a reward earned while
-              // a scrim is up, and a reward must never be dimmed.
-              child: CelebrationHost(
-                child: TourHost(
-                  // The router is not reachable from this builder's own
-                  // context — it lives below the app — so the one action the
-                  // tour can take is handed in from out here.
-                  onAddHabit: () => _router.push(Routes.newHabit),
-                  onToday: _onToday,
-                  child: child ?? const SizedBox.shrink(),
+      child: TaskScope(
+        store: _tasks,
+        child: TourAnchorScope(
+          registry: _anchors,
+          child: MaterialApp.router(
+            title: AppConstants.appName,
+            debugShowCheckedModeBanner: false,
+            theme: TideTheme.current,
+            routerConfig: _router,
+            builder: (context, child) {
+              // Lock text scaling to a sane band: the gauge readouts are a
+              // fixed-width instrument panel and fall apart past this.
+              final scale = MediaQuery.textScalerOf(
+                context,
+              ).clamp(minScaleFactor: 0.9, maxScaleFactor: 1.2);
+              return MediaQuery(
+                data: MediaQuery.of(context).copyWith(textScaler: scale),
+                // Completion may be logged from Today, the calendar, a detail
+                // screen or a sheet. Keeping this above the router gives all
+                // of them the same reward without duplicating UI glue in four
+                // interaction paths.
+                //
+                // The tour sits under the celebration rather than over it:
+                // the tour's last step opens the add sheet and ends itself, so
+                // the only way the two could overlap is a reward earned while
+                // a scrim is up, and a reward must never be dimmed.
+                child: CelebrationHost(
+                  child: TourHost(
+                    // The router is not reachable from this builder's own
+                    // context — it lives below the app — so the one action the
+                    // tour can take is handed in from out here.
+                    onAddHabit: () => _router.push(Routes.newHabit),
+                    onToday: _onToday,
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
+
+    final updates = widget.updates;
+    return updates == null ? app : UpdateScope(store: updates, child: app);
   }
 }

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static sample for the widget picker. Only RemoteViews-safe classes
+     here: the previous version drew its cells with plain View elements,
+     which RemoteViews refuses to inflate, so the picker showed "Can't load
+     widget". Keep in visual sync with widget_habit_heatmap.xml by hand. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_card_background"
+    android:orientation="vertical"
+    android:paddingHorizontal="14dp"
+    android:paddingVertical="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="18dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/manrope_medium"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="Morning water"
+            android:textColor="@color/tide_bone"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:layout_width="12dp"
+            android:layout_height="14dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_flame" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:fontFamily="@font/space_grotesk_medium"
+            android:includeFontPadding="false"
+            android:text="12"
+            android:textColor="@color/tide_lantern"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1"
+        android:contentDescription="@null"
+        android:scaleType="fitCenter"
+        android:src="@drawable/widget_heatmap_sample" />
+</LinearLayout>

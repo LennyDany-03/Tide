@@ -21,11 +21,11 @@ void main() {
     expect(find.text('No screens after 10'), findsOneWidget);
   });
 
-  testWidgets('the tab bar carries all four destinations', (tester) async {
+  testWidgets('the tab bar carries all five destinations', (tester) async {
     await tester.pumpWidget(const TideApp(startOnboarded: true));
     await tester.pump(const Duration(milliseconds: 900));
 
-    for (final label in ['Today', 'History', 'Insights', 'Settings']) {
+    for (final label in ['Today', 'To-do', 'History', 'Insights', 'Settings']) {
       expect(find.text(label), findsWidgets, reason: '$label tab missing');
     }
   });

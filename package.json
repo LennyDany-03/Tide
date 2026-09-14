@@ -6,9 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "release:patch": "node scripts/release.mjs bump patch",
+    "release:minor": "node scripts/release.mjs bump minor",
+    "release:major": "node scripts/release.mjs bump major",
+    "release:check": "node scripts/release.mjs check"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8"

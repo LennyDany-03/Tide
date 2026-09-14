@@ -19,6 +19,7 @@ import 'billing/payment_record.dart';
 import 'device_flags.dart';
 import 'habits/demo_habit_repository.dart';
 import 'habits/habit_repository.dart';
+import 'home_widget/home_widget_bridge.dart';
 import 'models/celebration_cue.dart';
 import 'models/day_summary.dart';
 import 'models/habit.dart';
@@ -45,6 +46,7 @@ class TideStore extends ChangeNotifier {
     DeviceFlags? flags,
     HabitRepository? repository,
     BillingService? billing,
+    this.widgetBridge,
   }) : auth = auth ?? DemoAuthService(),
        flags = flags ?? DeviceFlags.memory(),
        repository = repository ?? DemoHabitRepository(),
@@ -78,6 +80,11 @@ class TideStore extends ChangeNotifier {
   /// Who says whether this account is Pro. Never this class: [billing] relays
   /// the server's answer and nothing here can overrule it.
   final BillingService billing;
+
+  /// Pushes habits to the Android home-screen widgets. Null on every
+  /// non-mobile build and in every existing test — a no-op, not a
+  /// rearchitecture of how those construct a [TideStore].
+  final HomeWidgetBridge? widgetBridge;
 
   late final StreamSubscription<TideAccount?> _accountChanges;
   late final StreamSubscription<HabitChange> _remoteChanges;
@@ -322,6 +329,14 @@ class TideStore extends ChangeNotifier {
 
   /// Everything, including paused habits — used by history and settings.
   List<Habit> get allHabits => List.unmodifiable(_habits);
+
+  /// Habits set aside, most recently paused first — the shelf under Today's
+  /// list, which is the only way back to one once it has left the list.
+  List<Habit> get pausedHabits {
+    final paused = _habits.where((h) => h.paused).toList()
+      ..sort((a, b) => b.pausedSince!.compareTo(a.pausedSince!));
+    return List.unmodifiable(paused);
+  }
 
   Habit? habitById(String id) {
     for (final habit in _habits) {
@@ -569,8 +584,9 @@ class TideStore extends ChangeNotifier {
       final frozen = Set<DateTime>.from(h.frozenDays)..remove(day);
       return h.copyWith(
         frozenDays: frozen,
-        freezesRemaining:
-            (h.freezesRemaining + 1).clamp(0, h.freezeAllowance).toInt(),
+        freezesRemaining: (h.freezesRemaining + 1)
+            .clamp(0, h.freezeAllowance)
+            .toInt(),
       );
     });
     _saveHabit(habitId);
@@ -602,8 +618,52 @@ class TideStore extends ChangeNotifier {
     _changed();
   }
 
-  void togglePause(String habitId) {
-    _mutate(habitId, (habit) => habit.copyWith(paused: !habit.paused));
+  /// Sets a habit aside from today.
+  ///
+  /// It leaves Today and stops asking for anything: from the first paused
+  /// day, each day is a rest day for this habit — not a miss, not a log, and
+  /// not a freeze spent. Nothing already logged is touched, and the days
+  /// before the pause keep counting exactly as they did.
+  ///
+  /// A day already settled is left alone. Pausing after marking today starts
+  /// the pause tomorrow, so the mark you just made still counts.
+  void pause(String habitId, {DateTime? asOf}) {
+    final habit = habitById(habitId);
+    if (habit == null || habit.paused) return;
+    final today = DateUtils.dateOnly(asOf ?? DateTime.now());
+    final start = habit.countsTowardStreak(today)
+        ? DateUtils.addDaysToDate(today, 1)
+        : today;
+
+    _mutate(habitId, (h) {
+      final spans = [...h.pauses];
+      // Resumed and paused again before the resume took effect: that is one
+      // pause, not two back to back.
+      if (spans.isNotEmpty && spans.last.end == start) {
+        spans.last = PauseSpan(start: spans.last.start);
+      } else {
+        spans.add(PauseSpan(start: start));
+      }
+      return h.copyWith(pauses: spans);
+    });
+    _saveHabit(habitId);
+  }
+
+  /// Brings a paused habit back, due again from today, on the streak it left.
+  void resume(String habitId, {DateTime? asOf}) {
+    final habit = habitById(habitId);
+    if (habit == null || !habit.paused) return;
+    final today = DateUtils.dateOnly(asOf ?? DateTime.now());
+
+    _mutate(habitId, (h) {
+      final spans = [...h.pauses];
+      final open = spans.removeLast();
+      // A pause that has not reached a day yet never happened.
+      if (open.start.isBefore(today)) {
+        spans.add(PauseSpan(start: open.start, end: today));
+      }
+      return h.copyWith(pauses: spans);
+    });
     _saveHabit(habitId);
   }
 
@@ -774,9 +834,11 @@ class TideStore extends ChangeNotifier {
   /// gone by then is let go with the rest of the account's copy on this
   /// device.
   Future<void> logOut() async {
-    if (repository.hasPendingWrites) {
-      await repository.flush().timeout(_flushTimeout, onTimeout: () {});
-    }
+    await Future.wait<void>([
+      if (repository.hasPendingWrites)
+        repository.flush().timeout(_flushTimeout, onTimeout: () {}),
+      for (final hook in List.of(_logOutHooks)) hook(),
+    ]);
     try {
       await auth.logOut();
     } catch (error) {
@@ -784,6 +846,16 @@ class TideStore extends ChangeNotifier {
     }
     _release();
   }
+
+  /// Work another module needs to finish while the session can still reach
+  /// the server — the to-do list sending what it has queued. Each hook must
+  /// bound its own wait; log out waits for all of them.
+  final List<Future<void> Function()> _logOutHooks = [];
+
+  void addLogOutHook(Future<void> Function() hook) => _logOutHooks.add(hook);
+
+  void removeLogOutHook(Future<void> Function() hook) =>
+      _logOutHooks.remove(hook);
 
   /// Deletes the account on the server for good, then leaves it the way
   /// [logOut] does.
@@ -885,6 +957,7 @@ class TideStore extends ChangeNotifier {
     if (was && !next.isPro && weeklyRecap) weeklyRecap = false;
 
     notifyListeners();
+    _syncWidgets();
   }
 
   void finishTour() {
@@ -993,6 +1066,7 @@ class TideStore extends ChangeNotifier {
 
     _session.value = next.id;
     notifyListeners();
+    _syncWidgets();
   }
 
   Future<void> _armTourIfOwed(TideAccount account) async {
@@ -1023,6 +1097,7 @@ class TideStore extends ChangeNotifier {
     unawaited(billing.close(forget: true));
     _session.value = null;
     notifyListeners();
+    _syncWidgets();
   }
 
   Future<void> _saveTour(TideAccount account) async {
@@ -1125,6 +1200,35 @@ class TideStore extends ChangeNotifier {
   void _changed() {
     repository.remember(_habits);
     notifyListeners();
+    _syncWidgets();
+  }
+
+  /// Pushes the current habits to every Android home-screen widget, if the
+  /// app has a bridge to push them through (mobile builds only).
+  void _syncWidgets() => widgetBridge?.scheduleHabitSync(
+    signedIn: signedIn,
+    habits: _habits,
+    isPro: isPro,
+    widgetHabits: flags.widgetHabits,
+  );
+
+  /// Re-pushes the widget payload with nothing changed in the store — used
+  /// on app resume, since the day may have rolled over while backgrounded.
+  void refreshWidgets() => _syncWidgets();
+
+  /// The habit a placed Streak or Heatmap widget shows, by launcher widget id.
+  String? widgetHabitId(int widgetId) => flags.widgetHabits[widgetId];
+
+  /// Ties one placed widget to [habitId] and redraws it before returning, so
+  /// the picker can send the app to the background straight after.
+  Future<void> assignWidgetHabit(int widgetId, String habitId) async {
+    flags.setWidgetHabit(widgetId, habitId);
+    await widgetBridge?.syncHabitsNow(
+      signedIn: signedIn,
+      habits: _habits,
+      isPro: isPro,
+      widgetHabits: flags.widgetHabits,
+    );
   }
 
   void _saveHabit(String habitId) {
@@ -1144,6 +1248,7 @@ class TideStore extends ChangeNotifier {
     unawaited(_planChanges.cancel());
     unawaited(repository.close());
     unawaited(billing.close());
+    widgetBridge?.dispose();
     _session.dispose();
     super.dispose();
   }

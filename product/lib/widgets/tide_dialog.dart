@@ -117,7 +117,9 @@ Future<T?> showTideDialog<T>({
   return showGeneralDialog<T>(
     context: context,
     barrierDismissible: dismissible,
-    barrierLabel: dismissible ? MaterialLocalizations.of(context).modalBarrierDismissLabel : null,
+    barrierLabel: dismissible
+        ? MaterialLocalizations.of(context).modalBarrierDismissLabel
+        : null,
     barrierColor: TideColors.scrim,
     transitionDuration: TideMotion.tabSwitch,
     // A dialog route is mounted straight onto the navigator, above every
@@ -158,13 +160,16 @@ Future<T?> showTideDialog<T>({
 /// app was stuck.
 ///
 /// Resolves true when the user chooses to leave.
-Future<bool> confirmDiscardChanges(BuildContext context) async {
+Future<bool> confirmDiscardChanges(
+  BuildContext context, {
+  String subject = 'This habit',
+}) async {
   final discard = await showTideDialog<bool>(
     context: context,
     builder: (context) => TideDialogPanel(
       title: 'Discard changes?',
       body:
-          'This habit has edits that have not been saved. Leaving now '
+          '$subject has edits that have not been saved. Leaving now '
           'loses them.',
       actions: [
         TideDialogAction(
