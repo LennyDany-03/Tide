@@ -34,5 +34,8 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        // In-app updates for the sideloaded build. See UpdateInstaller.kt.
+        UpdateInstaller(this).register(flutterEngine.dartExecutor.binaryMessenger)
     }
 }

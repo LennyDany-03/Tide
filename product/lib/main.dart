@@ -6,11 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:quick_actions/quick_actions.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/app_constants.dart';
 import 'config/app_routes.dart';
 import 'config/supabase_config.dart';
+import 'config/update_config.dart';
+import 'screens/update/update_dialog.dart';
 import 'services/auth/auth_service.dart';
 import 'services/auth/demo_auth_service.dart';
 import 'services/auth/supabase_auth_service.dart';
@@ -32,6 +35,9 @@ import 'services/tasks/task_scope.dart';
 import 'services/tasks/task_store.dart';
 import 'services/tide_scope.dart';
 import 'services/tide_store.dart';
+import 'services/updates/update_platform.dart';
+import 'services/updates/update_scope.dart';
+import 'services/updates/update_store.dart';
 import 'theme/tide_colors.dart';
 import 'theme/tide_palette.dart';
 import 'theme/tide_theme.dart';
@@ -93,6 +99,20 @@ Future<void> main() async {
           defaultTargetPlatform == TargetPlatform.iOS);
   final launchUri = mobile ? await _widgetLaunchUri() : null;
 
+  // Only the sideloaded Android build updates itself; iOS and the web are
+  // updated by their stores and hosts. A build compiled without a manifest
+  // URL (every local run) has no updater at all.
+  final updates =
+      !kIsWeb &&
+          defaultTargetPlatform == TargetPlatform.android &&
+          UpdateConfig.isConfigured
+      ? UpdateStore(
+          manifestUrl: UpdateConfig.manifestUrl,
+          platform: const AndroidUpdatePlatform(),
+          prefs: await SharedPreferences.getInstance(),
+        )
+      : null;
+
   runApp(
     TideApp(
       // A widget tap is an errand — "choose this widget's habit", "open that
@@ -110,6 +130,7 @@ Future<void> main() async {
       reconnects: mobile ? connectionRestored() : null,
       homeShortcuts: mobile,
       widgetBridge: mobile ? HomeWidgetBridge() : null,
+      updates: updates,
     ),
   );
 }
@@ -143,7 +164,13 @@ class TideApp extends StatefulWidget {
     this.homeShortcuts = false,
     this.widgetBridge,
     this.launchUri,
+    this.updates,
   });
+
+  /// Checks for and installs new releases of the sideloaded Android build.
+  /// Left null, there is no updater — which is every test and every build
+  /// compiled without `UPDATE_MANIFEST_URL`.
+  final UpdateStore? updates;
 
   /// The widget tap that launched the app, handled once the first frame is
   /// up. Later taps, with the app already running, arrive on
@@ -263,11 +290,19 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
     if (widget.homeShortcuts) {
       _registerShortcuts();
       _registerHomeWidgetTaps();
-      WidgetsBinding.instance.addObserver(this);
     }
+    final updates = widget.updates;
+    if (updates != null) {
+      updates.addListener(_announceUpdate);
+      _onToday.addListener(_announceUpdate);
+      unawaited(updates.check());
+    }
+    if (_observesLifecycle) WidgetsBinding.instance.addObserver(this);
     final launch = widget.launchUri;
     if (launch != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _openFromWidget(launch));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _openFromWidget(launch),
+      );
     }
   }
 
@@ -276,7 +311,40 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
     // The day may have rolled over, or a widget tap may have changed
     // something, while the app sat backgrounded — push a fresh payload
     // rather than waiting on the next habit mutation.
-    if (state == AppLifecycleState.resumed) _store.refreshWidgets();
+    if (state != AppLifecycleState.resumed) return;
+    if (widget.homeShortcuts) _store.refreshWidgets();
+    unawaited(widget.updates?.check(ifStale: true));
+  }
+
+  bool get _observesLifecycle => widget.homeShortcuts || widget.updates != null;
+
+  /// Whether the update panel is on screen, so a second notification while
+  /// it is up does not stack another one on top.
+  bool _announcingUpdate = false;
+
+  /// Shows a newly found release once, on Today.
+  ///
+  /// Today rather than wherever the app happens to be: a panel arriving over
+  /// the habit editor or the paywall interrupts an errand, and Today is where
+  /// every launch lands anyway. After the first showing a release waits in
+  /// Settings; only a required update is raised again.
+  void _announceUpdate() {
+    final updates = widget.updates;
+    if (updates == null || _announcingUpdate) return;
+    if (!_onToday.value || !updates.shouldAnnounce) return;
+    // Listeners can fire mid-build (the route listener does), and a dialog
+    // cannot be pushed from there.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _router.routerDelegate.navigatorKey.currentContext;
+      if (!mounted || context == null || _announcingUpdate) return;
+      if (!_onToday.value || !updates.shouldAnnounce) return;
+      _announcingUpdate = true;
+      updates.markAnnounced();
+      showUpdateDialog(
+        context,
+        updates,
+      ).whenComplete(() => _announcingUpdate = false);
+    });
   }
 
   /// A reminder was tapped: open its task, if it is still on this account.
@@ -392,7 +460,9 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    if (widget.homeShortcuts) WidgetsBinding.instance.removeObserver(this);
+    if (_observesLifecycle) WidgetsBinding.instance.removeObserver(this);
+    widget.updates?.removeListener(_announceUpdate);
+    _onToday.removeListener(_announceUpdate);
     _router.routerDelegate.removeListener(_trackRoute);
     unawaited(_openedReminders?.cancel());
     unawaited(_widgetTaps?.cancel());
@@ -409,7 +479,7 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     // The scope sits above the router so every route — including the sheets
     // pushed on the root navigator — reads the same store.
-    return TideScope(
+    final app = TideScope(
       store: _store,
       child: TaskScope(
         store: _tasks,
@@ -453,5 +523,8 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
         ),
       ),
     );
+
+    final updates = widget.updates;
+    return updates == null ? app : UpdateScope(store: updates, child: app);
   }
 }

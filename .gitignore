@@ -36,6 +36,13 @@ yarn-error.log*
 # vercel
 .vercel
 
+# release signing keys never belong in the repo (see TRIGGER.md)
+*.jks
+*.keystore
+
+# playwright mcp screenshots
+.playwright-mcp/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -1,0 +1,233 @@
+# Publishes a new version of the Tide Android app.
+#
+# Starts after CI passes on main (or by hand from the Actions tab). It reads
+# the version from product/pubspec.yaml and does nothing unless that version
+# has no git tag yet, so an ordinary push to main never releases anything.
+# When the version is new it:
+#
+#   1. checks CHANGELOG.md has finished notes for it,
+#   2. builds a release APK signed with the Tide release key,
+#   3. creates the GitHub Release vX.Y.Z with the APK attached,
+#   4. rewrites public/version.json (the manifest the app's updater and the
+#      website read) and commits it back to main.
+#
+# How to cut a release, and the secrets this needs: TRIGGER.md.
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.44.4"
+  NODE_VERSION: "22"
+  JAVA_VERSION: "17"
+
+jobs:
+  prepare:
+    name: Is this a new version?
+    # A workflow_run fires for failed CI runs too, and for pull requests.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.tag.outputs.release }}
+      version: ${{ steps.info.outputs.version }}
+      build: ${{ steps.info.outputs.build }}
+      tag: ${{ steps.info.outputs.tag }}
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The commit CI actually tested, not whatever main is now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - id: info
+        run: node scripts/release.mjs info
+      - id: tag
+        run: |
+          if git rev-parse -q --verify "refs/tags/${{ steps.info.outputs.tag }}" >/dev/null; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ steps.info.outputs.tag }} is already released. Bump the version in product/pubspec.yaml to publish a new one."
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Releasing ${{ steps.info.outputs.tag }}."
+          fi
+      - if: steps.tag.outputs.release == 'true'
+        run: node scripts/release.mjs check
+
+  build:
+    name: Build signed APK
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.apk.outputs.sha256 }}
+      size: ${{ steps.apk.outputs.size }}
+      file: ${{ steps.apk.outputs.file }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # Every release must be signed with the same key, or Android refuses
+      # the update. Refusing to build is better than publishing an APK no
+      # existing install can accept.
+      - name: Decode the release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not set. See TRIGGER.md, 'One-time setup'."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/tide-release.jks"
+          echo "TIDE_KEYSTORE_PATH=$RUNNER_TEMP/tide-release.jks" >> "$GITHUB_ENV"
+
+      # Public, compile-time values only (see product/lib/config/). Missing
+      # ones leave that feature in its offline/demo mode rather than failing.
+      - name: Write build configuration
+        working-directory: product
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          UPDATE_MANIFEST_URL: ${{ vars.UPDATE_MANIFEST_URL || format('https://raw.githubusercontent.com/{0}/main/public/version.json', github.repository) }}
+        run: |
+          {
+            echo "SUPABASE_URL=$SUPABASE_URL"
+            echo "SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
+            echo "GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID"
+            echo "UPDATE_MANIFEST_URL=$UPDATE_MANIFEST_URL"
+          } > .env.release
+
+      - name: Build
+        working-directory: product
+        env:
+          TIDE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          TIDE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          TIDE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          flutter pub get
+          flutter build apk --release --dart-define-from-file=.env.release
+
+      - id: apk
+        name: Name and fingerprint the APK
+        run: |
+          file="tide-${{ needs.prepare.outputs.version }}.apk"
+          mv product/build/app/outputs/flutter-apk/app-release.apk "$file"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$file" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "size=$(stat -c%s "$file")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: ${{ steps.apk.outputs.file }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # main may have moved on since CI passed. The release describes the
+      # commit that was tested, so the script reads that commit's copies.
+      - name: Read the released commit's version and notes
+        env:
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          git show "$SHA:CHANGELOG.md" > "$RUNNER_TEMP/CHANGELOG.md"
+          git show "$SHA:product/pubspec.yaml" > "$RUNNER_TEMP/pubspec.yaml"
+          echo "RELEASE_CHANGELOG=$RUNNER_TEMP/CHANGELOG.md" >> "$GITHUB_ENV"
+          echo "RELEASE_PUBSPEC=$RUNNER_TEMP/pubspec.yaml" >> "$GITHUB_ENV"
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          FILE: ${{ needs.build.outputs.file }}
+          SHA256: ${{ needs.build.outputs.sha256 }}
+        run: |
+          {
+            node scripts/release.mjs notes "$VERSION"
+            echo
+            echo "---"
+            echo "SHA-256 \`$SHA256\`"
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" "$FILE" \
+            --target "$SHA" \
+            --title "Tide $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md"
+
+      - name: Point the update manifest at the new APK
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          FILE: ${{ needs.build.outputs.file }}
+          SHA256: ${{ needs.build.outputs.sha256 }}
+          SIZE: ${{ needs.build.outputs.size }}
+          APK_BASE_URL: ${{ vars.APK_BASE_URL }}
+        run: |
+          base="${APK_BASE_URL:-${{ github.server_url }}/${{ github.repository }}/releases/download/$TAG}"
+          node scripts/release.mjs manifest --url "$base/$FILE" --sha256 "$SHA256" --size "$SIZE"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/version.json
+          if git diff --cached --quiet; then
+            echo "public/version.json is already current."
+            exit 0
+          fi
+          # [skip ci]: the manifest commit is output, not a change to check.
+          git commit -m "Release Tide $VERSION [skip ci]"
+          for attempt in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep 5
+          done
+          echo "::error::Could not push public/version.json to main."
+          exit 1

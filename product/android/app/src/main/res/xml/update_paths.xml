@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The only directory UpdateFileProvider shares with the system installer:
+     the update cache UpdateInstaller.downloadDirectory() writes into. -->
+<paths>
+    <cache-path name="updates" path="updates/" />
+</paths>

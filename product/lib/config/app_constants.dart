@@ -58,6 +58,19 @@ abstract final class AppConstants {
   /// this is a receipt list, not an export.
   static const int receiptLimit = 20;
 
+  // --- App updates -------------------------------------------------------
+
+  /// The least time between two automatic update checks. Launch always
+  /// checks; a resume only checks once this much has passed, so switching
+  /// apps all afternoon does not fetch the manifest every time.
+  static const int updateCheckIntervalHours = 6;
+
+  /// How long the manifest request may take before the check gives up.
+  static const int updateManifestTimeoutSeconds = 15;
+
+  /// How long the APK download may go without a byte before it gives up.
+  static const int updateDownloadStallSeconds = 30;
+
   // --- To-do ------------------------------------------------------------
 
   /// Reminders a task may carry on the free plan. Pro has no ceiling.

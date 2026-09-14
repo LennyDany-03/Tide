@@ -1,0 +1,98 @@
+# Checks every change to the codebase.
+#
+# Runs on every push to any branch and on every pull request into main. Only
+# the parts that changed are checked: the Flutter app when product/ changed,
+# the website when anything outside product/ changed. A green run of this
+# workflow on main is what starts release.yml (see TRIGGER.md).
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: "3.44.4"
+  NODE_VERSION: "22"
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+      site: ${{ steps.filter.outputs.site }}
+      release: ${{ steps.filter.outputs.release }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            app:
+              - 'product/**'
+            site:
+              - '!product/**'
+            release:
+              - 'product/pubspec.yaml'
+              - 'CHANGELOG.md'
+              - 'scripts/release.mjs'
+
+  app:
+    name: Flutter app
+    needs: changes
+    if: needs.changes.outputs.app == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: product
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  site:
+    name: Website
+    needs: changes
+    if: needs.changes.outputs.site == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  release-notes:
+    name: Release notes
+    needs: changes
+    if: needs.changes.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      # Fails when product/pubspec.yaml names a version CHANGELOG.md has no
+      # finished section for, so a branch cannot be merged into a release
+      # with no notes.
+      - run: node scripts/release.mjs check

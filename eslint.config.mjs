@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The Flutter app and its Deno Edge Functions have their own toolchains.
+    "product/**",
   ]),
 ]);
 

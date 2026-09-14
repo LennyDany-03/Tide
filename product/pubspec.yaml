@@ -22,6 +22,12 @@ dependencies:
   connectivity_plus: ^7.3.1
   quick_actions: ^1.1.1
   home_widget: ^0.9.4
+  # In-app updates for the sideloaded Android build: the release manifest is
+  # compared with pub_semver, the APK is streamed with http and checked
+  # against the manifest's sha256 before the install intent is fired.
+  pub_semver: ^2.2.1
+  http: ^1.6.0
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:
