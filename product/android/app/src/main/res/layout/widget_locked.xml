@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Free plan: a single static tile, not a dimmed version of the unlocked
-     rows. The whole tile is one tap target that opens the Upgrade paywall,
-     where the app's real (animated) unlock moment already lives — see
-     HabitDashboardWidgetProvider.kt. -->
+<!-- Shared locked-state tile for every Pro widget (Habit Dashboard, Habit
+     Heatmap, Weekly Recap): one tap target straight into the Upgrade
+     paywall, title set at runtime by each provider via lockedTitle in
+     WidgetPayloadReader.kt. Not a dimmed version of the real widget — see
+     HabitDashboardWidgetProvider.kt for why. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/dashboard_locked_container"
+    android:id="@+id/locked_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -19,10 +20,10 @@
         android:src="@drawable/ic_widget_lock" />
 
     <TextView
+        android:id="@+id/locked_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:fontFamily="@font/manrope_medium"
-        android:text="@string/widget_dashboard_title"
         android:textColor="@color/tide_bone"
         android:textSize="13sp" />
 

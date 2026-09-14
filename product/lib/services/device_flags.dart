@@ -16,12 +16,13 @@ class DeviceFlags {
     this._onboardingSeen,
     this._toursDone,
     this._pendingVerification,
+    this._streakWidgetHabitId,
   );
 
   /// Remembers nothing past the process — tests, and a caller that has not
   /// loaded storage.
   DeviceFlags.memory({bool onboardingSeen = false, String? pendingVerification})
-    : this._(null, onboardingSeen, {}, pendingVerification);
+    : this._(null, onboardingSeen, {}, pendingVerification, null);
 
   static Future<DeviceFlags> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -30,17 +31,20 @@ class DeviceFlags {
       prefs.getBool(_onboardingKey) ?? false,
       {...?prefs.getStringList(_toursKey)},
       prefs.getString(_pendingKey),
+      prefs.getString(_streakWidgetHabitKey),
     );
   }
 
   static const String _onboardingKey = 'tide.onboarding_seen';
   static const String _toursKey = 'tide.tours_done';
   static const String _pendingKey = 'tide.pending_verification';
+  static const String _streakWidgetHabitKey = 'tide.streak_widget_habit_id';
 
   final SharedPreferences? _prefs;
   bool _onboardingSeen;
   final Set<String> _toursDone;
   String? _pendingVerification;
+  String? _streakWidgetHabitId;
 
   bool get onboardingSeen => _onboardingSeen;
 
@@ -74,6 +78,26 @@ class DeviceFlags {
       email == null
           ? _prefs?.remove(_pendingKey)
           : _prefs?.setString(_pendingKey, email),
+    );
+  }
+
+  /// The habit the Single Habit Streak and Habit Heatmap widgets show.
+  ///
+  /// Kept here rather than as a session preference like [palette] or
+  /// [weeklyRecap] on [TideStore], because a widget pin has to survive a
+  /// restart to be worth anything — the whole point is reading it without
+  /// opening the app. Not scoped to an account: switching accounts on the
+  /// same device just leaves a stale id that resolves to nothing, which the
+  /// widgets already treat as "not configured".
+  String? get streakWidgetHabitId => _streakWidgetHabitId;
+
+  void setStreakWidgetHabitId(String? habitId) {
+    if (habitId == _streakWidgetHabitId) return;
+    _streakWidgetHabitId = habitId;
+    unawaited(
+      habitId == null
+          ? _prefs?.remove(_streakWidgetHabitKey)
+          : _prefs?.setString(_streakWidgetHabitKey, habitId),
     );
   }
 }

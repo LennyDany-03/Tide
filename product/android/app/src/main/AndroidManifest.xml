@@ -76,6 +76,56 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/habit_dashboard_widget_info"/>
         </receiver>
+        <receiver
+            android:name=".SingleHabitStreakWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/single_habit_streak_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".TodayTasksWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/today_tasks_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".QuickAddWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_add_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".HabitHeatmapWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/habit_heatmap_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".WeeklyRecapWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/weekly_recap_widget_info"/>
+        </receiver>
 
         <!-- flutter_local_notifications: delivers scheduled task reminders,
              and reschedules them after a reboot or an app update. -->

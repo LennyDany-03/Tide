@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pro, unlocked. The grid itself is a PNG rendered by Flutter
+     (HeatmapExport, via HomeWidget.renderFlutterWidget) — see
+     HabitHeatmapWidgetProvider.kt for why RemoteViews doesn't draw this
+     grid natively. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/heatmap_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_card_background"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="14dp">
+
+    <TextView
+        android:id="@+id/heatmap_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:ellipsize="end"
+        android:fontFamily="@font/manrope_medium"
+        android:maxLines="1"
+        android:textColor="@color/tide_silt"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/heatmap_empty_state"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/manrope_regular"
+        android:text="@string/widget_pick_a_habit"
+        android:textColor="@color/tide_bone"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/heatmap_image"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:adjustViewBounds="true" />
+</LinearLayout>

@@ -2,8 +2,21 @@
 <resources>
     <string name="widget_today_title">TODAY\'S HABITS</string>
     <string name="widget_dashboard_title">HABIT DASHBOARD</string>
+    <string name="widget_tasks_title">TODAY\'S TASKS</string>
+    <string name="widget_recap_title">WEEKLY RECAP</string>
+    <string name="widget_heatmap_title">HABIT HEATMAP</string>
     <string name="widget_upgrade_to_pro">Upgrade to Pro</string>
     <string name="widget_open_tide">Open Tide to get started</string>
+    <string name="widget_pick_a_habit">Pick a habit in Settings</string>
+    <string name="widget_tasks_empty">Nothing due — open Tide to add one</string>
+    <string name="widget_recap_week_label">this week</string>
+    <string name="widget_recap_streak_label">best streak</string>
+
     <string name="widget_today_description">A checklist of today\'s due habits.</string>
     <string name="widget_dashboard_description">Every habit, and the streak behind it.</string>
+    <string name="widget_streak_description">One habit\'s name and current streak.</string>
+    <string name="widget_tasks_description">What\'s due or overdue today.</string>
+    <string name="widget_quick_add_description">One tap into a new habit.</string>
+    <string name="widget_heatmap_description">A habit\'s history, at a glance.</string>
+    <string name="widget_recap_description">This week\'s rate and your best streak.</string>
 </resources>

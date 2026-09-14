@@ -6,6 +6,8 @@
     android:targetCellHeight="3"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_today_habits"
+    android:previewLayout="@layout/widget_today_habits_preview"
+    android:previewImage="@drawable/widget_preview_fallback"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:description="@string/widget_today_description">

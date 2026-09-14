@@ -466,6 +466,7 @@ class TaskStore extends ChangeNotifier {
     final accountId = _accountId;
     if (accountId != null) local.save(accountId, _tasks);
     notifyListeners();
+    _syncWidget();
     _scheduleReminders();
     _debounce?.cancel();
     _debounce = Timer(
@@ -511,6 +512,7 @@ class TaskStore extends ChangeNotifier {
     if (accountId == null) {
       _tasks = const [];
       notifyListeners();
+      _syncWidget();
       return;
     }
     _tasks = local.load(accountId);
@@ -521,9 +523,19 @@ class TaskStore extends ChangeNotifier {
       (_) => unawaited(sync()),
     );
     notifyListeners();
+    _syncWidget();
     _scheduleReminders();
     unawaited(sync());
   }
+
+  /// Pushes today's due/overdue tasks to the Today's Tasks widget, through
+  /// the same bridge [tide] pushes habits through — this store never holds
+  /// its own [HomeWidgetBridge] so as not to duplicate the one [TideApp]
+  /// already built for mobile builds.
+  void _syncWidget() => tide.widgetBridge?.scheduleTaskSync(
+    signedIn: _accountId != null,
+    tasks: open,
+  );
 
   void _closeAccount(String accountId, {required bool forget}) {
     _lifecycle?.dispose();

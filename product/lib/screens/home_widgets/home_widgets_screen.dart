@@ -3,18 +3,23 @@ import 'package:go_router/go_router.dart';
 import 'package:home_widget/home_widget.dart';
 
 import '../../config/pro_features.dart';
+import '../../services/models/habit.dart';
 import '../../services/tide_scope.dart';
+import '../../services/tide_store.dart';
 import '../../theme/tide_colors.dart';
+import '../../theme/tide_elevation.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/tide_backdrop.dart';
+import '../../widgets/tide_surface.dart';
 import 'widgets/locked_widget_preview.dart';
 import 'widgets/widget_gallery_card.dart';
+import 'widgets/widget_previews.dart';
 
-/// Today's Habits and Habit Dashboard, laid out the way they'll sit on the
-/// home screen, with the system "add to home screen" action underneath each.
+/// Every home-screen widget Tide offers, laid out the way each sits on the
+/// home screen, with the system "add to home screen" action underneath.
 ///
-/// Both widgets are deep-link only: a tap opens the app (see
+/// Every widget here is deep-link only: a tap opens the app (see
 /// `_openFromWidget` in lib/main.dart) rather than acting natively — there is
 /// no interactive logging on the home screen itself in this first pass.
 class HomeWidgetsScreen extends StatelessWidget {
@@ -38,10 +43,30 @@ class HomeWidgetsScreen extends StatelessWidget {
     await HomeWidget.requestPinWidget(androidName: androidName);
   }
 
+  Future<void> _pickPinnedHabit(BuildContext context, TideStore store) async {
+    final habits = store.allHabits;
+    if (habits.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Add a habit first, then pin it here.', style: TideType.label),
+        ),
+      );
+      return;
+    }
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _HabitPickerSheet(habits: habits),
+    );
+    if (picked != null) store.setStreakWidgetHabit(picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = TideScope.of(context);
-    final dashboardLocked = store.locked(ProFeature.habitDashboardWidget);
+    final pinnedHabit = store.streakWidgetHabitId == null
+        ? null
+        : store.habitById(store.streakWidgetHabitId!);
 
     return Scaffold(
       backgroundColor: TideColors.deepWater,
@@ -83,21 +108,83 @@ class HomeWidgetsScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 48),
                 child: Text(
-                  'A checklist and a dashboard, right on your home screen.',
+                  'Habits and to-dos, right on your home screen.',
                   style: TideType.labelMuted,
                 ),
               ),
               const SizedBox(height: 24),
 
+              // Single Habit Streak and Habit Heatmap both show one pinned
+              // habit — one picker for both, rather than two that could
+              // disagree about which habit is shown where.
+              PressScale(
+                onTap: () => _pickPinnedHabit(context, store),
+                child: TideSurface(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Widget habit', style: TideType.sectionHeader),
+                            const SizedBox(height: 2),
+                            Text(
+                              pinnedHabit?.name ??
+                                  'None chosen — tap to pick one',
+                              style: TideType.labelMuted,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: TideColors.silt,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
               WidgetGalleryCard(
                 title: "Today's Habits",
                 subtitle: "A checklist of what's due today.",
-                preview: const _TodayHabitsPreview(),
+                preview: const TodayHabitsPreview(),
                 onAdd: () => _pin(context, 'TodayHabitsWidgetProvider'),
               ),
               const SizedBox(height: 16),
 
-              if (dashboardLocked)
+              WidgetGalleryCard(
+                title: 'Single Habit Streak',
+                subtitle: pinnedHabit == null
+                    ? 'Pick a habit above to show its streak.'
+                    : 'Shows ${pinnedHabit.name}\'s current streak.',
+                preview: SingleHabitStreakPreview(habitName: pinnedHabit?.name),
+                onAdd: () => _pin(context, 'SingleHabitStreakWidgetProvider'),
+              ),
+              const SizedBox(height: 16),
+
+              WidgetGalleryCard(
+                title: "Today's Tasks",
+                subtitle: "What's due or overdue today.",
+                preview: const TodayTasksPreview(),
+                onAdd: () => _pin(context, 'TodayTasksWidgetProvider'),
+              ),
+              const SizedBox(height: 16),
+
+              WidgetGalleryCard(
+                title: 'Quick Add',
+                subtitle: 'One tap into a new habit.',
+                preview: const QuickAddPreview(),
+                onAdd: () => _pin(context, 'QuickAddWidgetProvider'),
+              ),
+              const SizedBox(height: 16),
+
+              if (store.locked(ProFeature.habitDashboardWidget))
                 const LockedWidgetPreview(
                   title: 'Habit Dashboard',
                   feature: ProFeature.habitDashboardWidget,
@@ -106,8 +193,38 @@ class HomeWidgetsScreen extends StatelessWidget {
                 WidgetGalleryCard(
                   title: 'Habit Dashboard',
                   subtitle: 'Every habit, and the streak behind it.',
-                  preview: const _HabitDashboardPreview(),
+                  preview: const HabitDashboardPreview(),
                   onAdd: () => _pin(context, 'HabitDashboardWidgetProvider'),
+                ),
+              const SizedBox(height: 16),
+
+              if (store.locked(ProFeature.habitHeatmapWidget))
+                const LockedWidgetPreview(
+                  title: 'Habit Heatmap',
+                  feature: ProFeature.habitHeatmapWidget,
+                )
+              else
+                WidgetGalleryCard(
+                  title: 'Habit Heatmap',
+                  subtitle: pinnedHabit == null
+                      ? 'Pick a habit above to show its history.'
+                      : '${pinnedHabit.name}\'s last five weeks.',
+                  preview: const HeatmapPreview(),
+                  onAdd: () => _pin(context, 'HabitHeatmapWidgetProvider'),
+                ),
+              const SizedBox(height: 16),
+
+              if (store.locked(ProFeature.weeklyRecapWidget))
+                const LockedWidgetPreview(
+                  title: 'Weekly Recap',
+                  feature: ProFeature.weeklyRecapWidget,
+                )
+              else
+                WidgetGalleryCard(
+                  title: 'Weekly Recap',
+                  subtitle: "This week's rate, and your best streak.",
+                  preview: const WeeklyRecapPreview(),
+                  onAdd: () => _pin(context, 'WeeklyRecapWidgetProvider'),
                 ),
             ],
           ),
@@ -117,82 +234,41 @@ class HomeWidgetsScreen extends StatelessWidget {
   }
 }
 
-/// A static stand-in for the native RemoteViews row layout — a mock, not a
-/// live preview of real habits. Deliberately simple next to the real widget:
-/// there is no glyph rendering on the home screen either (see
-/// widget_status_done.xml's comment), so the preview shouldn't promise one.
-class _TodayHabitsPreview extends StatelessWidget {
-  const _TodayHabitsPreview();
+class _HabitPickerSheet extends StatelessWidget {
+  const _HabitPickerSheet({required this.habits});
+
+  final List<Habit> habits;
 
   @override
   Widget build(BuildContext context) {
-    return _PreviewRows(
-      rows: const [('Morning water', true), ('Evening walk', false)],
-    );
-  }
-}
-
-class _HabitDashboardPreview extends StatelessWidget {
-  const _HabitDashboardPreview();
-
-  @override
-  Widget build(BuildContext context) {
-    return _PreviewRows(
-      rows: const [('Morning water', true), ('Evening walk', false)],
-      streaks: const [12, 4],
-    );
-  }
-}
-
-class _PreviewRows extends StatelessWidget {
-  const _PreviewRows({required this.rows, this.streaks});
-
-  final List<(String, bool)> rows;
-  final List<int>? streaks;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: TideColors.shoal,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0) const SizedBox(height: 10),
-            Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: rows[i].$2
-                        ? TideColors.lantern
-                        : Colors.transparent,
-                    border: rows[i].$2
-                        ? null
-                        : Border.all(color: TideColors.silt, width: 1.2),
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        constraints: const BoxConstraints(maxHeight: 420),
+        decoration: BoxDecoration(
+          color: TideColors.shelf,
+          borderRadius: TideElevation.radius20,
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
+            for (final habit in habits)
+              PressScale(
+                onTap: () => Navigator.of(context).pop(habit.id),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
                   child: Text(
-                    rows[i].$1,
+                    habit.name,
                     style: TideType.label.copyWith(color: TideColors.bone),
                   ),
                 ),
-                if (streaks != null)
-                  Text(
-                    '${streaks![i]}',
-                    style: TideType.gauge(12, color: TideColors.lantern),
-                  ),
-              ],
-            ),
+              ),
           ],
-        ],
+        ),
       ),
     );
   }

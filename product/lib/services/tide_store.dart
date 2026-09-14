@@ -1203,17 +1203,28 @@ class TideStore extends ChangeNotifier {
     _syncWidgets();
   }
 
-  /// Pushes the current habits to both Android home-screen widgets, if the
+  /// Pushes the current habits to every Android home-screen widget, if the
   /// app has a bridge to push them through (mobile builds only).
-  void _syncWidgets() => widgetBridge?.scheduleSync(
+  void _syncWidgets() => widgetBridge?.scheduleHabitSync(
     signedIn: signedIn,
     habits: _habits,
     isPro: isPro,
+    pinnedHabitId: flags.streakWidgetHabitId,
   );
 
   /// Re-pushes the widget payload with nothing changed in the store — used
   /// on app resume, since the day may have rolled over while backgrounded.
   void refreshWidgets() => _syncWidgets();
+
+  /// Which habit the Single Habit Streak and Habit Heatmap widgets show.
+  /// Null clears the pin — both widgets fall back to their "not configured"
+  /// state rather than a stale habit.
+  String? get streakWidgetHabitId => flags.streakWidgetHabitId;
+
+  void setStreakWidgetHabit(String? habitId) {
+    flags.setStreakWidgetHabitId(habitId);
+    _syncWidgets();
+  }
 
   void _saveHabit(String habitId) {
     final habit = habitById(habitId);

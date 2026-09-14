@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Free, 1x1. Entirely static — see QuickAddWidgetProvider.kt, which
+     doesn't read widgetData at all. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/quick_add_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <FrameLayout
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        android:layout_gravity="center"
+        android:background="@drawable/widget_add_button_background">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:fontFamily="@font/manrope_medium"
+            android:includeFontPadding="false"
+            android:text="+"
+            android:textColor="@color/tide_on_lantern"
+            android:textSize="30sp" />
+    </FrameLayout>
+</FrameLayout>

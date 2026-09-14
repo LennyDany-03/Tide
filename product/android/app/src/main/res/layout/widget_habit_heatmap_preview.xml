@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static sample content for the system widget picker (previewLayout).
+     The real widget shows a rendered HeatmapExport PNG in an ImageView
+     (widget_habit_heatmap.xml) — the picker can't run Flutter to render
+     one, so this hand-placed grid of the same four intensity tiers
+     (widget_heatmap_cell_0..3) stands in for it. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_card_background"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="14dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="10dp"
+        android:fontFamily="@font/manrope_medium"
+        android:text="@string/widget_heatmap_title"
+        android:textColor="@color/tide_silt"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal">
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_1" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_2" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_0" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_2" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:background="@drawable/widget_heatmap_cell_1" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:orientation="horizontal">
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_0" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_2" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_2" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:background="@drawable/widget_heatmap_cell_3" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:orientation="horizontal">
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_0" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_2" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_1" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:background="@drawable/widget_heatmap_cell_2" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:orientation="horizontal">
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_2" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_2" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_0" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:background="@drawable/widget_heatmap_cell_1" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:orientation="horizontal">
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_1" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_2" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="3dp" android:background="@drawable/widget_heatmap_cell_3" />
+            <View android:layout_width="10dp" android:layout_height="10dp" android:background="@drawable/widget_heatmap_cell_3" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

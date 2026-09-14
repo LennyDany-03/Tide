@@ -272,11 +272,12 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
     );
   }
 
-  /// Both Android home-screen widgets are deep-link only for now: a tap
+  /// Every Android home-screen widget is deep-link only for now: a tap
   /// opens the app rather than acting natively, so there is no in-widget
-  /// business logic to keep in sync with [TideStore]. See
-  /// TodayHabitsWidgetProvider.kt / HabitDashboardWidgetProvider.kt for the
-  /// other half — each row's `PendingIntent` carries one of these URIs.
+  /// business logic to keep in sync with [TideStore]/[TaskStore]. See
+  /// `android/app/src/main/kotlin/com/example/tide/*WidgetProvider.kt` for
+  /// the other half — each tap target's `PendingIntent` carries one of
+  /// these URIs.
   void _registerHomeWidgetTaps() {
     _widgetTaps = HomeWidget.widgetClicked.listen(_openFromWidget);
     unawaited(HomeWidget.initiallyLaunchedFromHomeWidget().then(_openFromWidget));
@@ -296,10 +297,26 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
         _router.go(Routes.today);
         unawaited(_router.push(Routes.habit(id)));
       case 'dashboard':
+      case 'insights':
         _router.go(Routes.insights);
       case 'dashboard-locked':
+      case 'heatmap-locked':
+      case 'recap-locked':
         _router.go(Routes.today);
         unawaited(_router.push(Routes.upgrade));
+      case 'task':
+        final id = uri.queryParameters['id'];
+        if (id != null) _openTask(id);
+      case 'quick-add':
+        _router.go(Routes.today);
+        unawaited(
+          _router.push(_store.canAddHabit ? Routes.newHabit : Routes.upgrade),
+        );
+      case 'streak-unconfigured':
+        _router.go(Routes.today);
+        unawaited(_router.push(Routes.homeWidgets));
+      case 'heatmap':
+        _router.go(Routes.insights);
     }
   }
 

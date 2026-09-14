@@ -12,14 +12,13 @@ import es.antonborri.home_widget.HomeWidgetProvider
 /**
  * Pro widget: up to [MAX_ROWS] habits ranked by current streak.
  *
- * The locked (free) state is a completely different RemoteViews tree
- * ([R.layout.widget_habit_dashboard_locked]), not the unlocked rows dimmed
- * behind a scrim — building and hiding 6 habit rows just to show a lock
- * icon would be wasted work on every render, and Android's RemoteViews
- * can't restructure a tree cheaply anyway. The locked tile is one tap
- * target straight into the Upgrade paywall; the actual animated "unlock"
- * moment lives there, in Flutter, not on the home screen (RemoteViews has
- * no arbitrary-animation API to draw one here).
+ * The locked (free) state is [LockedWidgetViews] — a completely different,
+ * shared RemoteViews tree, not the unlocked rows dimmed behind a scrim:
+ * building and hiding 6 habit rows just to show a lock icon would be wasted
+ * work on every render, and Android's RemoteViews can't restructure a tree
+ * cheaply anyway. The actual animated "unlock" moment lives in Flutter, on
+ * the paywall the locked tile opens — RemoteViews has no arbitrary-animation
+ * API to draw one here.
  */
 class HabitDashboardWidgetProvider : HomeWidgetProvider() {
     companion object {
@@ -54,20 +53,13 @@ class HabitDashboardWidgetProvider : HomeWidgetProvider() {
             val views = if (payload?.isPro == true) {
                 buildUnlockedViews(context, payload.rows.take(MAX_ROWS))
             } else {
-                buildLockedViews(context)
+                LockedWidgetViews.build(
+                    context,
+                    R.string.widget_dashboard_title,
+                    "tide://widget/dashboard-locked",
+                )
             }
             appWidgetManager.updateAppWidget(widgetId, views)
-        }
-    }
-
-    private fun buildLockedViews(context: Context): RemoteViews {
-        return RemoteViews(context.packageName, R.layout.widget_habit_dashboard_locked).apply {
-            val pendingIntent = HomeWidgetLaunchIntent.getActivity(
-                context,
-                MainActivity::class.java,
-                Uri.parse("tide://widget/dashboard-locked"),
-            )
-            setOnClickPendingIntent(R.id.dashboard_locked_container, pendingIntent)
         }
     }
 

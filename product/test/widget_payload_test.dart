@@ -7,6 +7,7 @@ import 'package:tide/services/home_widget/widget_payload.dart';
 import 'package:tide/services/models/habit.dart';
 import 'package:tide/services/models/tide_glyph.dart';
 import 'package:tide/services/streak_calculator.dart';
+import 'package:tide/services/tasks/task.dart';
 
 final _today = DateTime(2026, 9, 14);
 
@@ -184,6 +185,121 @@ void main() {
       final back = jsonDecode(jsonEncode(payload)) as Map<String, dynamic>;
 
       expect(back, payload);
+    });
+  });
+
+  group('WidgetPayload.singleHabitStreak', () {
+    test('reports not configured when nothing is pinned', () {
+      expect(WidgetPayload.singleHabitStreak(null), {
+        'signedIn': true,
+        'configured': false,
+      });
+    });
+
+    test('carries the pinned habit\'s streak and today\'s state', () {
+      final habit = _streakHabit('1', 'Water', 5);
+
+      final payload = WidgetPayload.singleHabitStreak(habit, asOf: _today);
+
+      expect(payload['configured'], isTrue);
+      expect(payload['name'], 'Water');
+      expect(payload['streak'], 5);
+      expect(payload['doneToday'], isTrue);
+    });
+  });
+
+  group('WidgetPayload.todayTasks', () {
+    Task task(
+      String id,
+      String title, {
+      DateTime? dueDate,
+      bool isCompleted = false,
+      bool isArchived = false,
+    }) => Task(
+      id: id,
+      title: title,
+      createdAt: DateTime(2026, 1, 1),
+      updatedAt: DateTime(2026, 1, 1),
+      dueDate: dueDate,
+      isCompleted: isCompleted,
+      isArchived: isArchived,
+    );
+
+    test('includes only due-or-overdue, incomplete, unarchived tasks', () {
+      final dueToday = task('1', 'Due today', dueDate: _today);
+      final overdue = task(
+        '2',
+        'Overdue',
+        dueDate: DateUtils.addDaysToDate(_today, -3),
+      );
+      final future = task(
+        '3',
+        'Future',
+        dueDate: DateUtils.addDaysToDate(_today, 1),
+      );
+      final undated = task('4', 'Undated');
+      final done = task('5', 'Done', dueDate: _today, isCompleted: true);
+      final archived = task('6', 'Archived', dueDate: _today, isArchived: true);
+
+      final payload = WidgetPayload.todayTasks([
+        dueToday,
+        overdue,
+        future,
+        undated,
+        done,
+        archived,
+      ], asOf: _today);
+      final rows = (payload['rows'] as List).cast<Map<String, Object?>>();
+
+      expect(rows.map((r) => r['id']), ['2', '1']); // overdue sorts first
+      expect(rows.firstWhere((r) => r['id'] == '2')['overdue'], isTrue);
+      expect(rows.firstWhere((r) => r['id'] == '1')['overdue'], isFalse);
+    });
+
+    test('caps at the task row budget', () {
+      final tasks = [
+        for (var i = 0; i < WidgetPayload.maxTaskRows + 3; i++)
+          task('$i', 'Task $i', dueDate: _today),
+      ];
+
+      final payload = WidgetPayload.todayTasks(tasks, asOf: _today);
+
+      expect(payload['rows'], hasLength(WidgetPayload.maxTaskRows));
+    });
+  });
+
+  group('WidgetPayload.heatmapSeries', () {
+    test('covers heatmapDays days, ending today', () {
+      final habit = _streakHabit('1', 'Water', 5);
+
+      final series = WidgetPayload.heatmapSeries(habit, asOf: _today);
+
+      expect(series, hasLength(WidgetPayload.heatmapDays));
+      expect(series.last, 1.0); // today, logged
+    });
+  });
+
+  test('WidgetPayload.heatmapMeta carries isPro and configured through', () {
+    expect(WidgetPayload.heatmapMeta(isPro: true, configured: false), {
+      'signedIn': true,
+      'isPro': true,
+      'configured': false,
+    });
+  });
+
+  group('WidgetPayload.weeklyRecap', () {
+    test('carries isPro through, and reports the best current streak', () {
+      final habits = [_streakHabit('1', 'A', 2), _streakHabit('2', 'B', 7)];
+
+      final payload = WidgetPayload.weeklyRecap(
+        habits,
+        isPro: true,
+        asOf: _today,
+      );
+
+      expect(payload['isPro'], isTrue);
+      expect(payload['bestStreak'], 7);
+      expect(payload['weekPercent'], isA<int>());
     });
   });
 }

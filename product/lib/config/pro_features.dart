@@ -48,6 +48,12 @@ enum ProFeature {
 
   /// The Habit Dashboard home-screen widget.
   habitDashboardWidget,
+
+  /// The Habit Heatmap home-screen widget.
+  habitHeatmapWidget,
+
+  /// The Weekly Recap home-screen widget.
+  weeklyRecapWidget,
 }
 
 /// One line of the paywall, and one gate in the app. The same object, because
@@ -129,6 +135,16 @@ abstract final class ProFeatures {
       label: 'Habit Dashboard widget',
       freeAllowance: "Today's Habits widget",
       blurb: 'Pro adds the streak dashboard to your home screen.',
+    ),
+    ProFeature.habitHeatmapWidget: ProFeatureSpec(
+      label: 'Habit Heatmap widget',
+      freeAllowance: '—',
+      blurb: 'Pro puts a habit\'s history on your home screen.',
+    ),
+    ProFeature.weeklyRecapWidget: ProFeatureSpec(
+      label: 'Weekly Recap widget',
+      freeAllowance: '—',
+      blurb: 'Pro puts the week\'s numbers on your home screen.',
     ),
   };
 
