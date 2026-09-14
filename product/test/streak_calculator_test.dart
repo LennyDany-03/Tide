@@ -138,12 +138,50 @@ void main() {
       expect(summary.isFullyLogged, isTrue);
     });
 
-    test('paused habits are excluded entirely', () {
+    test('a habit paused on a day asks nothing of that day', () {
       final habits = [
         habit(logged: {0}),
-        habit().copyWith(paused: true),
+        habit().copyWith(pauses: [PauseSpan(start: daysAgo(3))]),
       ];
       expect(StreakCalculator.daySummary(habits, today).scheduled, 1);
+    });
+
+    test('pausing does not rewrite the days before the pause', () {
+      final subject = habit(
+        logged: {5},
+      ).copyWith(pauses: [PauseSpan(start: daysAgo(3))]);
+      final before = StreakCalculator.daySummary([subject], daysAgo(5));
+      expect(before.scheduled, 1);
+      expect(before.completed, 1);
+    });
+  });
+
+  group('pauses', () {
+    test('a running pause holds the streak rather than breaking it', () {
+      final subject = habit(
+        logged: {4, 5, 6},
+      ).copyWith(pauses: [PauseSpan(start: daysAgo(3))]);
+      expect(StreakCalculator.currentStreak(subject, asOf: today), 3);
+    });
+
+    test('a finished pause is stepped over, and the run carries on', () {
+      // Kept 8–6 days ago, paused 5–2 days ago, kept again since.
+      final subject = habit(logged: {0, 1, 6, 7, 8}).copyWith(
+        pauses: [PauseSpan(start: daysAgo(5), end: daysAgo(1))],
+      );
+      expect(StreakCalculator.currentStreak(subject, asOf: today), 5);
+      expect(StreakCalculator.bestStreak(subject, asOf: today), 5);
+    });
+
+    test('paused days are left out of the completion rate', () {
+      final subject = habit(logged: {0, 1, 2, 3, 4}).copyWith(
+        pauses: [PauseSpan(start: daysAgo(9), end: daysAgo(4))],
+      );
+      // Ten days: five paused, five kept.
+      expect(
+        StreakCalculator.completionRate(subject, days: 10, asOf: today),
+        1.0,
+      );
     });
   });
 

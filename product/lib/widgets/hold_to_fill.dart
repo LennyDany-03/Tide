@@ -324,9 +324,20 @@ class HoldToConfirmButton extends StatelessWidget {
     this.holdingLabel,
     this.color,
     this.expand = true,
+    this.quiet = false,
   });
 
   final String label;
+
+  /// No resting fill or outline — coral words on the surface, and the fill
+  /// and edge arrive only while it is held.
+  ///
+  /// For surfaces where delete is one option among several rather than the
+  /// point of the screen. A coral slab at rest is the loudest object in any
+  /// panel it sits in, which put the least-used action in the most visible
+  /// place. The gesture and its feedback are unchanged: it is still learned
+  /// once.
+  final bool quiet;
 
   /// Shown while the ring is filling — "Keep holding".
   final String? holdingLabel;
@@ -350,10 +361,14 @@ class HoldToConfirmButton extends StatelessWidget {
               width: expand ? double.infinity : null,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12 + 0.18 * progress),
+                color: quiet
+                    ? color.withValues(alpha: 0.18 * progress)
+                    : color.withValues(alpha: 0.12 + 0.18 * progress),
                 borderRadius: TideElevation.radius12,
                 border: Border.all(
-                  color: color.withValues(alpha: 0.3 + 0.5 * progress),
+                  color: quiet
+                      ? color.withValues(alpha: 0.6 * progress)
+                      : color.withValues(alpha: 0.3 + 0.5 * progress),
                 ),
               ),
               child: Center(

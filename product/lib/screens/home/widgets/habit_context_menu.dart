@@ -1,40 +1,45 @@
 import 'package:flutter/material.dart';
 
+import '../../../config/habit_copy.dart';
 import '../../../services/models/habit.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
+import '../../../widgets/gauge_number.dart';
 import '../../../widgets/habit_glyph.dart';
 import '../../../widgets/hold_to_fill.dart';
 import '../../../widgets/press_scale.dart';
 import '../../../widgets/tide_button.dart';
-import '../../../widgets/tide_surface.dart';
 
-/// The long-press menu, raised from anywhere on a habit card.
+/// The long-press sheet, raised from anywhere on a habit card.
 ///
-/// Everything you can do to a habit, in the order you reach for it: log it,
-/// look at it, change it, park it, destroy it. **Habit details** is the entry
-/// that was missing — long-pressing a habit and finding no route through to
-/// its own screen sent people back to the card to hunt for a second,
-/// different gesture that opened it.
+/// **A glance first, verbs second.** The menu this replaced was a floating
+/// card of verbs: an icon in a tinted tile, a dot and a status, a list of
+/// icon-chevron rows in a box inside the box, and a coral slab at the
+/// bottom. Every piece of that is the default kit, and together they said
+/// nothing about the habit that the card behind it had not already said. The
+/// sheet opens on the habit itself — its name at display size, the streak as
+/// a figure, and the last two weeks as fourteen days — so a long-press is
+/// worth doing even when you only wanted to look.
 ///
-/// Three tiers, so the eye lands in the right place first. Logging is the
-/// one solid lantern button — it is what a long-press is usually for. The
-/// quiet verbs share one grouped list, divided by hairlines. Delete sits
-/// apart behind the same coral hold-to-fill used on Habit detail and in
-/// Settings — the gesture that destroys things never changes shape. The
-/// menu used to give all four verbs identical trench blocks: darker than the
-/// page, they read as holes punched in the panel, and the primary action
-/// differed from "Pause" only by a faint tint.
+/// **Rises from the bottom, where the thumb already is.** A centred panel put
+/// the primary action in the middle of the screen, the one place a thumb on
+/// a long-pressed card has to travel furthest to reach.
+///
+/// **One primary, three quiet tiles, one hidden danger.** Logging is the one
+/// lantern button. Details, Edit and Pause sit side by side as equal tiles —
+/// three verbs of the same weight read faster as a row than as a list.
+/// Delete keeps the coral hold used everywhere else, but quiet: coral words
+/// until it is held, so the rarest action is no longer the loudest shape.
+///
+/// On a paused habit the sheet changes its question. Resume becomes the
+/// primary — logging a habit that is not due makes no sense — and the line
+/// under the name says since when, and that the streak is being held.
 ///
 /// Plain scrim, no blur, as with [showTideDialog]. The blur banded into
 /// posterised colour blobs on some GPUs — hues the palette does not contain
-/// — and it cost a `BackdropFilter` at the exact moment the menu opens.
-///
-/// The shell carries a 20px radius and 8px of padding; everything inside
-/// carries 12 — 20 minus 8, so the curves are concentric rather than merely
-/// both rounded.
+/// — and it cost a `BackdropFilter` at the exact moment the sheet opens.
 Future<void> showHabitContextMenu(
   BuildContext context, {
   required Habit habit,
@@ -52,10 +57,11 @@ Future<void> showHabitContextMenu(
     barrierLabel: 'Dismiss',
     barrierColor: TideColors.scrim,
     transitionDuration: TideMotion.sheetIn,
-    pageBuilder: (context, animation, secondary) => Center(
+    pageBuilder: (context, animation, secondary) => Align(
+      alignment: Alignment.bottomCenter,
       child: Material(
         type: MaterialType.transparency,
-        child: _Menu(
+        child: _Sheet(
           habit: habit,
           streak: streak,
           onDetails: onDetails,
@@ -70,22 +76,22 @@ Future<void> showHabitContextMenu(
     transitionBuilder: (context, animation, secondary, child) {
       final curved = CurvedAnimation(
         parent: animation,
-        curve: TideMotion.overshoot,
+        curve: TideMotion.sheetCurve,
         reverseCurve: Curves.easeInCubic,
       );
-      return FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.92, end: 1).animate(curved),
-          child: child,
-        ),
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 1),
+          end: Offset.zero,
+        ).animate(curved),
+        child: child,
       );
     },
   );
 }
 
-class _Menu extends StatelessWidget {
-  const _Menu({
+class _Sheet extends StatelessWidget {
+  const _Sheet({
     required this.habit,
     required this.streak,
     required this.onDetails,
@@ -105,7 +111,7 @@ class _Menu extends StatelessWidget {
   final VoidCallback? onComplete;
   final VoidCallback? onLogProgress;
 
-  /// Closes the menu before acting, so a pushed route or an opened sheet
+  /// Closes the sheet before acting, so a pushed route or an opened sheet
   /// never arrives underneath it.
   void _run(BuildContext context, VoidCallback action) {
     Navigator.of(context).pop();
@@ -114,62 +120,107 @@ class _Menu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final log = onComplete != null
+    final bottom = MediaQuery.paddingOf(context).bottom;
+
+    final primary = habit.paused
+        ? (label: 'Resume habit', icon: Icons.play_arrow_rounded, act: onPause)
+        : onComplete != null
         ? (label: 'Mark complete', icon: Icons.check_rounded, act: onComplete!)
         : onLogProgress != null
         ? (label: 'Mark progress', icon: Icons.add_rounded, act: onLogProgress!)
         : null;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: TideSurface(
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 520),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
           color: TideColors.shoal,
-          floating: true,
-          border: Border.all(color: TideColors.bone.withValues(alpha: 0.08)),
-          padding: const EdgeInsets.all(8),
+          borderRadius: TideElevation.sheetRadius,
+          boxShadow: TideElevation.floating,
+        ),
+        child: ClipRRect(
+          borderRadius: TideElevation.sheetRadius,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _Header(habit: habit, streak: streak),
-              if (log != null) ...[
-                TideButton(
-                  label: log.label,
-                  icon: Icon(log.icon, size: 19, color: TideColors.onLantern),
-                  onPressed: () => _run(context, log.act),
+              Container(
+                height: TideElevation.innerHighlightWidth,
+                decoration: BoxDecoration(
+                  gradient: TideElevation.innerHighlightGradient,
                 ),
-                const SizedBox(height: 8),
-              ],
-              _Group(
-                children: [
-                  _MenuRow(
-                    icon: Icons.insights_rounded,
-                    label: 'Habit details',
-                    navigates: true,
-                    onTap: () => _run(context, onDetails),
-                  ),
-                  _MenuRow(
-                    icon: Icons.tune_rounded,
-                    label: 'Edit habit',
-                    navigates: true,
-                    onTap: () => _run(context, onEdit),
-                  ),
-                  _MenuRow(
-                    icon: habit.paused
-                        ? Icons.play_arrow_rounded
-                        : Icons.pause_rounded,
-                    label: habit.paused ? 'Resume habit' : 'Pause habit',
-                    onTap: () => _run(context, onPause),
-                  ),
-                ],
               ),
-              const SizedBox(height: 8),
-              HoldToConfirmButton(
-                label: 'Hold to delete',
-                holdingLabel: 'Keep holding…',
-                onConfirm: () => _run(context, onDelete),
+              const SizedBox(height: 10),
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: TideColors.bone.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(20, 18, 20, 12 + bottom),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Header(habit: habit, streak: streak),
+                    const SizedBox(height: 22),
+                    _Fortnight(habit: habit),
+                    const SizedBox(height: 22),
+                    if (primary != null) ...[
+                      TideButton(
+                        label: primary.label,
+                        icon: Icon(
+                          primary.icon,
+                          size: 19,
+                          color: TideColors.onLantern,
+                        ),
+                        onPressed: () => _run(context, primary.act),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _Tile(
+                            icon: Icons.insights_rounded,
+                            label: 'Habit details',
+                            onTap: () => _run(context, onDetails),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _Tile(
+                            icon: Icons.tune_rounded,
+                            label: 'Edit habit',
+                            onTap: () => _run(context, onEdit),
+                          ),
+                        ),
+                        if (!habit.paused) ...[
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _Tile(
+                              icon: Icons.pause_rounded,
+                              label: 'Pause habit',
+                              onTap: () => _run(context, onPause),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    HoldToConfirmButton(
+                      label: 'Hold to delete',
+                      holdingLabel: 'Keep holding…',
+                      quiet: true,
+                      onConfirm: () => _run(context, onDelete),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -179,165 +230,268 @@ class _Menu extends StatelessWidget {
   }
 }
 
-/// Which habit this is and where it stands, said once, so the menu is not a
-/// stack of verbs floating over a screen you can no longer read.
+/// The habit's name at display size, what it asks for, and the streak as a
+/// figure rather than a phrase.
 class _Header extends StatelessWidget {
   const _Header({required this.habit, required this.streak});
 
   final Habit habit;
   final int streak;
 
-  bool get _live => !habit.paused && streak > 0;
-
-  String get _status {
-    if (habit.paused) return 'Paused';
-    if (streak > 0) return '$streak day streak';
-    return 'No streak yet';
+  String get _subline {
+    if (habit.paused) return HabitCopy.pausedSince(habit);
+    final target = habit.targetLabel;
+    final schedule = HabitCopy.schedule(habit);
+    return target.isEmpty ? schedule : '$target · $schedule';
   }
 
   @override
   Widget build(BuildContext context) {
-    final glyphColor = habit.paused
+    final accent = habit.paused
         ? TideColors.drained(TideColors.lantern, 0.7)
         : TideColors.lantern;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: TideColors.lantern.withValues(
-                alpha: habit.paused ? 0.05 : 0.12,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  HabitGlyph(glyph: habit.glyph, size: 14, color: accent),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      _subline,
+                      style: TideType.labelMuted,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
-              borderRadius: TideElevation.radius12,
-            ),
-            child: HabitGlyph(glyph: habit.glyph, size: 18, color: glyphColor),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  habit.name,
-                  style: TideType.heading,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 8),
+              Text(
+                habit.name,
+                style: TideType.hero.copyWith(
+                  fontSize: 26,
+                  letterSpacing: -0.8,
                 ),
-                const SizedBox(height: 5),
-                Row(
-                  children: [
-                    // Lit only while there is a streak to protect — the same
-                    // intensity-of-one-hue state the cards use.
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _live
-                            ? TideColors.lantern
-                            : TideColors.silt.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    const SizedBox(width: 7),
-                    Flexible(
-                      child: Text(
-                        _status,
-                        style: TideType.labelMuted,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GaugeNumber(
+              value: streak,
+              style: TideType.gauge(
+                34,
+                letterSpacing: -1.4,
+                color: streak > 0 && !habit.paused
+                    ? TideColors.bone
+                    : TideColors.silt,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              habit.paused ? 'streak held' : 'day streak',
+              style: TideType.labelMuted,
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
 
-/// The quiet verbs as one grouped list. A step *below* the shell rather than
-/// a trench, so it reads as a tray set into the panel, not a hole in it.
-class _Group extends StatelessWidget {
-  const _Group({required this.children});
+/// The last fourteen days, one square each, today on the right.
+///
+/// The same mark as the card's week strip and the detail heatmap, stretched
+/// to the sheet's width so it reads as a row of days rather than a gauge. A
+/// paused day is an outline with nothing in it: a rest, not a miss.
+class _Fortnight extends StatelessWidget {
+  const _Fortnight({required this.habit});
 
-  final List<Widget> children;
+  final Habit habit;
 
-  /// Row padding + icon + gap, so the hairlines start under the labels and
-  /// the icons stand in one unbroken column.
-  static const double _dividerInset = 14 + 19 + 14;
+  static const int _days = 14;
+  static const double _gap = 4;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: TideColors.shelf,
-        borderRadius: TideElevation.radius12,
-        border: Border.all(color: TideColors.hairline),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0)
-              Container(
-                height: 1,
-                margin: const EdgeInsets.only(left: _dividerInset),
-                color: TideColors.hairline,
-              ),
-            children[i],
+    final today = DateUtils.dateOnly(DateTime.now());
+    final created = DateUtils.dateOnly(habit.createdAt);
+    final days = [
+      for (var i = _days - 1; i >= 0; i--) DateUtils.addDaysToDate(today, -i),
+    ];
+
+    var due = 0;
+    var kept = 0;
+    for (final day in days) {
+      if (day.isBefore(created) || !habit.isDueOn(day)) continue;
+      // Today is still open, so it only counts once it has been kept.
+      if (day == today && !habit.countsTowardStreak(day)) continue;
+      due++;
+      if (habit.countsTowardStreak(day)) kept++;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text('Last two weeks', style: TideType.sectionHeader),
+            const Spacer(),
+            GaugeNumber(
+              value: kept,
+              style: TideType.gauge(13, color: TideColors.bone),
+            ),
+            Text(' of $due kept', style: TideType.labelMuted),
           ],
-        ],
+        ),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final size = (constraints.maxWidth - _gap * (_days - 1)) / _days;
+            return Row(
+              children: [
+                for (var i = 0; i < _days; i++) ...[
+                  if (i > 0) const SizedBox(width: _gap),
+                  _DayMark(
+                    size: size,
+                    habit: habit,
+                    day: days[i],
+                    today: today,
+                    beforeHabit: days[i].isBefore(created),
+                    delay: TideMotion.cellStep * i * 2,
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _DayMark extends StatelessWidget {
+  const _DayMark({
+    required this.size,
+    required this.habit,
+    required this.day,
+    required this.today,
+    required this.beforeHabit,
+    required this.delay,
+  });
+
+  final double size;
+  final Habit habit;
+  final DateTime day;
+  final DateTime today;
+  final bool beforeHabit;
+  final Duration delay;
+
+  @override
+  Widget build(BuildContext context) {
+    final paused = habit.isPausedOn(day);
+    final due = habit.isDueOn(day) && !beforeHabit;
+    final frozen = due && habit.isFrozenOn(day);
+    final level = !due ? 0.0 : (frozen ? 0.45 : habit.progressOn(day));
+    final isToday = day == today;
+
+    final empty = TideColors.bone.withValues(alpha: 0.06);
+    final Color fill = paused || beforeHabit
+        ? Colors.transparent
+        : !due
+        ? TideColors.bone.withValues(alpha: 0.03)
+        : TideColors.intensity(
+            level,
+            hue: frozen ? TideColors.frost : TideColors.lantern,
+          );
+
+    final Border? border = isToday
+        ? Border.all(
+            color: TideColors.lantern.withValues(alpha: 0.7),
+            width: 1.4,
+          )
+        : paused
+        ? Border.all(color: TideColors.bone.withValues(alpha: 0.16))
+        : null;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: 1),
+      duration: TideMotion.cellFill + delay,
+      curve: Interval(
+        delay.inMilliseconds /
+            (TideMotion.cellFill.inMilliseconds + delay.inMilliseconds),
+        1,
+        curve: Curves.easeOutCubic,
+      ),
+      builder: (context, t, _) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: Color.lerp(empty, fill, t),
+          borderRadius: BorderRadius.circular(size * 0.26),
+          border: border,
+        ),
       ),
     );
   }
 }
 
-class _MenuRow extends StatelessWidget {
-  const _MenuRow({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.navigates = false,
-  });
+/// One of the three quiet verbs: an icon over its name, on a tile a step
+/// back from the sheet.
+class _Tile extends StatelessWidget {
+  const _Tile({required this.icon, required this.label, required this.onTap});
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
-  /// Takes you to another screen — earns a chevron. Pause acts in place and
-  /// does not, so the row tells you whether you are about to leave.
-  final bool navigates;
-
   @override
   Widget build(BuildContext context) {
     return PressScale(
       onTap: onTap,
-      // Shallower than the default: the row is full-width inside a group,
-      // and a deep press pulls it visibly away from its own dividers.
-      scale: 0.985,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-        child: Row(
+      child: Container(
+        height: 76,
+        decoration: BoxDecoration(
+          color: TideColors.shelf,
+          borderRadius: TideElevation.radius12,
+          border: Border.all(color: TideColors.hairline),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 19, color: TideColors.silt),
-            const SizedBox(width: 14),
-            Expanded(child: Text(label, style: TideType.label)),
-            if (navigates)
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 20,
-                color: TideColors.silt.withValues(alpha: 0.7),
+            Icon(
+              icon,
+              size: 20,
+              color: TideColors.bone.withValues(alpha: 0.85),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TideType.labelMuted.copyWith(
+                color: TideColors.bone,
+                fontWeight: FontWeight.w500,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),

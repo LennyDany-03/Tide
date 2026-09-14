@@ -41,6 +41,40 @@ abstract final class Minutes {
   }
 }
 
+/// A stretch of days a habit was set aside: [start] inclusive, [end]
+/// exclusive, both local midnights. An open span ([end] null) is a pause
+/// still running.
+///
+/// A pause is a range of days rather than a flag on the habit, because a
+/// flag cannot say *when*. It used to be one boolean, and every question
+/// that mattered had no answer: a paused week came back as seven misses the
+/// moment the habit was resumed — the streak it was meant to protect was the
+/// first thing it broke — and pausing a habit today rewrote last month's
+/// calendar, which stopped counting it on days it had actually been done.
+@immutable
+class PauseSpan {
+  const PauseSpan({required this.start, this.end});
+
+  final DateTime start;
+
+  /// The day the habit came back. Null while it is still paused.
+  final DateTime? end;
+
+  bool get open => end == null;
+
+  bool covers(DateTime date) {
+    final day = DateUtils.dateOnly(date);
+    return !day.isBefore(start) && (end == null || day.isBefore(end!));
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is PauseSpan && other.start == start && other.end == end;
+
+  @override
+  int get hashCode => Object.hash(start, end);
+}
+
 /// A single habit and its complete log history.
 ///
 /// Immutable — every mutation goes through [copyWith] so the store can hand
@@ -60,7 +94,7 @@ class Habit {
     this.reminderTime = const TimeOfDay(hour: 8, minute: 0),
     this.freezeAllowance = 2,
     this.freezesRemaining = 2,
-    this.paused = false,
+    this.pauses = const [],
     this.logs = const {},
     this.frozenDays = const {},
   });
@@ -89,7 +123,14 @@ class Habit {
   final int freezeAllowance;
   final int freezesRemaining;
 
-  final bool paused;
+  /// Every pause this habit has had, oldest first. At most the last is open.
+  final List<PauseSpan> pauses;
+
+  /// Set aside right now: off Today, and asking nothing of anybody.
+  bool get paused => pauses.isNotEmpty && pauses.last.open;
+
+  /// The first day of the pause that is running, if one is.
+  DateTime? get pausedSince => paused ? pauses.last.start : null;
 
   /// Date (normalised to midnight) → amount logged that day.
   final Map<DateTime, num> logs;
@@ -100,6 +141,13 @@ class Habit {
   // --- Queries ----------------------------------------------------------
 
   bool isScheduledOn(DateTime date) => days.contains(date.weekday);
+
+  bool isPausedOn(DateTime date) => pauses.any((span) => span.covers(date));
+
+  /// Whether [date] asked anything of this habit: a scheduled weekday that
+  /// was not inside a pause. Streaks, rates and summaries all count on this,
+  /// so a paused day is a rest day — neither earned nor missed.
+  bool isDueOn(DateTime date) => isScheduledOn(date) && !isPausedOn(date);
 
   num amountOn(DateTime date) => logs[DateUtils.dateOnly(date)] ?? 0;
 
@@ -148,7 +196,7 @@ class Habit {
     TimeOfDay? reminderTime,
     int? freezeAllowance,
     int? freezesRemaining,
-    bool? paused,
+    List<PauseSpan>? pauses,
     Map<DateTime, num>? logs,
     Set<DateTime>? frozenDays,
   }) {
@@ -165,7 +213,7 @@ class Habit {
       reminderTime: reminderTime ?? this.reminderTime,
       freezeAllowance: freezeAllowance ?? this.freezeAllowance,
       freezesRemaining: freezesRemaining ?? this.freezesRemaining,
-      paused: paused ?? this.paused,
+      pauses: pauses ?? this.pauses,
       logs: logs ?? this.logs,
       frozenDays: frozenDays ?? this.frozenDays,
     );

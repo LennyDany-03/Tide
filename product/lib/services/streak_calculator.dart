@@ -12,13 +12,16 @@ abstract final class StreakCalculator {
   /// Days that were neither logged nor frozen break a streak. A scheduled
   /// day that simply has not happened yet (today, before you log it) does
   /// not — otherwise every streak would read as broken each morning.
+  ///
+  /// Days inside a pause are stepped over like unscheduled ones: the run
+  /// neither grows nor breaks, so a habit comes back on the streak it left.
   static int currentStreak(Habit habit, {DateTime? asOf}) {
     final today = DateUtils.dateOnly(asOf ?? DateTime.now());
     var cursor = today;
 
     // Today gets a grace period: if it is scheduled but not yet logged,
     // start counting from yesterday instead of calling the streak broken.
-    if (habit.isScheduledOn(cursor) && !habit.countsTowardStreak(cursor)) {
+    if (habit.isDueOn(cursor) && !habit.countsTowardStreak(cursor)) {
       cursor = cursor.subtract(const Duration(days: 1));
     }
 
@@ -26,7 +29,7 @@ abstract final class StreakCalculator {
     var streak = 0;
 
     while (!cursor.isBefore(floor)) {
-      if (habit.isScheduledOn(cursor)) {
+      if (habit.isDueOn(cursor)) {
         if (!habit.countsTowardStreak(cursor)) break;
         streak++;
       }
@@ -43,7 +46,7 @@ abstract final class StreakCalculator {
     var run = 0;
 
     while (!cursor.isAfter(end)) {
-      if (habit.isScheduledOn(cursor)) {
+      if (habit.isDueOn(cursor)) {
         if (habit.countsTowardStreak(cursor)) {
           run++;
           if (run > best) best = run;
@@ -68,13 +71,30 @@ abstract final class StreakCalculator {
     var cursor = start.isBefore(floor) ? floor : start;
 
     while (!cursor.isAfter(end)) {
-      if (habit.isScheduledOn(cursor)) {
+      if (habit.isDueOn(cursor)) {
         scheduled++;
         if (habit.countsTowardStreak(cursor)) done++;
       }
       cursor = cursor.add(const Duration(days: 1));
     }
     return scheduled == 0 ? 0 : done / scheduled;
+  }
+
+  /// Every due day ever kept — logged to target or frozen — up to [asOf].
+  /// The lifetime figure on Habit detail.
+  static int keptDays(Habit habit, {DateTime? asOf}) {
+    final end = DateUtils.dateOnly(asOf ?? DateTime.now());
+    final floor = DateUtils.dateOnly(habit.createdAt);
+    final days = {...habit.logs.keys, ...habit.frozenDays};
+    return days
+        .where(
+          (day) =>
+              !day.isAfter(end) &&
+              !day.isBefore(floor) &&
+              habit.isDueOn(day) &&
+              habit.countsTowardStreak(day),
+        )
+        .length;
   }
 
   /// Aggregate completion for one day across a set of habits.
@@ -85,9 +105,8 @@ abstract final class StreakCalculator {
     var frozen = 0;
 
     for (final habit in habits) {
-      if (habit.paused) continue;
       if (DateUtils.dateOnly(habit.createdAt).isAfter(day)) continue;
-      if (!habit.isScheduledOn(day)) continue;
+      if (!habit.isDueOn(day)) continue;
 
       scheduled++;
       if (habit.isFrozenOn(day)) {
@@ -109,7 +128,7 @@ abstract final class StreakCalculator {
   static List<HabitDayEntry> dayBreakdown(List<Habit> habits, DateTime date) {
     final day = DateUtils.dateOnly(date);
     return habits
-        .where((h) => !h.paused && h.isScheduledOn(day))
+        .where((h) => h.isDueOn(day))
         .map(
           (h) => HabitDayEntry(
             habit: h,

@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
 
@@ -171,6 +172,43 @@ void main() {
     expect(find.text('Edit habit'), findsOneWidget);
     expect(find.text('Pause habit'), findsOneWidget);
     expect(find.text('Hold to delete'), findsOneWidget);
+  });
+
+  testWidgets('a paused habit leaves the list for the paused shelf, and '
+      'comes back from it', (tester) async {
+    await openShell(tester);
+
+    await tester.longPress(find.text('Morning water'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.text('Pause habit'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+
+    // Still reachable: pausing used to take the card away with no way back.
+    expect(find.text('5 of 8'), findsNothing);
+    expect(find.textContaining('Morning water paused'), findsOneWidget);
+
+    // Past the note's own lifetime, so it is not lying over the shelf.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.scrollUntilVisible(
+      find.text('Resume'),
+      300,
+      scrollable: find
+          .ancestor(of: find.text('Habits'), matching: find.byType(Scrollable))
+          .first,
+    );
+    // Clear of the floating tab bar.
+    await tester.drag(find.text('Paused'), const Offset(0, -300));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('Resume'), findsOneWidget);
+
+    await tester.tap(find.text('Resume'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+
+    expect(find.text('Resume'), findsNothing);
+    expect(find.text('5 of 8'), findsOneWidget);
   });
 
   testWidgets('the menu opens the habit detail screen', (tester) async {

@@ -323,6 +323,14 @@ class TideStore extends ChangeNotifier {
   /// Everything, including paused habits — used by history and settings.
   List<Habit> get allHabits => List.unmodifiable(_habits);
 
+  /// Habits set aside, most recently paused first — the shelf under Today's
+  /// list, which is the only way back to one once it has left the list.
+  List<Habit> get pausedHabits {
+    final paused = _habits.where((h) => h.paused).toList()
+      ..sort((a, b) => b.pausedSince!.compareTo(a.pausedSince!));
+    return List.unmodifiable(paused);
+  }
+
   Habit? habitById(String id) {
     for (final habit in _habits) {
       if (habit.id == id) return habit;
@@ -569,8 +577,9 @@ class TideStore extends ChangeNotifier {
       final frozen = Set<DateTime>.from(h.frozenDays)..remove(day);
       return h.copyWith(
         frozenDays: frozen,
-        freezesRemaining:
-            (h.freezesRemaining + 1).clamp(0, h.freezeAllowance).toInt(),
+        freezesRemaining: (h.freezesRemaining + 1)
+            .clamp(0, h.freezeAllowance)
+            .toInt(),
       );
     });
     _saveHabit(habitId);
@@ -602,8 +611,52 @@ class TideStore extends ChangeNotifier {
     _changed();
   }
 
-  void togglePause(String habitId) {
-    _mutate(habitId, (habit) => habit.copyWith(paused: !habit.paused));
+  /// Sets a habit aside from today.
+  ///
+  /// It leaves Today and stops asking for anything: from the first paused
+  /// day, each day is a rest day for this habit — not a miss, not a log, and
+  /// not a freeze spent. Nothing already logged is touched, and the days
+  /// before the pause keep counting exactly as they did.
+  ///
+  /// A day already settled is left alone. Pausing after marking today starts
+  /// the pause tomorrow, so the mark you just made still counts.
+  void pause(String habitId, {DateTime? asOf}) {
+    final habit = habitById(habitId);
+    if (habit == null || habit.paused) return;
+    final today = DateUtils.dateOnly(asOf ?? DateTime.now());
+    final start = habit.countsTowardStreak(today)
+        ? DateUtils.addDaysToDate(today, 1)
+        : today;
+
+    _mutate(habitId, (h) {
+      final spans = [...h.pauses];
+      // Resumed and paused again before the resume took effect: that is one
+      // pause, not two back to back.
+      if (spans.isNotEmpty && spans.last.end == start) {
+        spans.last = PauseSpan(start: spans.last.start);
+      } else {
+        spans.add(PauseSpan(start: start));
+      }
+      return h.copyWith(pauses: spans);
+    });
+    _saveHabit(habitId);
+  }
+
+  /// Brings a paused habit back, due again from today, on the streak it left.
+  void resume(String habitId, {DateTime? asOf}) {
+    final habit = habitById(habitId);
+    if (habit == null || !habit.paused) return;
+    final today = DateUtils.dateOnly(asOf ?? DateTime.now());
+
+    _mutate(habitId, (h) {
+      final spans = [...h.pauses];
+      final open = spans.removeLast();
+      // A pause that has not reached a day yet never happened.
+      if (open.start.isBefore(today)) {
+        spans.add(PauseSpan(start: open.start, end: today));
+      }
+      return h.copyWith(pauses: spans);
+    });
     _saveHabit(habitId);
   }
 

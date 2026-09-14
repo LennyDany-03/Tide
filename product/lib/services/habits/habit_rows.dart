@@ -33,7 +33,16 @@ abstract final class HabitRows {
       'reminder_time': _timeText(habit.reminderTime),
       'freeze_allowance': habit.freezeAllowance,
       'freezes_remaining': habit.freezesRemaining,
+      // Both, on purpose. `pauses` is what this build reads; `paused` stays
+      // true to it so a build from before pause spans still hides the habit.
       'paused': habit.paused,
+      'pauses': [
+        for (final span in habit.pauses)
+          {
+            'start': dayText(span.start),
+            'end': span.end == null ? null : dayText(span.end!),
+          },
+      ],
       'created_at': habit.createdAt.toUtc().toIso8601String(),
       'origin': origin,
     };
@@ -110,7 +119,7 @@ abstract final class HabitRows {
       reminderTime: _time(row['reminder_time']),
       freezeAllowance: allowance,
       freezesRemaining: _whole(row['freezes_remaining']) ?? allowance,
-      paused: row['paused'] == true,
+      pauses: _pauses(row),
       logs: logs,
       frozenDays: frozenDays,
     );
@@ -155,6 +164,50 @@ abstract final class HabitRows {
   }
 
   static int? _whole(Object? value) => _number(value)?.toInt();
+
+  /// The pause history, oldest first, with at most the last span open.
+  ///
+  /// A row from before spans existed carries only `paused: true`. It has no
+  /// record of when the pause began, so the best reading is the last time
+  /// the row changed — the pause is very likely the change that was made —
+  /// and failing that, today. Either way the habit stays paused.
+  static List<PauseSpan> _pauses(Map<String, dynamic> row) {
+    final spans = <PauseSpan>[];
+    final raw = row['pauses'];
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final start = parseDay(item['start']);
+        if (start == null) continue;
+        final end = parseDay(item['end']);
+        if (end != null && !end.isAfter(start)) continue;
+        spans.add(PauseSpan(start: start, end: end));
+      }
+    }
+    spans.sort((a, b) => a.start.compareTo(b.start));
+    // Only the newest span may still be running.
+    for (var i = 0; i < spans.length - 1; i++) {
+      if (spans[i].open) {
+        spans[i] = PauseSpan(start: spans[i].start, end: spans[i + 1].start);
+      }
+    }
+
+    final flagged = row['paused'] == true;
+    final running = spans.isNotEmpty && spans.last.open;
+    if (flagged && !running) {
+      final updated = row['updated_at'];
+      final since = updated is String
+          ? DateUtils.dateOnly(_instant(updated))
+          : DateUtils.dateOnly(DateTime.now());
+      final floor = spans.isEmpty ? null : spans.last.end;
+      spans.add(
+        PauseSpan(
+          start: floor != null && since.isBefore(floor) ? floor : since,
+        ),
+      );
+    }
+    return spans;
+  }
 
   static DateTime _instant(Object? value) {
     final parsed = value is String ? DateTime.tryParse(value) : null;

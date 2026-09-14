@@ -18,6 +18,7 @@ import 'widgets/habit_card.dart';
 import 'widgets/habit_context_menu.dart';
 import 'widgets/habit_log_sheet.dart';
 import 'widgets/hero_stat_card.dart';
+import 'widgets/paused_shelf.dart';
 import 'widgets/home_header.dart';
 import 'widgets/reordering_habit_list.dart';
 import 'widgets/wave_refresh_indicator.dart';
@@ -41,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<double> _weekLevels(Habit habit) {
     return [
       for (final day in _week())
-        if (!habit.isScheduledOn(day))
+        if (!habit.isDueOn(day))
           0.0
         else if (habit.isFrozenOn(day))
           0.5
@@ -53,8 +54,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Which of those seven were frozen. Kept alongside the levels rather
   /// than folded into them: a frozen day and a half-logged day both sit at
   /// 0.5, and they should not come out the same colour.
-  List<bool> _weekFrozen(Habit habit) =>
-      [for (final day in _week()) habit.isFrozenOn(day)];
+  List<bool> _weekFrozen(Habit habit) => [
+    for (final day in _week()) habit.isFrozenOn(day),
+  ];
 
   void _log(Habit habit, num amount) {
     final store = TideScope.read(context);
@@ -102,6 +104,40 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Pauses or resumes, and says what just happened.
+  ///
+  /// A pause takes the card off the list under the thumb, so it is never
+  /// silent: the note names what was kept and where the habit went, and
+  /// offers the way back while the card is still fresh in mind.
+  void _togglePause(Habit habit) {
+    final store = TideScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (habit.paused) {
+      store.resume(habit.id);
+      return;
+    }
+
+    store.pause(habit.id);
+    final streak = StreakCalculator.currentStreak(habit);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            streak > 0
+                ? '${habit.name} paused. Your $streak day streak is held.'
+                : '${habit.name} paused. Find it under Paused.',
+            style: TideType.label,
+          ),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () => store.resume(habit.id),
+          ),
+        ),
+      );
+  }
+
   void _openMenu(Habit habit) {
     final store = TideScope.read(context);
     showHabitContextMenu(
@@ -110,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
       streak: StreakCalculator.currentStreak(habit),
       onDetails: () => context.push(Routes.habit(habit.id)),
       onEdit: () => context.push(Routes.editHabit(habit.id)),
-      onPause: () => store.togglePause(habit.id),
+      onPause: () => _togglePause(habit),
       onDelete: () => store.deleteHabit(habit.id),
       onComplete: habit.type == HabitType.binary
           ? () => _log(habit, habit.target)
@@ -136,6 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final store = TideScope.of(context);
     final habits = store.habits;
+    final paused = store.pausedHabits;
     final summary = store.today;
 
     return Stack(
@@ -270,6 +307,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ],
+              if (paused.isNotEmpty)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 30, 20, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: PausedShelf(
+                      habits: paused,
+                      onOpen: (habit) => context.push(Routes.habit(habit.id)),
+                      onMenu: _openMenu,
+                      onResume: _togglePause,
+                    ),
+                  ),
+                ),
               // Clears the floating tab bar the list sits under.
               SliverToBoxAdapter(
                 child: SizedBox(
