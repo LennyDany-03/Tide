@@ -140,9 +140,9 @@ abstract final class ProFeatures {
       blurb: 'Pro adds the streak dashboard to your home screen.',
     ),
     ProFeature.habitHeatmapWidget: ProFeatureSpec(
-      label: 'Habit Heatmap widget',
-      freeAllowance: '—',
-      blurb: 'Pro puts a habit\'s history on your home screen.',
+      label: 'A heatmap for every habit',
+      freeAllowance: '1 heatmap widget',
+      blurb: 'Pro pins a heatmap widget for every habit you keep.',
     ),
     ProFeature.weeklyRecapWidget: ProFeatureSpec(
       label: 'Weekly Recap widget',
@@ -151,8 +151,8 @@ abstract final class ProFeatures {
     ),
     ProFeature.widgetInstances: ProFeatureSpec(
       label: 'A streak widget for every habit',
-      freeAllowance: '1 streak widget',
-      blurb: 'Pro pins a streak widget for every habit you keep.',
+      freeAllowance: '1 of each',
+      blurb: 'Pro pins a Streak or Heatmap widget for every habit you keep.',
     ),
   };
 

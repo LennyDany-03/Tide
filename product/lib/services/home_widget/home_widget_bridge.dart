@@ -6,7 +6,6 @@ import 'package:home_widget/home_widget.dart';
 
 import '../models/habit.dart';
 import '../tasks/task.dart';
-import 'heatmap_export.dart';
 import 'widget_payload.dart';
 
 /// The two widgets that are each tied to one habit, chosen per placed widget.
@@ -24,6 +23,20 @@ enum HabitWidgetKind {
       if (kind.name == name) return kind;
     }
     return null;
+  }
+}
+
+/// The verb in a widget tap URI.
+///
+/// Native writes `tide://widget/setup?id=…` — Dart's [Uri.host] is then
+/// `widget`, not `setup`. The action is the first path segment. `tide://setup`
+/// (host only) is accepted too, so an older link still routes.
+abstract final class WidgetLaunch {
+  static String? action(Uri uri) {
+    if (uri.host == 'widget') {
+      return uri.pathSegments.isEmpty ? null : uri.pathSegments.first;
+    }
+    return uri.host.isEmpty ? null : uri.host;
   }
 }
 
@@ -49,7 +62,6 @@ class HomeWidgetBridge {
 
   static String _streakKey(int id) => 'single_habit_streak_$id';
   static String _heatmapKey(int id) => 'habit_heatmap_$id';
-  static String _heatmapImageKey(int id) => 'habit_heatmap_image_$id';
 
   static const _todayProvider = 'TodayHabitsWidgetProvider';
   static const _dashboardProvider = 'HabitDashboardWidgetProvider';
@@ -104,17 +116,15 @@ class HomeWidgetBridge {
     });
   }
 
-  /// Whether a placed widget of [kind] is past what the plan allows: the
-  /// Heatmap is Pro outright, and a free account gets one Streak widget —
-  /// the first one placed. Mirrors `WidgetUi.instanceLocked` on the native
-  /// side, which draws the same decision.
+  /// Whether a placed widget of [kind] is past what the plan allows: a free
+  /// account gets the first Streak and the first Heatmap; every later copy
+  /// is Pro. Mirrors `WidgetUi.instanceLocked` on the native side.
   static Future<bool> instanceLocked(
     HabitWidgetKind kind,
     int widgetId, {
     required bool isPro,
   }) async {
     if (isPro) return false;
-    if (kind == HabitWidgetKind.heatmap) return true;
     try {
       final ids = (await _installed())[kind.provider] ?? const [];
       return ids.isNotEmpty && ids.first != widgetId;
@@ -161,18 +171,13 @@ class HomeWidgetBridge {
       }
 
       for (final id in installed[HabitWidgetKind.heatmap.provider] ?? const <int>[]) {
-        final habit = state.signedIn && state.isPro ? state.habitFor(id) : null;
+        final habit = state.signedIn ? state.habitFor(id) : null;
+        // The grid is drawn natively from the series inside this payload,
+        // at the widget's own size — no off-screen render to wait on.
         await HomeWidget.saveWidgetData<String>(
           _heatmapKey(id),
           jsonEncode(WidgetPayload.heatmapHeader(habit)),
         );
-        if (habit != null) {
-          await HomeWidget.renderFlutterWidget(
-            HeatmapExport(series: WidgetPayload.heatmapSeries(habit)),
-            key: _heatmapImageKey(id),
-            logicalSize: HeatmapExport.size,
-          );
-        }
       }
 
       for (final provider in [

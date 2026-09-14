@@ -182,7 +182,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 SettingsRow(
                   label: 'Home screen widgets',
-                  subtitle: "Today's Habits, and the streak dashboard",
+                  subtitle: 'Habits and to-dos, right on the home screen',
                   icon: Icons.widgets_outlined,
                   showChevron: true,
                   onTap: () => context.push(Routes.homeWidgets),

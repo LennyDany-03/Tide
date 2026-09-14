@@ -3,61 +3,68 @@ package com.example.tide
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.SharedPreferences
-import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
-import es.antonborri.home_widget.HomeWidgetLaunchIntent
-import es.antonborri.home_widget.HomeWidgetProvider
 
-/**
- * Free widget: one pinned habit's name and current streak (picked in the
- * app's Settings → Home screen widgets, not through a native configure
- * activity — see `DeviceFlags.streakWidgetHabitId` on the Dart side). Tap
- * opens the same `habit`/`habit-detail` deep link Today's Habits rows use;
- * with nothing pinned yet, it opens the widget gallery to pin one.
- */
-class SingleHabitStreakWidgetProvider : HomeWidgetProvider() {
+class SingleHabitStreakWidgetProvider : TideHomeWidgetProvider() {
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
         widgetData: SharedPreferences,
     ) {
-        val payload = WidgetPayloadReader.singleHabitStreak(widgetData)
-
         appWidgetIds.forEach { widgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_single_habit_streak).apply {
-                if (payload?.configured == true) {
-                    setViewVisibility(R.id.streak_content, View.VISIBLE)
-                    setViewVisibility(R.id.streak_unconfigured, View.GONE)
-                    setTextViewText(R.id.streak_number, payload.streak.toString())
-                    setTextViewText(R.id.streak_name, payload.name)
-                    setImageViewResource(
-                        R.id.streak_status,
-                        if (payload.doneToday) R.drawable.widget_status_done else R.drawable.widget_status_due,
-                    )
-                    val host = if (payload.type == "binary") "habit" else "habit-detail"
-                    setOnClickPendingIntent(
-                        R.id.streak_container,
-                        HomeWidgetLaunchIntent.getActivity(
-                            context,
-                            MainActivity::class.java,
-                            Uri.parse("tide://widget/$host?id=${payload.id}"),
-                        ),
-                    )
-                } else {
-                    setViewVisibility(R.id.streak_content, View.GONE)
-                    setViewVisibility(R.id.streak_unconfigured, View.VISIBLE)
-                    setOnClickPendingIntent(
-                        R.id.streak_container,
-                        HomeWidgetLaunchIntent.getActivity(
-                            context,
-                            MainActivity::class.java,
-                            Uri.parse("tide://widget/streak-unconfigured"),
-                        ),
-                    )
-                }
+            if (WidgetUi.instanceLocked(
+                    context,
+                    SingleHabitStreakWidgetProvider::class.java,
+                    widgetId,
+                    WidgetUi.isPro(widgetData),
+                )
+            ) {
+                appWidgetManager.updateAppWidget(
+                    widgetId,
+                    LockedWidgetViews.build(
+                        context,
+                        R.string.widget_streak_title,
+                        WidgetUi.upgradeUri().toString(),
+                    ),
+                )
+                return@forEach
             }
+
+            val payload = WidgetPayloadReader.singleHabitStreak(widgetData, widgetId)
+            val configured = payload?.configured == true
+            val views = RemoteViews(context.packageName, R.layout.widget_single_habit_streak)
+
+            views.setViewVisibility(R.id.streak_content, if (configured) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.streak_unconfigured, if (configured) View.GONE else View.VISIBLE)
+            views.setViewVisibility(
+                R.id.streak_done,
+                if (configured && payload.doneToday) View.VISIBLE else View.GONE,
+            )
+
+            if (configured) {
+                views.setImageViewResource(R.id.streak_flame, WidgetUi.flame(payload.streak))
+                views.setTextViewText(R.id.streak_number, payload.streak.toString())
+                views.setTextViewText(R.id.streak_name, payload.name)
+                WidgetUi.click(
+                    context,
+                    views,
+                    R.id.streak_container,
+                    WidgetUi.habitUri(payload.id ?: "", payload.type),
+                )
+                WidgetUi.click(
+                    context,
+                    views,
+                    R.id.streak_name,
+                    WidgetUi.setupUri("streak", widgetId),
+                )
+            } else {
+                val setup = WidgetUi.setupUri("streak", widgetId)
+                WidgetUi.click(context, views, R.id.streak_container, setup, widgetId)
+                WidgetUi.click(context, views, R.id.streak_unconfigured, setup, widgetId + 1)
+            }
+
             appWidgetManager.updateAppWidget(widgetId, views)
         }
     }

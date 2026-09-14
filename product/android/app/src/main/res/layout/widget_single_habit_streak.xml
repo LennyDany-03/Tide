@@ -1,58 +1,96 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Free, 1x1. One layout for both states (like widget_today_habits.xml's
-     empty state) rather than a separate "unconfigured" tree — there's only
-     ever one thing to hide or show. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/streak_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_card_background">
+    android:background="@drawable/widget_card_background"
+    android:clickable="true"
+    android:focusable="true">
 
     <LinearLayout
         android:id="@+id/streak_content"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
         android:gravity="center"
-        android:padding="8dp">
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <ImageView
+            android:id="@+id/streak_flame"
+            android:layout_width="40dp"
+            android:layout_height="46dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_flame" />
 
         <TextView
             android:id="@+id/streak_number"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
             android:fontFamily="@font/space_grotesk_medium"
-            android:textColor="@color/tide_lantern"
-            android:textSize="28sp" />
+            android:includeFontPadding="false"
+            android:textColor="@color/tide_bone"
+            android:textSize="34sp" />
 
-        <ImageView
-            android:id="@+id/streak_status"
-            android:layout_width="8dp"
-            android:layout_height="8dp"
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:layout_marginBottom="4dp" />
+            android:fontFamily="@font/manrope_medium"
+            android:text="@string/widget_day_streak"
+            android:textColor="@color/tide_silt"
+            android:textSize="11sp" />
 
         <TextView
             android:id="@+id/streak_name"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
             android:ellipsize="end"
             android:fontFamily="@font/manrope_medium"
             android:gravity="center"
             android:maxLines="1"
-            android:textColor="@color/tide_silt"
-            android:textSize="11sp" />
+            android:textColor="@color/tide_lantern"
+            android:textSize="12sp" />
     </LinearLayout>
 
-    <TextView
+    <!-- Logged today: a small check in the corner, so the widget answers
+         "have I done it?" without opening the app. -->
+    <ImageView
+        android:id="@+id/streak_done"
+        android:layout_width="16dp"
+        android:layout_height="16dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="12dp"
+        android:contentDescription="@null"
+        android:src="@drawable/widget_check_done"
+        android:visibility="gone" />
+
+    <LinearLayout
         android:id="@+id/streak_unconfigured"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="center"
-        android:fontFamily="@font/manrope_medium"
+        android:clickable="true"
+        android:focusable="true"
         android:gravity="center"
+        android:orientation="vertical"
         android:padding="12dp"
-        android:text="@string/widget_pick_a_habit"
-        android:textColor="@color/tide_silt"
-        android:textSize="12sp"
-        android:visibility="gone" />
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="37dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_flame_out" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:fontFamily="@font/manrope_medium"
+            android:gravity="center"
+            android:text="@string/widget_choose_habit"
+            android:textColor="@color/tide_silt"
+            android:textSize="12sp" />
+    </LinearLayout>
 </FrameLayout>

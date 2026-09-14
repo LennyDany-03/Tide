@@ -138,12 +138,14 @@ class HomeWidgetsScreen extends StatelessWidget {
                 onAdd: () => _pin(context, 'QuickAddWidgetProvider'),
               ),
               const SizedBox(height: 16),
-              gated(
-                feature: ProFeature.habitHeatmapWidget,
+              WidgetGalleryCard(
                 title: 'Heatmap',
-                subtitle: 'Half a year of one habit. Tap to choose which.',
+                subtitle: store.locked(ProFeature.habitHeatmapWidget)
+                    ? 'Half a year of one habit. Tap the widget to choose which — '
+                          'Pro adds one for every habit.'
+                    : 'Half a year of one habit. Tap the widget to choose which.',
                 preview: const HeatmapPreview(),
-                provider: 'HabitHeatmapWidgetProvider',
+                onAdd: () => _pin(context, 'HabitHeatmapWidgetProvider'),
               ),
               const SizedBox(height: 16),
               gated(

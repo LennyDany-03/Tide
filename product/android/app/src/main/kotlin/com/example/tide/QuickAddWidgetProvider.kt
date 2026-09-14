@@ -4,6 +4,8 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.net.Uri
+import android.os.Bundle
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 
@@ -26,10 +28,26 @@ class QuickAddWidgetProvider : AppWidgetProvider() {
             Uri.parse("tide://widget/quick-add"),
         )
         appWidgetIds.forEach { widgetId ->
+            val wide = WidgetUi.size(context, appWidgetManager, widgetId, 70, 70).widthDp >= LABEL_MIN_WIDTH_DP
             val views = RemoteViews(context.packageName, R.layout.widget_quick_add).apply {
+                setViewVisibility(R.id.quick_add_label, if (wide) View.VISIBLE else View.GONE)
                 setOnClickPendingIntent(R.id.quick_add_container, pendingIntent)
             }
             appWidgetManager.updateAppWidget(widgetId, views)
         }
+    }
+
+    /** Widened past one cell, the button gets its "New habit" label. */
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        onUpdate(context, appWidgetManager, intArrayOf(appWidgetId))
+    }
+
+    private companion object {
+        const val LABEL_MIN_WIDTH_DP = 150
     }
 }

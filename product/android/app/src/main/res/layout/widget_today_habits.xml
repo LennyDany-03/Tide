@@ -1,154 +1,100 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 5 fixed row slots (AppConstants.freeHabitLimit) rather than a
-     RemoteViewsService list — the free plan never has more habits than
-     rows here, so a static layout with unused rows set to View.GONE is
-     enough; see TodayHabitsWidgetProvider.kt. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/today_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@drawable/widget_card_background"
-    android:paddingHorizontal="16dp"
-    android:paddingVertical="14dp">
+    android:orientation="vertical"
+    android:paddingStart="14dp"
+    android:paddingTop="14dp"
+    android:paddingEnd="14dp"
+    android:paddingBottom="10dp">
 
-    <TextView
-        android:id="@+id/today_title"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:fontFamily="@font/manrope_medium"
-        android:text="@string/widget_today_title"
-        android:textColor="@color/tide_silt"
-        android:textSize="12sp" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-    <TextView
-        android:id="@+id/today_empty_state"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fontFamily="@font/manrope_regular"
-        android:text="@string/widget_open_tide"
-        android:textColor="@color/tide_bone"
-        android:textSize="13sp"
-        android:visibility="gone" />
-
-    <LinearLayout
-        android:id="@+id/today_row_1"
-        android:layout_width="match_parent"
-        android:layout_height="34dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-        <ImageView
-            android:id="@+id/today_status_1"
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:layout_marginEnd="10dp"
-            android:src="@drawable/widget_status_due" />
-        <TextView
-            android:id="@+id/today_name_1"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="@font/manrope_medium"
-            android:maxLines="1"
-            android:textColor="@color/tide_bone"
-            android:textSize="14sp" />
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/manrope_medium"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_today_title"
+                android:textColor="@color/tide_bone"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/today_meta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:fontFamily="@font/manrope_regular"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="@color/tide_silt"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="42dp"
+            android:layout_height="42dp">
+
+            <ProgressBar
+                android:id="@+id/today_progress"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:indeterminate="false"
+                android:max="100"
+                android:progress="0"
+                android:progressDrawable="@drawable/widget_ring_progress" />
+
+            <TextView
+                android:id="@+id/today_percent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:fontFamily="@font/space_grotesk_medium"
+                android:includeFontPadding="false"
+                android:textColor="@color/tide_bone"
+                android:textSize="11sp" />
+        </FrameLayout>
     </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/today_row_2"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="34dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-        <ImageView
-            android:id="@+id/today_status_2"
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:layout_marginEnd="10dp"
-            android:src="@drawable/widget_status_due" />
-        <TextView
-            android:id="@+id/today_name_2"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="@font/manrope_medium"
-            android:maxLines="1"
-            android:textColor="@color/tide_bone"
-            android:textSize="14sp" />
-    </LinearLayout>
+        android:layout_height="0dp"
+        android:layout_marginTop="12dp"
+        android:layout_weight="1">
 
-    <LinearLayout
-        android:id="@+id/today_row_3"
-        android:layout_width="match_parent"
-        android:layout_height="34dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-        <ImageView
-            android:id="@+id/today_status_3"
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:layout_marginEnd="10dp"
-            android:src="@drawable/widget_status_due" />
-        <TextView
-            android:id="@+id/today_name_3"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="@font/manrope_medium"
-            android:maxLines="1"
-            android:textColor="@color/tide_bone"
-            android:textSize="14sp" />
-    </LinearLayout>
+        <!-- Scrolls: rows come from WidgetListService, so every due item is
+             reachable however small the widget is resized. -->
+        <ListView
+            android:id="@+id/today_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@android:color/transparent"
+            android:dividerHeight="6dp"
+            android:scrollbars="none" />
 
-    <LinearLayout
-        android:id="@+id/today_row_4"
-        android:layout_width="match_parent"
-        android:layout_height="34dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-        <ImageView
-            android:id="@+id/today_status_4"
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:layout_marginEnd="10dp"
-            android:src="@drawable/widget_status_due" />
         <TextView
-            android:id="@+id/today_name_4"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
+            android:id="@+id/today_empty_state"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:fontFamily="@font/manrope_medium"
-            android:maxLines="1"
-            android:textColor="@color/tide_bone"
-            android:textSize="14sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/today_row_5"
-        android:layout_width="match_parent"
-        android:layout_height="34dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-        <ImageView
-            android:id="@+id/today_status_5"
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:layout_marginEnd="10dp"
-            android:src="@drawable/widget_status_due" />
-        <TextView
-            android:id="@+id/today_name_5"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="@font/manrope_medium"
-            android:maxLines="1"
-            android:textColor="@color/tide_bone"
-            android:textSize="14sp" />
-    </LinearLayout>
+            android:gravity="center"
+            android:text="@string/widget_nothing_due"
+            android:textColor="@color/tide_silt"
+            android:textSize="13sp"
+            android:visibility="gone" />
+    </FrameLayout>
 </LinearLayout>

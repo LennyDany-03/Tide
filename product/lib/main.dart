@@ -244,6 +244,10 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
   /// The palette Material's theme was last built for.
   late TidePalette _palette;
 
+  /// A widget tap that arrived before the session was restored. Opened on
+  /// the next [TideStore.sessionChanges] once somebody is signed in.
+  Uri? _pendingWidgetLaunch;
+
   @override
   void initState() {
     super.initState();
@@ -253,6 +257,7 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
     _palette = _store.palette;
     TideColors.use(_palette);
     _store.addListener(_onStore);
+    _store.sessionChanges.addListener(_openPendingWidgetLaunch);
     _router.routerDelegate.addListener(_trackRoute);
     _openedReminders = _tasks.reminders.opened.listen(_openTask);
     if (widget.homeShortcuts) {
@@ -310,9 +315,19 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
     _widgetTaps = HomeWidget.widgetClicked.listen(_openFromWidget);
   }
 
+  void _openPendingWidgetLaunch() {
+    final pending = _pendingWidgetLaunch;
+    if (pending != null && _store.signedIn) _openFromWidget(pending);
+  }
+
   void _openFromWidget(Uri? uri) {
-    if (uri == null || !_store.signedIn) return;
-    switch (uri.host) {
+    if (uri == null) return;
+    if (!_store.signedIn) {
+      _pendingWidgetLaunch = uri;
+      return;
+    }
+    _pendingWidgetLaunch = null;
+    switch (WidgetLaunch.action(uri)) {
       case 'habit':
         final id = uri.queryParameters['id'];
         if (id == null || _store.habitById(id) == null) return;
@@ -341,12 +356,25 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
         unawaited(
           _router.push(_store.canAddHabit ? Routes.newHabit : Routes.upgrade),
         );
+      case 'heatmap':
+        final id = uri.queryParameters['id'];
+        if (id == null || _store.habitById(id) == null) return;
+        _router.go(Routes.today);
+        unawaited(_router.push(Routes.habit(id)));
+      case 'dashboard-locked':
+      case 'heatmap-locked':
+      case 'recap-locked':
+        _router.go(Routes.today);
+        unawaited(_router.push(Routes.upgrade));
       case 'setup':
         final id = int.tryParse(uri.queryParameters['id'] ?? '');
         final kind = HabitWidgetKind.byName(uri.queryParameters['kind']);
         if (id == null || kind == null) return;
         _router.go(Routes.today);
-        unawaited(_router.push(Routes.widgetSetup(id, kind.name)));
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          unawaited(_router.push(Routes.widgetSetup(id, kind.name)));
+        });
     }
   }
 
@@ -370,6 +398,7 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
     unawaited(_widgetTaps?.cancel());
     _tasks.dispose();
     _onToday.dispose();
+    _store.sessionChanges.removeListener(_openPendingWidgetLaunch);
     _store
       ..removeListener(_onStore)
       ..dispose();

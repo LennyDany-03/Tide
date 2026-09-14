@@ -127,6 +127,13 @@
                 android:resource="@xml/weekly_recap_widget_info"/>
         </receiver>
 
+        <!-- Rows for the scrolling Today, Tasks and Streaks widgets. Only the
+             launcher, holding BIND_REMOTEVIEWS, may bind it. -->
+        <service
+            android:name=".WidgetListService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
         <!-- flutter_local_notifications: delivers scheduled task reminders,
              and reschedules them after a reboot or an app update. -->
         <receiver

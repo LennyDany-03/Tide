@@ -143,7 +143,7 @@ class _WidgetSetupScreenState extends State<WidgetSetupScreen> {
                       habit: habit,
                       selected: habit.id == current,
                       saving: _saving == habit.id,
-                      enabled: _locked == false && _saving == null,
+                      enabled: _locked != true && _saving == null,
                       onTap: () => _choose(habit),
                     ),
                     const SizedBox(height: 10),

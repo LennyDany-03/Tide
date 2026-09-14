@@ -3,32 +3,10 @@ package com.example.tide
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.SharedPreferences
-import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
-import es.antonborri.home_widget.HomeWidgetLaunchIntent
-import es.antonborri.home_widget.HomeWidgetProvider
 
-/**
- * Free widget: up to [MAX_ROWS] of today's due-or-overdue tasks. Tapping a
- * row opens that task (see `_openTask` in lib/main.dart) rather than
- * completing it — v1 widgets are deep-link only, no native business logic.
- */
-class TodayTasksWidgetProvider : HomeWidgetProvider() {
-    companion object {
-        const val MAX_ROWS = 5
-        private val ROW_IDS =
-            intArrayOf(R.id.tasks_row_1, R.id.tasks_row_2, R.id.tasks_row_3, R.id.tasks_row_4, R.id.tasks_row_5)
-        private val STATUS_IDS = intArrayOf(
-            R.id.tasks_status_1, R.id.tasks_status_2, R.id.tasks_status_3,
-            R.id.tasks_status_4, R.id.tasks_status_5,
-        )
-        private val TITLE_IDS = intArrayOf(
-            R.id.tasks_title_1, R.id.tasks_title_2, R.id.tasks_title_3,
-            R.id.tasks_title_4, R.id.tasks_title_5,
-        )
-    }
-
+class TodayTasksWidgetProvider : TideHomeWidgetProvider() {
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -36,33 +14,56 @@ class TodayTasksWidgetProvider : HomeWidgetProvider() {
         widgetData: SharedPreferences,
     ) {
         val payload = WidgetPayloadReader.todayTasks(widgetData)
-        val rows = payload?.rows.orEmpty().take(MAX_ROWS)
+        val signedIn = payload?.signedIn == true
+        val overdue = payload?.overdue ?: 0
+        val total = payload?.total ?: 0
 
         appWidgetIds.forEach { widgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_today_tasks).apply {
-                setViewVisibility(R.id.tasks_empty_state, if (rows.isEmpty()) View.VISIBLE else View.GONE)
+            val views = RemoteViews(context.packageName, R.layout.widget_today_tasks)
 
-                for (i in ROW_IDS.indices) {
-                    if (i >= rows.size) {
-                        setViewVisibility(ROW_IDS[i], View.GONE)
-                        continue
-                    }
-                    val row = rows[i]
-                    setViewVisibility(ROW_IDS[i], View.VISIBLE)
-                    setTextViewText(TITLE_IDS[i], row.title)
-                    setImageViewResource(
-                        STATUS_IDS[i],
-                        if (row.overdue) R.drawable.widget_status_overdue else R.drawable.widget_status_due,
-                    )
-                    val pendingIntent = HomeWidgetLaunchIntent.getActivity(
-                        context,
-                        MainActivity::class.java,
-                        Uri.parse("tide://widget/task?id=${row.id}"),
-                    )
-                    setOnClickPendingIntent(ROW_IDS[i], pendingIntent)
-                }
-            }
+            views.setTextViewText(
+                R.id.tasks_meta,
+                when {
+                    !signedIn || total == 0 -> ""
+                    total == 1 -> context.getString(R.string.widget_one_due)
+                    else -> context.getString(R.string.widget_n_due, total)
+                },
+            )
+            views.setViewVisibility(
+                R.id.tasks_overdue,
+                if (signedIn && overdue > 0) View.VISIBLE else View.GONE,
+            )
+            views.setTextViewText(
+                R.id.tasks_overdue,
+                if (overdue == 1) {
+                    context.getString(R.string.widget_one_overdue)
+                } else {
+                    context.getString(R.string.widget_n_overdue, overdue)
+                },
+            )
+            views.setTextViewText(
+                R.id.tasks_empty_state,
+                context.getString(
+                    if (signedIn) R.string.widget_tasks_empty else R.string.widget_open_tide,
+                ),
+            )
+
+            WidgetUi.bindList(
+                context,
+                views,
+                R.id.tasks_list,
+                R.id.tasks_empty_state,
+                widgetId,
+                WidgetListService.KIND_TASKS,
+            )
+            WidgetUi.click(
+                context,
+                views,
+                R.id.tasks_container,
+                android.net.Uri.parse("tide://widget/tasks"),
+            )
             appWidgetManager.updateAppWidget(widgetId, views)
+            WidgetUi.refreshList(appWidgetManager, widgetId, R.id.tasks_list)
         }
     }
 }

@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- The four intensity tiers below mirror TideColors.intensity's own
-     alpha steps, for the picker's static preview grid only — the real
-     widget shows a rendered HeatmapExport image, not these drawables. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#12E8F1F6" />
-    <corners android:radius="3dp" />
-</shape>

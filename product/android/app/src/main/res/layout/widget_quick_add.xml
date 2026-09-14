@@ -1,25 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Free, 1x1. Entirely static — see QuickAddWidgetProvider.kt, which
-     doesn't read widgetData at all. -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     doesn't read widgetData at all. Also the picker preview. On the same
+     card as every other Tide widget, so it doesn't float bare on the
+     wallpaper; the label shows once the widget is widened. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/quick_add_container"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_card_background"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:padding="8dp">
 
     <FrameLayout
-        android:layout_width="52dp"
-        android:layout_height="52dp"
-        android:layout_gravity="center"
+        android:layout_width="46dp"
+        android:layout_height="46dp"
         android:background="@drawable/widget_add_button_background">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:layout_gravity="center"
-            android:fontFamily="@font/manrope_medium"
-            android:includeFontPadding="false"
-            android:text="+"
-            android:textColor="@color/tide_on_lantern"
-            android:textSize="30sp" />
+            android:contentDescription="@string/widget_new_habit"
+            android:src="@drawable/ic_widget_plus" />
     </FrameLayout>
-</FrameLayout>
+
+    <TextView
+        android:id="@+id/quick_add_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:fontFamily="@font/manrope_medium"
+        android:maxLines="1"
+        android:text="@string/widget_new_habit"
+        android:textColor="@color/tide_bone"
+        android:textSize="14sp"
+        android:visibility="gone" />
+</LinearLayout>

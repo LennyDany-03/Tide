@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tide/config/app_constants.dart';
+import 'package:tide/services/home_widget/home_widget_bridge.dart';
 import 'package:tide/services/home_widget/widget_payload.dart';
 import 'package:tide/services/models/habit.dart';
 import 'package:tide/services/models/tide_glyph.dart';
@@ -37,10 +37,12 @@ Habit _streakHabit(String id, String name, int streakDays) => _habit(
   id,
   name,
   logs: {
-    for (var i = 0; i < streakDays; i++)
-      DateUtils.addDaysToDate(_today, -i): 1,
+    for (var i = 0; i < streakDays; i++) DateUtils.addDaysToDate(_today, -i): 1,
   },
 );
+
+int get _heatmapDays =>
+    WidgetPayload.heatmapWeeks * 7 - (7 - _today.weekday);
 
 void main() {
   group('WidgetPayload.todayHabits', () {
@@ -62,17 +64,20 @@ void main() {
       final rows = payload['rows'] as List;
       expect(rows, hasLength(1));
       expect((rows.single as Map)['id'], '1');
+      expect(payload['total'], 1);
+      expect(payload['done'], 0);
     });
 
-    test('caps at the free habit limit', () {
+    test('caps at the list row budget', () {
       final habits = [
-        for (var i = 0; i < AppConstants.freeHabitLimit + 3; i++)
+        for (var i = 0; i < WidgetPayload.maxListRows + 3; i++)
           _habit('$i', 'Habit $i'),
       ];
 
       final payload = WidgetPayload.todayHabits(habits, asOf: _today);
 
-      expect(payload['rows'], hasLength(AppConstants.freeHabitLimit));
+      expect(payload['rows'], hasLength(WidgetPayload.maxListRows));
+      expect(payload['total'], WidgetPayload.maxListRows + 3);
     });
 
     test('marks a completed habit and a frozen habit both done', () {
@@ -92,37 +97,35 @@ void main() {
       ], asOf: _today);
       final rows = (payload['rows'] as List).cast<Map<String, Object?>>();
 
-      bool doneOf(String id) => rows.firstWhere((r) => r['id'] == id)['done'] as bool;
+      bool doneOf(String id) =>
+          rows.firstWhere((r) => r['id'] == id)['done'] as bool;
       expect(doneOf('c'), isTrue);
       expect(doneOf('f'), isTrue);
       expect(doneOf('u'), isFalse);
+      expect(payload['done'], 2);
     });
 
-    test('carries each habit\'s type through, for the native tap decision', () {
-      final quantity = _habit('q', 'Water', type: HabitType.quantity);
+    test('carries each habit\'s type and streak through', () {
+      final quantity = _streakHabit('q', 'Water', 5);
 
       final payload = WidgetPayload.todayHabits([quantity], asOf: _today);
       final row = (payload['rows'] as List).single as Map<String, Object?>;
 
-      expect(row['type'], 'quantity');
+      expect(row['type'], 'binary');
+      expect(row['streak'], 5);
     });
   });
 
   group('WidgetPayload.habitDashboard', () {
     test('carries isPro through unchanged', () {
-      final proPayload = WidgetPayload.habitDashboard(
-        [],
-        isPro: true,
-        asOf: _today,
+      expect(
+        WidgetPayload.habitDashboard([], isPro: true, asOf: _today)['isPro'],
+        isTrue,
       );
-      final freePayload = WidgetPayload.habitDashboard(
-        [],
-        isPro: false,
-        asOf: _today,
+      expect(
+        WidgetPayload.habitDashboard([], isPro: false, asOf: _today)['isPro'],
+        isFalse,
       );
-
-      expect(proPayload['isPro'], isTrue);
-      expect(freePayload['isPro'], isFalse);
     });
 
     test('orders rows by current streak, longest first', () {
@@ -141,11 +144,13 @@ void main() {
 
       expect(rows.map((r) => r['id']), ['b', 'a', 'c']);
       expect(rows.first['streak'], 5);
+      expect(payload['best'], 5);
+      expect(rows.first['week'], hasLength(7));
     });
 
-    test('caps at the dashboard row budget', () {
+    test('caps at the list row budget', () {
       final habits = [
-        for (var i = 0; i < WidgetPayload.maxDashboardRows + 2; i++)
+        for (var i = 0; i < WidgetPayload.maxListRows + 2; i++)
           _streakHabit('$i', 'Habit $i', i),
       ];
 
@@ -155,8 +160,7 @@ void main() {
         asOf: _today,
       );
 
-      expect(payload['rows'], hasLength(WidgetPayload.maxDashboardRows));
-      // The longest streaks survive the cap, not the first N in list order.
+      expect(payload['rows'], hasLength(WidgetPayload.maxListRows));
       final rows = (payload['rows'] as List).cast<Map<String, Object?>>();
       expect(rows.map((r) => r['streak']), isNot(contains(0)));
     });
@@ -172,9 +176,7 @@ void main() {
         _habit('1', 'Water'),
       ], asOf: _today);
 
-      final back = jsonDecode(jsonEncode(payload)) as Map<String, dynamic>;
-
-      expect(back, payload);
+      expect(jsonDecode(jsonEncode(payload)), payload);
     });
 
     test('habitDashboard', () {
@@ -182,9 +184,7 @@ void main() {
         _streakHabit('1', 'Water', 3),
       ], isPro: true, asOf: _today);
 
-      final back = jsonDecode(jsonEncode(payload)) as Map<String, dynamic>;
-
-      expect(back, payload);
+      expect(jsonDecode(jsonEncode(payload)), payload);
     });
   });
 
@@ -251,40 +251,62 @@ void main() {
       ], asOf: _today);
       final rows = (payload['rows'] as List).cast<Map<String, Object?>>();
 
-      expect(rows.map((r) => r['id']), ['2', '1']); // overdue sorts first
+      expect(rows.map((r) => r['id']), ['2', '1']);
       expect(rows.firstWhere((r) => r['id'] == '2')['overdue'], isTrue);
-      expect(rows.firstWhere((r) => r['id'] == '1')['overdue'], isFalse);
+      expect(rows.firstWhere((r) => r['id'] == '2')['due'], '3d late');
+      expect(rows.firstWhere((r) => r['id'] == '1')['due'], 'Today');
+      expect(payload['overdue'], 1);
     });
 
-    test('caps at the task row budget', () {
+    test('caps at the list row budget', () {
       final tasks = [
-        for (var i = 0; i < WidgetPayload.maxTaskRows + 3; i++)
+        for (var i = 0; i < WidgetPayload.maxListRows + 3; i++)
           task('$i', 'Task $i', dueDate: _today),
       ];
 
       final payload = WidgetPayload.todayTasks(tasks, asOf: _today);
 
-      expect(payload['rows'], hasLength(WidgetPayload.maxTaskRows));
+      expect(payload['rows'], hasLength(WidgetPayload.maxListRows));
+      expect(payload['total'], WidgetPayload.maxListRows + 3);
     });
   });
 
   group('WidgetPayload.heatmapSeries', () {
-    test('covers heatmapDays days, ending today', () {
+    test('covers this week so far, ending today', () {
       final habit = _streakHabit('1', 'Water', 5);
 
       final series = WidgetPayload.heatmapSeries(habit, asOf: _today);
 
-      expect(series, hasLength(WidgetPayload.heatmapDays));
-      expect(series.last, 1.0); // today, logged
+      expect(series, hasLength(_heatmapDays));
+      expect(series.last, 1.0);
     });
   });
 
-  test('WidgetPayload.heatmapMeta carries isPro and configured through', () {
-    expect(WidgetPayload.heatmapMeta(isPro: true, configured: false), {
+  test('WidgetPayload.heatmapHeader reports not configured without a habit', () {
+    expect(WidgetPayload.heatmapHeader(null), {
       'signedIn': true,
-      'isPro': true,
       'configured': false,
     });
+  });
+
+  test('WidgetPayload.heatmapHeader carries the habit\'s streak', () {
+    final payload = WidgetPayload.heatmapHeader(
+      _streakHabit('1', 'Water', 5),
+      asOf: _today,
+    );
+    expect(payload['configured'], isTrue);
+    expect(payload['name'], 'Water');
+    expect(payload['streak'], 5);
+  });
+
+  test('WidgetPayload.heatmapHeader carries the day series for the native grid', () {
+    final habit = _streakHabit('1', 'Water', 5);
+    final payload = WidgetPayload.heatmapHeader(habit, asOf: _today);
+
+    final series = payload['series']! as List;
+    expect(series, hasLength(_heatmapDays));
+    expect(series.last, 1.0);
+    expect(series, everyElement(anyOf(equals(-1.0), inInclusiveRange(0.0, 1.0))));
   });
 
   group('WidgetPayload.weeklyRecap', () {
@@ -300,6 +322,37 @@ void main() {
       expect(payload['isPro'], isTrue);
       expect(payload['bestStreak'], 7);
       expect(payload['weekPercent'], isA<int>());
+      expect(payload['lastWeekPercent'], isA<int>());
+      expect(payload['range'], isA<String>());
     });
+
+    test('sends one day-strip value per day from Monday through today', () {
+      final payload = WidgetPayload.weeklyRecap(
+        [_streakHabit('1', 'A', 10)],
+        isPro: true,
+        asOf: _today,
+      );
+
+      final days = payload['days']! as List;
+      expect(days, hasLength(_today.weekday));
+      expect(days.last, 1.0);
+    });
+  });
+
+  test('WidgetPayload.weekRange names a week that crosses a month', () {
+    expect(WidgetPayload.weekRange(DateTime(2026, 9, 28)), 'Sep 28 – Oct 4');
+    expect(WidgetPayload.weekRange(DateTime(2026, 9, 8)), 'Sep 8 – 14');
+  });
+
+  test('WidgetLaunch.action reads the verb from tide://widget/<verb>', () {
+    expect(
+      WidgetLaunch.action(Uri.parse('tide://widget/setup?id=7&kind=streak')),
+      'setup',
+    );
+    expect(
+      WidgetLaunch.action(Uri.parse('tide://widget/habit?id=abc')),
+      'habit',
+    );
+    expect(WidgetLaunch.action(Uri.parse('tide://setup?id=7&kind=streak')), 'setup');
   });
 }

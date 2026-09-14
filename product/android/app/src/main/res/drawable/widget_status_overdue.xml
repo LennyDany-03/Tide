@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- A Today's Tasks row status, overdue: a filled coral dot — the app's
-     one destructive/warning color (see colors.xml), never used elsewhere
-     in a widget. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="oval">
-    <solid android:color="@color/tide_coral" />
-</shape>

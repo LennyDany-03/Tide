@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Today's Habits / Habit Dashboard row status: a filled dot for a
-     completed (or frozen) habit. Glyph shapes are custom-painted in Flutter
-     (TideGlyph) and out of reach for a RemoteViews row, so a widget row
-     shows this status dot instead of the habit's real glyph. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="oval">
-    <solid android:color="@color/tide_lantern" />
-</shape>

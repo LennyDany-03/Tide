@@ -10,13 +10,15 @@ import '../tasks/task.dart';
 /// side decodes these exact shapes in `WidgetPayloadReader.kt`; the two must
 /// be changed together.
 abstract final class WidgetPayload {
-  /// The most rows any list widget draws at its tallest. The native side
-  /// decides how many of these fit the size the widget was resized to.
-  static const int maxListRows = 6;
+  /// The most rows any list widget carries. The lists scroll, so this is a
+  /// payload bound, not what fits on screen — past it the widget is not
+  /// where anyone should be working through their day.
+  static const int maxListRows = 30;
 
-  /// Columns in the Habit Heatmap grid — half a year, which is what fills a
-  /// 4×2 widget edge to edge at seven rows.
-  static const int heatmapWeeks = 26;
+  /// The most weeks the Habit Heatmap can draw — a year. The native side
+  /// sizes its cells to the widget's height and shows as many of the newest
+  /// weeks as its width fits, so a wide widget is never left half empty.
+  static const int heatmapWeeks = 53;
 
   /// Today's due habits, in the app's own order, and how many are kept.
   /// [total] counts every due habit, not just the rows sent, so a short
@@ -93,7 +95,9 @@ abstract final class WidgetPayload {
   /// One placed Streak widget's habit. `null` — nothing chosen yet, or the
   /// chosen habit is gone — reads as "not configured", and the widget asks.
   static Map<String, Object?> singleHabitStreak(Habit? habit, {DateTime? asOf}) {
-    if (habit == null) return const {'configured': false};
+    if (habit == null) {
+      return const {'signedIn': true, 'configured': false};
+    }
     final day = DateUtils.dateOnly(asOf ?? DateTime.now());
     return {
       'configured': true,
@@ -106,10 +110,14 @@ abstract final class WidgetPayload {
     };
   }
 
-  /// One placed Heatmap widget's header. The grid itself is an image — see
-  /// [heatmapSeries] and `HeatmapExport`.
+  /// One placed Heatmap widget: its header, and [heatmapSeries] as `series`
+  /// for `WidgetHeatmap.kt` to draw at the widget's own size. Ratios are
+  /// rounded to two places — the grid has five tiers, and a year of full
+  /// doubles is most of the payload.
   static Map<String, Object?> heatmapHeader(Habit? habit, {DateTime? asOf}) {
-    if (habit == null) return const {'configured': false};
+    if (habit == null) {
+      return const {'signedIn': true, 'configured': false};
+    }
     final day = DateUtils.dateOnly(asOf ?? DateTime.now());
     return {
       'configured': true,
@@ -117,6 +125,10 @@ abstract final class WidgetPayload {
       'type': habit.type.name,
       'name': habit.name,
       'streak': StreakCalculator.currentStreak(habit, asOf: day),
+      'series': [
+        for (final t in heatmapSeries(habit, asOf: day))
+          t < 0 ? -1.0 : (t * 100).round() / 100,
+      ],
     };
   }
 
@@ -183,10 +195,14 @@ abstract final class WidgetPayload {
     final today = DateUtils.dateOnly(asOf ?? DateTime.now());
     final monday = DateUtils.addDaysToDate(today, 1 - today.weekday);
     var checkIns = 0, scheduled = 0;
+    final days = <double>[];
     for (var day = monday; !day.isAfter(today); day = DateUtils.addDaysToDate(day, 1)) {
       final summary = StreakCalculator.daySummary(habits, day);
       checkIns += summary.completed;
       scheduled += summary.scheduled;
+      days.add(
+        summary.scheduled == 0 ? -1.0 : (summary.ratio * 100).round() / 100,
+      );
     }
     return {
       'signedIn': true,
@@ -207,6 +223,9 @@ abstract final class WidgetPayload {
       'checkIns': checkIns,
       'scheduled': scheduled,
       'range': weekRange(monday),
+      // Monday through today, for the day strip: -1 nothing asked, else the
+      // share kept. The days still to come are left off, not sent as misses.
+      'days': days,
     };
   }
 
