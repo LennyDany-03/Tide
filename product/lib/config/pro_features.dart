@@ -54,6 +54,9 @@ enum ProFeature {
 
   /// The Weekly Recap home-screen widget.
   weeklyRecapWidget,
+
+  /// More than one Streak widget on the home screen.
+  widgetInstances,
 }
 
 /// One line of the paywall, and one gate in the app. The same object, because
@@ -145,6 +148,11 @@ abstract final class ProFeatures {
       label: 'Weekly Recap widget',
       freeAllowance: '—',
       blurb: 'Pro puts the week\'s numbers on your home screen.',
+    ),
+    ProFeature.widgetInstances: ProFeatureSpec(
+      label: 'A streak widget for every habit',
+      freeAllowance: '1 streak widget',
+      blurb: 'Pro pins a streak widget for every habit you keep.',
     ),
   };
 

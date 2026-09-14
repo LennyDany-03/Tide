@@ -24,6 +24,8 @@ import '../screens/tasks/tasks_screen.dart';
 import '../screens/upgrade/upgrade_sheet.dart';
 import '../screens/verify_email/verify_email_screen.dart';
 import '../screens/welcome/welcome_screen.dart';
+import '../screens/widget_setup/widget_setup_screen.dart';
+import '../services/home_widget/home_widget_bridge.dart';
 import '../services/tide_store.dart';
 import '../theme/tide_motion.dart';
 import '../widgets/tide_sheet.dart';
@@ -50,8 +52,11 @@ abstract final class Routes {
   static const proPass = '/pro/pass';
   static const billing = '/billing';
   static const homeWidgets = '/settings/widgets';
+  static const widgetSetupPath = '/widget-setup';
 
   static String habit(String id) => '/today/habit/$id';
+  static String widgetSetup(int widgetId, String kind) =>
+      '$widgetSetupPath?id=$widgetId&kind=$kind';
   static String editHabit(String id) => '/habit/$id/edit';
   static String task(String id) => '/task/$id';
 }
@@ -319,6 +324,30 @@ abstract final class AppRoutes {
           parentNavigatorKey: _rootKey,
           pageBuilder: (context, state) =>
               _page(state, const HomeWidgetsScreen()),
+        ),
+
+        // The habit picker a Streak or Heatmap widget opens. Reached only
+        // from the home screen, and it hands back to the home screen itself.
+        GoRoute(
+          path: Routes.widgetSetupPath,
+          parentNavigatorKey: _rootKey,
+          redirect: (context, state) {
+            final query = state.uri.queryParameters;
+            final valid =
+                int.tryParse(query['id'] ?? '') != null &&
+                HabitWidgetKind.byName(query['kind']) != null;
+            return valid ? null : Routes.today;
+          },
+          pageBuilder: (context, state) {
+            final query = state.uri.queryParameters;
+            return _page(
+              state,
+              WidgetSetupScreen(
+                widgetId: int.parse(query['id']!),
+                kind: HabitWidgetKind.byName(query['kind'])!,
+              ),
+            );
+          },
         ),
 
         // The palette picker. A sheet over Settings rather than a page, so

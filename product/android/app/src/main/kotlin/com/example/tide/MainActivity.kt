@@ -1,6 +1,8 @@
 package com.example.tide
 
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     /**
@@ -16,4 +18,21 @@ class MainActivity : FlutterActivity() {
      * entirely and widget taps are handled only in Dart.
      */
     override fun shouldHandleDeeplinking(): Boolean = false
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        // The widget habit picker hands the user straight back to the home
+        // screen once a habit is chosen. moveTaskToBack rather than finish():
+        // the app stays warm, so the next open is instant.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "tide/app")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "moveToBack" -> {
+                        moveTaskToBack(true)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
 }

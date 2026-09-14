@@ -1,55 +1,68 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/tide_colors.dart';
+import 'widget_payload.dart';
 
-/// Renders a habit's daily-ratio series as a small grid image for the
-/// native Habit Heatmap widget.
+/// A habit's last [WidgetPayload.heatmapWeeks] weeks as a grid image, for
+/// the native Habit Heatmap widget.
 ///
-/// RemoteViews has no grid-of-coloured-cells primitive, and hand-rolling one
-/// in XML would mean re-deriving the app's own heatmap look natively and by
-/// hand. [HomeWidget.renderFlutterWidget] draws this off-screen instead and
-/// hands back a PNG path the native side just shows in an `ImageView` — the
-/// same shortcut the plugin's own example uses for its icon.
+/// RemoteViews has no grid-of-coloured-cells primitive, so
+/// [HomeWidget.renderFlutterWidget] draws this off-screen and the widget
+/// shows the PNG. Columns are weeks, oldest on the left; rows are Monday to
+/// Sunday. The days of this week still to come are left blank, and today
+/// carries a thin lantern outline so the grid has a "you are here".
 class HeatmapExport extends StatelessWidget {
-  const HeatmapExport({super.key, required this.series, this.columns = 7});
+  const HeatmapExport({super.key, required this.series});
 
-  /// One ratio per day, oldest first: -1 for a rest day, 0..1 for how much
-  /// of that day's schedule was kept. See [StreakCalculator.dailySeries].
+  /// From [WidgetPayload.heatmapSeries]: one ratio per day up to today.
   final List<double> series;
 
-  final int columns;
-
-  static const double cellSize = 14;
+  static const double cell = 10;
   static const double gap = 3;
+  static const int _weeks = WidgetPayload.heatmapWeeks;
 
-  static Size sizeFor(int seriesLength, {int columns = 7}) {
-    final rows = (seriesLength / columns).ceil();
-    return Size(
-      columns * cellSize + (columns - 1) * gap,
-      rows * cellSize + (rows - 1) * gap,
-    );
-  }
+  static Size get size => const Size(
+    _weeks * (cell + gap) - gap,
+    7 * (cell + gap) - gap,
+  );
 
   @override
   Widget build(BuildContext context) {
-    final size = sizeFor(series.length, columns: columns);
-    return SizedBox(
-      width: size.width,
-      height: size.height,
-      child: Wrap(
-        spacing: gap,
-        runSpacing: gap,
+    return SizedBox.fromSize(
+      size: size,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final t in series)
-            Container(
-              width: cellSize,
-              height: cellSize,
-              decoration: BoxDecoration(
-                color: TideColors.intensity(t < 0 ? 0 : t),
-                borderRadius: BorderRadius.circular(3),
-              ),
+          for (var week = 0; week < _weeks; week++) ...[
+            if (week > 0) const SizedBox(width: gap),
+            Column(
+              children: [
+                for (var weekday = 0; weekday < 7; weekday++) ...[
+                  if (weekday > 0) const SizedBox(height: gap),
+                  _cell(week * 7 + weekday),
+                ],
+              ],
             ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _cell(int index) {
+    if (index >= series.length) return const SizedBox(width: cell, height: cell);
+    final t = series[index];
+    return Container(
+      width: cell,
+      height: cell,
+      decoration: BoxDecoration(
+        color: t < 0
+            ? TideColors.bone.withValues(alpha: 0.035)
+            : TideColors.intensity(t),
+        borderRadius: BorderRadius.circular(2.5),
+        border: index == series.length - 1
+            ? Border.all(color: TideColors.lantern, width: 1.2)
+            : null,
       ),
     );
   }

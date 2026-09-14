@@ -1209,21 +1209,26 @@ class TideStore extends ChangeNotifier {
     signedIn: signedIn,
     habits: _habits,
     isPro: isPro,
-    pinnedHabitId: flags.streakWidgetHabitId,
+    widgetHabits: flags.widgetHabits,
   );
 
   /// Re-pushes the widget payload with nothing changed in the store — used
   /// on app resume, since the day may have rolled over while backgrounded.
   void refreshWidgets() => _syncWidgets();
 
-  /// Which habit the Single Habit Streak and Habit Heatmap widgets show.
-  /// Null clears the pin — both widgets fall back to their "not configured"
-  /// state rather than a stale habit.
-  String? get streakWidgetHabitId => flags.streakWidgetHabitId;
+  /// The habit a placed Streak or Heatmap widget shows, by launcher widget id.
+  String? widgetHabitId(int widgetId) => flags.widgetHabits[widgetId];
 
-  void setStreakWidgetHabit(String? habitId) {
-    flags.setStreakWidgetHabitId(habitId);
-    _syncWidgets();
+  /// Ties one placed widget to [habitId] and redraws it before returning, so
+  /// the picker can send the app to the background straight after.
+  Future<void> assignWidgetHabit(int widgetId, String habitId) async {
+    flags.setWidgetHabit(widgetId, habitId);
+    await widgetBridge?.syncHabitsNow(
+      signedIn: signedIn,
+      habits: _habits,
+      isPro: isPro,
+      widgetHabits: flags.widgetHabits,
+    );
   }
 
   void _saveHabit(String habitId) {

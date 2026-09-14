@@ -1,167 +1,231 @@
 import 'package:flutter/material.dart';
 
-import '../../config/app_constants.dart';
 import '../models/habit.dart';
 import '../streak_calculator.dart';
 import '../tasks/task.dart';
 
-/// The JSON shape written for each home-screen widget — deliberately smaller
-/// than [HabitRows.snapshot]: a widget draws a handful of fields per habit,
-/// never the whole row, and it never round-trips back into a [Habit]. The
-/// Android side decodes this exact shape in `WidgetPayloadReader.kt`; the
-/// two must be changed together.
+/// The JSON each home-screen widget draws from — deliberately smaller than
+/// [HabitRows.snapshot]: a widget draws a handful of fields per habit, never
+/// the whole row, and it never round-trips back into a [Habit]. The Android
+/// side decodes these exact shapes in `WidgetPayloadReader.kt`; the two must
+/// be changed together.
 abstract final class WidgetPayload {
-  /// The row budget [widget_today_habits.xml] was built for. Free habits are
-  /// already capped at this, via [AppConstants.freeHabitLimit] — this is
-  /// never actually a truncation on the free plan.
-  static const int maxTodayRows = AppConstants.freeHabitLimit;
+  /// The most rows any list widget draws at its tallest. The native side
+  /// decides how many of these fit the size the widget was resized to.
+  static const int maxListRows = 6;
 
-  /// The row budget [widget_habit_dashboard.xml] was built for.
-  static const int maxDashboardRows = 6;
+  /// Columns in the Habit Heatmap grid — half a year, which is what fills a
+  /// 4×2 widget edge to edge at seven rows.
+  static const int heatmapWeeks = 26;
 
-  /// The row budget [widget_today_tasks.xml] was built for.
-  static const int maxTaskRows = 5;
-
-  /// How many days [heatmapSeries] covers — five weeks, so a 7-wide grid
-  /// comes out even.
-  static const int heatmapDays = 35;
-
-  /// Today's due habits, for the free "Today's Habits" widget. A binary row
-  /// carries its [HabitType] so the native side can decide whether a tap
-  /// logs it outright or opens its detail (a quantity/duration row has no
-  /// amount to guess from a tap).
+  /// Today's due habits, in the app's own order, and how many are kept.
+  /// [total] counts every due habit, not just the rows sent, so a short
+  /// widget can say "+2 more" truthfully.
   static Map<String, Object?> todayHabits(List<Habit> habits, {DateTime? asOf}) {
     final day = DateUtils.dateOnly(asOf ?? DateTime.now());
-    final due = habits.where((h) => h.isDueOn(day)).take(maxTodayRows);
+    final due = habits.where((h) => h.isDueOn(day)).toList();
     return {
       'signedIn': true,
+      'done': due.where((h) => h.countsTowardStreak(day)).length,
+      'total': due.length,
       'rows': [
-        for (final h in due)
+        for (final h in due.take(maxListRows))
           {
             'id': h.id,
             'name': h.name,
             'type': h.type.name,
-            'done': h.isCompleteOn(day) || h.isFrozenOn(day),
+            'done': h.countsTowardStreak(day),
+            'streak': StreakCalculator.currentStreak(h, asOf: day),
           },
       ],
     };
   }
 
-  /// Every habit ranked by current streak, for the Pro "Habit Dashboard"
-  /// widget. Carries [isPro] through unchanged — the native side, not this
-  /// codec, decides whether to draw the locked placeholder or the rows, so a
-  /// stale cached payload never mis-renders a lapsed Pro account as still
-  /// unlocked past its own last write.
+  /// Active habits ranked by current streak, each with its last seven days.
+  /// Carries [isPro] through — the native side draws the lock, so a cached
+  /// payload can never show a lapsed plan as unlocked.
   static Map<String, Object?> habitDashboard(
     List<Habit> habits, {
     required bool isPro,
     DateTime? asOf,
   }) {
     final day = DateUtils.dateOnly(asOf ?? DateTime.now());
-    final ranked = [...habits]..sort(
-      (a, b) => StreakCalculator.currentStreak(
-        b,
-        asOf: day,
-      ).compareTo(StreakCalculator.currentStreak(a, asOf: day)),
-    );
+    final streaks = {
+      for (final h in habits.where((h) => !h.paused))
+        h: StreakCalculator.currentStreak(h, asOf: day),
+    };
+    final ranked = streaks.keys.toList()
+      ..sort((a, b) => streaks[b]!.compareTo(streaks[a]!));
     return {
       'signedIn': true,
       'isPro': isPro,
+      'best': ranked.isEmpty ? 0 : streaks[ranked.first],
       'rows': [
-        for (final h in ranked.take(maxDashboardRows))
+        for (final h in ranked.take(maxListRows))
           {
             'id': h.id,
             'name': h.name,
-            'streak': StreakCalculator.currentStreak(h, asOf: day),
-            'dueToday': h.isDueOn(day),
-            'doneToday': h.isCompleteOn(day) || h.isFrozenOn(day),
+            'streak': streaks[h],
+            'week': weekCodes(h, asOf: day),
           },
       ],
     };
   }
 
-  /// The pinned habit's name and streak, for the free "Single Habit Streak"
-  /// widget. `null` when nothing is pinned yet, or the pinned id no longer
-  /// resolves to a habit (an account switch, or the habit was deleted) —
-  /// both read as "not configured" rather than an error.
+  /// One code per day for the last seven days, oldest first, for the
+  /// dashboard's day strip: 2 kept, 1 missed, 0 nothing asked (a rest day,
+  /// or before the habit existed), 3 today and still open. Today is its own
+  /// code because an unlogged today is not a miss yet.
+  static List<int> weekCodes(Habit habit, {DateTime? asOf}) {
+    final today = DateUtils.dateOnly(asOf ?? DateTime.now());
+    final created = DateUtils.dateOnly(habit.createdAt);
+    return [
+      for (var back = 6; back >= 0; back--)
+        () {
+          final day = DateUtils.addDaysToDate(today, -back);
+          if (day.isBefore(created) || !habit.isDueOn(day)) return 0;
+          if (habit.countsTowardStreak(day)) return 2;
+          return back == 0 ? 3 : 1;
+        }(),
+    ];
+  }
+
+  /// One placed Streak widget's habit. `null` — nothing chosen yet, or the
+  /// chosen habit is gone — reads as "not configured", and the widget asks.
   static Map<String, Object?> singleHabitStreak(Habit? habit, {DateTime? asOf}) {
-    if (habit == null) return const {'signedIn': true, 'configured': false};
+    if (habit == null) return const {'configured': false};
     final day = DateUtils.dateOnly(asOf ?? DateTime.now());
     return {
-      'signedIn': true,
       'configured': true,
       'id': habit.id,
       'name': habit.name,
       'type': habit.type.name,
       'streak': StreakCalculator.currentStreak(habit, asOf: day),
-      'doneToday': habit.isCompleteOn(day) || habit.isFrozenOn(day),
+      'doneToday': habit.countsTowardStreak(day),
+      'dueToday': habit.isDueOn(day),
     };
   }
 
-  /// Due-or-overdue, not-yet-completed tasks, for the free "Today's Tasks"
-  /// widget — soonest due date first, undated tasks excluded (there is
-  /// nothing to call overdue about one).
+  /// One placed Heatmap widget's header. The grid itself is an image — see
+  /// [heatmapSeries] and `HeatmapExport`.
+  static Map<String, Object?> heatmapHeader(Habit? habit, {DateTime? asOf}) {
+    if (habit == null) return const {'configured': false};
+    final day = DateUtils.dateOnly(asOf ?? DateTime.now());
+    return {
+      'configured': true,
+      'id': habit.id,
+      'type': habit.type.name,
+      'name': habit.name,
+      'streak': StreakCalculator.currentStreak(habit, asOf: day),
+    };
+  }
+
+  /// [heatmapWeeks] whole Monday-to-Sunday columns ending with this week,
+  /// as one ratio per day up to today (-1 rest day, 0..1 kept). The days of
+  /// this week still to come are left off the end rather than sent as
+  /// misses; the grid draws them empty.
+  static List<double> heatmapSeries(Habit habit, {DateTime? asOf}) {
+    final today = DateUtils.dateOnly(asOf ?? DateTime.now());
+    return StreakCalculator.dailySeries(
+      [habit],
+      days: heatmapWeeks * 7 - (7 - today.weekday),
+      asOf: today,
+    );
+  }
+
+  /// Due-or-overdue, open tasks, soonest due first, with the label each row
+  /// shows on its right. Undated tasks are left out — nothing is late about
+  /// one.
   static Map<String, Object?> todayTasks(List<Task> tasks, {DateTime? asOf}) {
     final today = DateUtils.dateOnly(asOf ?? DateTime.now());
     final due =
         tasks.where((t) {
-          final due = t.dueDate;
+          final date = t.dueDate;
           return !t.isCompleted &&
               !t.isArchived &&
-              due != null &&
-              !due.isAfter(today);
+              date != null &&
+              !date.isAfter(today);
         }).toList()..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
     return {
       'signedIn': true,
+      'overdue': due.where((t) => t.dueDate!.isBefore(today)).length,
+      'total': due.length,
       'rows': [
-        for (final t in due.take(maxTaskRows))
+        for (final t in due.take(maxListRows))
           {
             'id': t.id,
             'title': t.title,
             'overdue': t.dueDate!.isBefore(today),
+            'due': dueLabel(t.dueDate!, asOf: today),
           },
       ],
     };
   }
 
-  /// The pinned habit's last [heatmapDays] days, one ratio per day (-1 for a
-  /// rest day, 0..1 for how much of that day's schedule was kept) — the
-  /// series [HeatmapExport] paints into the image the Pro "Habit Heatmap"
-  /// widget reads. Kept separate from [heatmapMeta] because this is a
-  /// rendered image, not JSON the native side parses.
-  static List<double> heatmapSeries(Habit habit, {DateTime? asOf}) =>
-      StreakCalculator.dailySeries(
-        [habit],
-        days: heatmapDays,
-        asOf: asOf ?? DateTime.now(),
-      );
+  static String dueLabel(DateTime due, {DateTime? asOf}) {
+    final today = DateUtils.dateOnly(asOf ?? DateTime.now());
+    final late = DateUtils.dateOnly(due).difference(today).inDays.abs();
+    return switch (late) {
+      0 => 'Today',
+      1 => 'Yesterday',
+      _ => '${late}d late',
+    };
+  }
 
-  /// What decides which layout the Habit Heatmap widget draws: [isPro]
-  /// picks locked vs unlocked exactly like [habitDashboard], and
-  /// [configured] separates "Pro, but no habit pinned yet" from an actual
-  /// rendered heatmap.
-  static Map<String, Object?> heatmapMeta({
-    required bool isPro,
-    required bool configured,
-  }) => {'signedIn': true, 'isPro': isPro, 'configured': configured};
-
-  /// This week's completion rate and the longest streak currently running
-  /// across every habit, for the Pro "Weekly Recap" widget — the same two
-  /// figures [TideStore.weeklyRate] and [StreakCalculator.bestStreakAcross]
-  /// surface in the app, not a separate notion of "the recap".
+  /// This week so far: the rate, last week's rate for comparison, the best
+  /// streak running, and the raw check-ins behind the rate — the same
+  /// figures Insights shows, not a separate notion of "the recap".
   static Map<String, Object?> weeklyRecap(
     List<Habit> habits, {
     required bool isPro,
     DateTime? asOf,
-  }) => {
-    'signedIn': true,
-    'isPro': isPro,
-    'weekPercent': (StreakCalculator.weeklyRate(habits, asOf: asOf) * 100)
-        .round(),
-    'bestStreak': StreakCalculator.bestStreakAcross(habits, asOf: asOf),
-  };
+  }) {
+    final today = DateUtils.dateOnly(asOf ?? DateTime.now());
+    final monday = DateUtils.addDaysToDate(today, 1 - today.weekday);
+    var checkIns = 0, scheduled = 0;
+    for (var day = monday; !day.isAfter(today); day = DateUtils.addDaysToDate(day, 1)) {
+      final summary = StreakCalculator.daySummary(habits, day);
+      checkIns += summary.completed;
+      scheduled += summary.scheduled;
+    }
+    return {
+      'signedIn': true,
+      'isPro': isPro,
+      'weekPercent': (StreakCalculator.weeklyRate(habits, asOf: today) * 100)
+          .round(),
+      'lastWeekPercent':
+          (StreakCalculator.weeklyRate(
+                    habits,
+                    asOf: DateUtils.addDaysToDate(today, -7),
+                  ) *
+                  100)
+              .round(),
+      'bestStreak': StreakCalculator.bestStreakAcross(
+        habits.where((h) => !h.paused).toList(),
+        asOf: today,
+      ),
+      'checkIns': checkIns,
+      'scheduled': scheduled,
+      'range': weekRange(monday),
+    };
+  }
 
-  /// What every widget shows when nobody is signed in, or the repository
-  /// behind them is the in-memory demo one.
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  /// "Sep 8 – 14", or "Sep 29 – Oct 5" across a month end.
+  static String weekRange(DateTime monday) {
+    final sunday = DateUtils.addDaysToDate(monday, 6);
+    final start = '${_months[monday.month - 1]} ${monday.day}';
+    final end = sunday.month == monday.month
+        ? '${sunday.day}'
+        : '${_months[sunday.month - 1]} ${sunday.day}';
+    return '$start – $end';
+  }
+
+  /// What every account-bound widget shows with nobody signed in, or with
+  /// the in-memory demo repository behind the app.
   static Map<String, Object?> signedOut() => const {'signedIn': false};
 }

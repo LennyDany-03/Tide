@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,13 +17,13 @@ class DeviceFlags {
     this._onboardingSeen,
     this._toursDone,
     this._pendingVerification,
-    this._streakWidgetHabitId,
+    this._widgetHabits,
   );
 
   /// Remembers nothing past the process — tests, and a caller that has not
   /// loaded storage.
   DeviceFlags.memory({bool onboardingSeen = false, String? pendingVerification})
-    : this._(null, onboardingSeen, {}, pendingVerification, null);
+    : this._(null, onboardingSeen, {}, pendingVerification, {});
 
   static Future<DeviceFlags> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -31,20 +32,20 @@ class DeviceFlags {
       prefs.getBool(_onboardingKey) ?? false,
       {...?prefs.getStringList(_toursKey)},
       prefs.getString(_pendingKey),
-      prefs.getString(_streakWidgetHabitKey),
+      _decodeWidgetHabits(prefs.getString(_widgetHabitsKey)),
     );
   }
 
   static const String _onboardingKey = 'tide.onboarding_seen';
   static const String _toursKey = 'tide.tours_done';
   static const String _pendingKey = 'tide.pending_verification';
-  static const String _streakWidgetHabitKey = 'tide.streak_widget_habit_id';
+  static const String _widgetHabitsKey = 'tide.widget_habits';
 
   final SharedPreferences? _prefs;
   bool _onboardingSeen;
   final Set<String> _toursDone;
   String? _pendingVerification;
-  String? _streakWidgetHabitId;
+  final Map<int, String> _widgetHabits;
 
   bool get onboardingSeen => _onboardingSeen;
 
@@ -81,23 +82,41 @@ class DeviceFlags {
     );
   }
 
-  /// The habit the Single Habit Streak and Habit Heatmap widgets show.
+  /// Which habit each placed Streak or Heatmap widget shows, by the
+  /// launcher's widget id.
   ///
-  /// Kept here rather than as a session preference like [palette] or
-  /// [weeklyRecap] on [TideStore], because a widget pin has to survive a
-  /// restart to be worth anything — the whole point is reading it without
-  /// opening the app. Not scoped to an account: switching accounts on the
-  /// same device just leaves a stale id that resolves to nothing, which the
-  /// widgets already treat as "not configured".
-  String? get streakWidgetHabitId => _streakWidgetHabitId;
+  /// Per placed widget, not one pin for all of them: two Heatmap widgets side
+  /// by side are two habits. Kept on the device because a widget that forgot
+  /// its habit on every restart would ask again every morning. Not scoped to
+  /// an account — after switching accounts an id resolves to no habit, and
+  /// the widget simply asks again.
+  Map<int, String> get widgetHabits => Map.unmodifiable(_widgetHabits);
 
-  void setStreakWidgetHabitId(String? habitId) {
-    if (habitId == _streakWidgetHabitId) return;
-    _streakWidgetHabitId = habitId;
+  void setWidgetHabit(int widgetId, String habitId) {
+    if (_widgetHabits[widgetId] == habitId) return;
+    _widgetHabits[widgetId] = habitId;
     unawaited(
-      habitId == null
-          ? _prefs?.remove(_streakWidgetHabitKey)
-          : _prefs?.setString(_streakWidgetHabitKey, habitId),
+      _prefs?.setString(
+        _widgetHabitsKey,
+        jsonEncode({
+          for (final entry in _widgetHabits.entries)
+            '${entry.key}': entry.value,
+        }),
+      ),
     );
+  }
+
+  static Map<int, String> _decodeWidgetHabits(String? raw) {
+    if (raw == null) return {};
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      return {
+        for (final entry in decoded.entries)
+          if (int.tryParse(entry.key) != null && entry.value is String)
+            int.parse(entry.key): entry.value as String,
+      };
+    } on FormatException {
+      return {};
+    }
   }
 }

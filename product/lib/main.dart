@@ -91,10 +91,15 @@ Future<void> main() async {
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
+  final launchUri = mobile ? await _widgetLaunchUri() : null;
 
   runApp(
     TideApp(
-      showSplash: true,
+      // A widget tap is an errand — "choose this widget's habit", "open that
+      // task" — and three seconds of logo in front of it reads as the tap
+      // not having worked.
+      showSplash: launchUri == null,
+      launchUri: launchUri,
       auth: auth,
       flags: flags,
       habits: habits,
@@ -107,6 +112,19 @@ Future<void> main() async {
       widgetBridge: mobile ? HomeWidgetBridge() : null,
     ),
   );
+}
+
+/// The home-screen widget tap that started this process, if one did. Read
+/// before `runApp` — the activity and its intent are already attached by the
+/// time Dart's `main` runs — so the first frame already knows to skip the
+/// splash.
+Future<Uri?> _widgetLaunchUri() async {
+  try {
+    return await HomeWidget.initiallyLaunchedFromHomeWidget();
+  } catch (error) {
+    debugPrint('Could not read the widget launch: $error');
+    return null;
+  }
 }
 
 class TideApp extends StatefulWidget {
@@ -124,7 +142,13 @@ class TideApp extends StatefulWidget {
     this.reconnects,
     this.homeShortcuts = false,
     this.widgetBridge,
+    this.launchUri,
   });
+
+  /// The widget tap that launched the app, handled once the first frame is
+  /// up. Later taps, with the app already running, arrive on
+  /// [HomeWidget.widgetClicked] instead.
+  final Uri? launchUri;
 
   /// Tests and deep links can skip straight into the shell: onboarding
   /// counts as seen and the demo account is already signed in.
@@ -236,6 +260,10 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
       _registerHomeWidgetTaps();
       WidgetsBinding.instance.addObserver(this);
     }
+    final launch = widget.launchUri;
+    if (launch != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openFromWidget(launch));
+    }
   }
 
   @override
@@ -280,7 +308,6 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
   /// these URIs.
   void _registerHomeWidgetTaps() {
     _widgetTaps = HomeWidget.widgetClicked.listen(_openFromWidget);
-    unawaited(HomeWidget.initiallyLaunchedFromHomeWidget().then(_openFromWidget));
   }
 
   void _openFromWidget(Uri? uri) {
@@ -296,12 +323,14 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
         if (id == null || _store.habitById(id) == null) return;
         _router.go(Routes.today);
         unawaited(_router.push(Routes.habit(id)));
+      case 'today':
+        _router.go(Routes.today);
+      case 'tasks':
+        _router.go(Routes.tasks);
       case 'dashboard':
       case 'insights':
         _router.go(Routes.insights);
-      case 'dashboard-locked':
-      case 'heatmap-locked':
-      case 'recap-locked':
+      case 'upgrade':
         _router.go(Routes.today);
         unawaited(_router.push(Routes.upgrade));
       case 'task':
@@ -312,11 +341,12 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
         unawaited(
           _router.push(_store.canAddHabit ? Routes.newHabit : Routes.upgrade),
         );
-      case 'streak-unconfigured':
+      case 'setup':
+        final id = int.tryParse(uri.queryParameters['id'] ?? '');
+        final kind = HabitWidgetKind.byName(uri.queryParameters['kind']);
+        if (id == null || kind == null) return;
         _router.go(Routes.today);
-        unawaited(_router.push(Routes.homeWidgets));
-      case 'heatmap':
-        _router.go(Routes.insights);
+        unawaited(_router.push(Routes.widgetSetup(id, kind.name)));
     }
   }
 
