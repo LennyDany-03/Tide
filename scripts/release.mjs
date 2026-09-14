@@ -27,7 +27,9 @@ const paths = {
 };
 
 const PLACEHOLDER = "Describe what changed.";
-const VERSION_LINE = /^version:\s*(\d+)\.(\d+)\.(\d+)\+(\d+)\s*$/m;
+// [ \t] rather than \s: \s also matches newlines, and a bump would swallow
+// the blank line after the version.
+const VERSION_LINE = /^version:[ \t]*(\d+)\.(\d+)\.(\d+)\+(\d+)[ \t]*\r?$/m;
 const SECTION = /^## \[([^\]]+)\](?: - (\d{4}-\d{2}-\d{2}))?[ \t]*$/gm;
 
 function fail(message) {

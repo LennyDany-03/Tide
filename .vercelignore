@@ -1,0 +1,5 @@
+# The website is the repo root. The Flutter app, its skills and its build
+# output are never part of a website deployment.
+product/
+.agents/
+.claude/
