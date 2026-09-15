@@ -22,16 +22,21 @@ const sizes = {
   lg: "h-13 px-6 text-base",
 };
 
+/** Where every "Download Now" goes: the thank-you page, told to start the
+ * APK download (app/thanks/start-download.tsx). */
+export const DOWNLOAD_HREF = "/thanks?download";
+
 /**
  * The one "Download Now" action, used everywhere on the site.
  *
- * It goes to the thank-you page. The page is where the APK download starts
- * once the release workflow has published one (see lib/release.ts).
+ * It opens the thank-you page, which starts the download of the latest APK
+ * from GitHub Releases and shows how to install it.
  */
 export function DownloadButton({ variant = "primary", size = "lg", className = "" }: Props) {
   return (
     <Link
-      href="/thanks"
+      href={DOWNLOAD_HREF}
+      prefetch={false}
       className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
     >
       <DownloadSimple

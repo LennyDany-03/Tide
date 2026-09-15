@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getRelease } from "@/lib/release";
 import { Brand } from "./brand";
+import { DOWNLOAD_HREF } from "./download-button";
 
 export async function SiteFooter() {
   const release = await getRelease();
@@ -31,7 +32,7 @@ export async function SiteFooter() {
               </Link>
             </li>
             <li>
-              <Link href="/thanks" className="text-silt transition-colors hover:text-bone">
+              <Link href={DOWNLOAD_HREF} className="text-silt transition-colors hover:text-bone">
                 Download Now
               </Link>
             </li>
