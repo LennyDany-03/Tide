@@ -14,12 +14,15 @@ CI green on main ─► Release (.github/workflows/release.yml)
                ├─ tag vX.Y.Z already exists?  ─► stop, nothing to do
                ├─ CHANGELOG.md has notes for X.Y.Z?  (fails if not)
                ├─ build a signed release APK
-               ├─ GitHub Release vX.Y.Z  + tide-X.Y.Z.apk
-               └─ public/version.json updated and committed to main
+               └─ GitHub Release vX.Y.Z  + tide-X.Y.Z.apk  + version.json
                         │
-                        ├─► website shows the new version and changelog
+                        │  github.com/<owner>/<repo>/releases/latest/download/version.json
+                        │  always points at the newest release, so:
+                        ├─► website shows the new version within 15 minutes
                         └─► installed apps see the update and install it
 ```
+
+Nothing is ever committed back to `main`, so `main` can require pull requests.
 
 ## Releasing, step by step
 
@@ -71,10 +74,12 @@ Release workflow starts by itself. Watch it under **Actions → Release**.
 
 **5. Done.** When it finishes:
 
-- **Releases** on GitHub has `vX.Y.Z` with `tide-X.Y.Z.apk` and its SHA-256.
-- `public/version.json` on `main` points at that APK. If the website is
-  deployed from `main` (Vercel does this on every push), it redeploys and
-  shows the new version, and the thank-you page links to the real APK.
+- **Releases** on GitHub has `vX.Y.Z` with `tide-X.Y.Z.apk`, its SHA-256 and
+  `version.json` (the update manifest).
+- The website re-reads that manifest every 15 minutes, with no redeploy
+  needed: it shows the new version, and the thank-you page links to the
+  real APK. The changelog page updates when the merge to `main` redeploys
+  the site.
 - Installed apps find the update on their next launch (or when reopened
   after 6 hours), show "Tide X.Y.Z is ready" once, and keep it under
   **Settings → App updates** after that.
@@ -83,13 +88,27 @@ Release workflow starts by itself. Watch it under **Actions → Release**.
 
 **Actions → Release → Run workflow** runs the same pipeline on the current
 `main` without waiting for CI. It still skips a version that is already
-tagged, so it is safe to press twice.
+tagged, so it is safe to press twice. If a release exists but is missing its
+`version.json`, pressing it attaches the manifest without rebuilding.
+
+## Starting a release over
+
+To throw away a release (for example a bad build nobody has installed):
+
+1. **Releases** → open `vX.Y.Z` → **Delete** (trash icon).
+2. **Tags** (from the Releases page) → open `vX.Y.Z` → **⋯** → **Delete tag**.
+   Deleting the release alone leaves the tag, and a tag counts as released.
+3. **Actions → Release → Run workflow**.
+
+Once people have installed a version, do not delete it: bump to the next
+patch instead.
 
 ## Forcing everyone to update
 
-Edit `minSupportedVersion` in `public/version.json` (for example to `1.1.0`)
-and commit it. Installs older than that see an update panel they cannot
-dismiss. The release workflow keeps whatever value is there.
+**Settings → Secrets and variables → Actions → Variables → New variable**:
+`MIN_SUPPORTED_VERSION` = for example `1.1.0`. It is written into the
+manifest of the next release, and installs older than that see an update
+panel they cannot dismiss.
 
 ## One-time setup
 
@@ -136,25 +155,25 @@ base64 -i tide-release.jks | tr -d '\n'
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("tide-release.jks")) | Set-Clipboard
 ```
 
-### 3. Let the workflow push to `main`
+### 3. Let the workflow create releases
 
 **Settings → Actions → General → Workflow permissions → Read and write
-permissions.** The release commits `public/version.json` back to `main`. If
-`main` is branch-protected, allow GitHub Actions to bypass the rule, or the
-last step fails (the GitHub Release is still created).
+permissions.** This lets it create tags and releases. It does not need to
+push to `main`, so a "changes must be made through a pull request" rule on
+`main` is fine.
 
-### 4. Where the app and the APK are fetched from (optional variables)
+### 4. Optional variables
 
 **Settings → Secrets and variables → Actions → Variables**
 
-| Variable              | Default                                                               | Change it when                                   |
-| --------------------- | --------------------------------------------------------------------- | ------------------------------------------------ |
-| `UPDATE_MANIFEST_URL` | `https://raw.githubusercontent.com/<owner>/<repo>/main/public/version.json` | the website is live: use `https://<your-site>/version.json` |
-| `APK_BASE_URL`        | the GitHub Release download URL                                       | you host APKs somewhere else                     |
+| Variable                | Default                                                          | Change it when                                   |
+| ----------------------- | ---------------------------------------------------------------- | ------------------------------------------------ |
+| `UPDATE_MANIFEST_URL`   | `https://github.com/<owner>/<repo>/releases/latest/download/version.json` | you want the app to read `https://<your-site>/version.json` instead |
+| `APK_BASE_URL`          | the GitHub Release download URL                                  | you host APKs somewhere else                     |
+| `MIN_SUPPORTED_VERSION` | `1.0.0`                                                          | you want to force older installs to update       |
 
-Both defaults only work if the repository is **public**. For a private
-repository, deploy the website and set `UPDATE_MANIFEST_URL` to its
-`/version.json`, and host the APK somewhere public (`APK_BASE_URL`).
+The defaults only work while the repository is **public**: GitHub Release
+downloads of a private repository need a login, which the app does not have.
 
 `UPDATE_MANIFEST_URL` is compiled into the app, so a change reaches people
 from the next release onward.
@@ -167,8 +186,9 @@ from the next release onward.
 | `CHANGELOG.md has no ## [X.Y.Z] section` | Add the dated section (or run `npm run release:patch`) and push again. |
 | `still has the placeholder entry` | Replace `- Describe what changed.` with real notes. |
 | `ANDROID_KEYSTORE_BASE64 is not set` | Do "One-time setup" above, then **Run workflow**. |
-| Release created but `version.json` push failed | Fix the permission/branch protection, then run `node scripts/release.mjs manifest --url <apk url> --sha256 <sha from the release notes> --size <bytes>` locally and commit. |
-| The app says the checksum did not match | The APK at the manifest URL is not the one released. Re-run the release or fix `version.json`. |
+| Release exists but has no `version.json` | **Actions → Release → Run workflow**. It attaches the manifest without rebuilding. |
+| `Tag vX.Y.Z exists but has no GitHub Release` | Delete the tag (see "Starting a release over") or bump the version. |
+| The app says the checksum did not match | The APK in the release is not the one the manifest describes. Start the release over. |
 | Update installs fail with "App not installed" | The APK was signed with a different key than the installed app. Always use the one release key. |
 
 ## Files involved
@@ -178,7 +198,9 @@ from the next release onward.
 | `product/pubspec.yaml` | the version, the single source of truth |
 | `CHANGELOG.md` | release notes: GitHub Release, website changelog, in-app update panel |
 | `scripts/release.mjs` | bump, check, notes, manifest |
-| `public/version.json` | the update manifest the app and the website read |
+| `version.json` (a GitHub Release asset) | the update manifest the app and the website read |
+| `lib/release-fallback.json` | the website's offline copy of the manifest |
+| `app/version.json/route.ts` | the manifest mirrored at `https://<your-site>/version.json` |
 | `.github/workflows/ci.yml` | checks on every push and pull request |
 | `.github/workflows/release.yml` | build, sign, publish |
 | `product/lib/services/updates/` | the app's updater (pub_semver compare, download, sha256 check) |

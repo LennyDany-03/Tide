@@ -1,0 +1,20 @@
+{
+  "version": "1.0.1",
+  "build": 2,
+  "releasedAt": "2026-09-15",
+  "minSupportedVersion": "1.0.0",
+  "android": {
+    "url": "",
+    "sha256": "",
+    "size": 0
+  },
+  "notes": [
+    "In-app updates: Tide checks for a new version, downloads it and installs it for you.",
+    "Settings, App updates: check for a new version any time.",
+    "Pause a habit for a trip or a sick week without breaking its streak.",
+    "A to-do list beside your habits, with due dates, repeats and reminders that work offline.",
+    "Home screen widgets for today's habits, to-dos, streaks, a habit dashboard, a heatmap and a weekly recap.",
+    "Pick which habit a widget shows, straight from the home screen.",
+    "Settings now shows the version of Tide you have installed."
+  ]
+}

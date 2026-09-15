@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { release } from "@/lib/release";
+import { getRelease } from "@/lib/release";
 import { Brand } from "./brand";
 
-export function SiteFooter() {
+export async function SiteFooter() {
+  const release = await getRelease();
   return (
     <footer className="border-t border-hairline">
       <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-12 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">

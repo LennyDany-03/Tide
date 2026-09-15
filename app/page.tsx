@@ -12,7 +12,10 @@ import { DownloadButton } from "./_components/download-button";
 import { Phone } from "./_components/phone";
 import { SiteFooter } from "./_components/site-footer";
 import { SiteHeader } from "./_components/site-header";
-import { formatDate, formatSize, release } from "@/lib/release";
+import { formatDate, formatSize, getRelease } from "@/lib/release";
+
+// Picks up a new GitHub Release without a redeploy (see lib/release.ts).
+export const revalidate = 900;
 
 /** The app's five palettes, from product/lib/theme/tide_palette.dart. */
 const palettes = [
@@ -43,7 +46,8 @@ const plans = {
   ],
 };
 
-export default function Home() {
+export default async function Home() {
+  const release = await getRelease();
   const size = formatSize(release.android.size);
 
   return (

@@ -7,9 +7,16 @@
 #
 #   1. checks CHANGELOG.md has finished notes for it,
 #   2. builds a release APK signed with the Tide release key,
-#   3. creates the GitHub Release vX.Y.Z with the APK attached,
-#   4. rewrites public/version.json (the manifest the app's updater and the
-#      website read) and commits it back to main.
+#   3. creates the GitHub Release vX.Y.Z with two files attached: the APK and
+#      version.json, the update manifest.
+#
+# The app and the website read the manifest from
+#   https://github.com/<owner>/<repo>/releases/latest/download/version.json
+# which GitHub always points at the newest release. So nothing is ever
+# committed back to main, and main can stay locked to pull requests.
+#
+# If a release exists but lost its version.json (an interrupted run), the
+# next run attaches it without rebuilding anything.
 #
 # How to cut a release, and the secrets this needs: TRIGGER.md.
 name: Release
@@ -43,48 +50,62 @@ jobs:
        github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     outputs:
-      release: ${{ steps.tag.outputs.release }}
       version: ${{ steps.info.outputs.version }}
-      build: ${{ steps.info.outputs.build }}
       tag: ${{ steps.info.outputs.tag }}
-      sha: ${{ steps.sha.outputs.sha }}
+      build_apk: ${{ steps.state.outputs.build_apk }}
+      publish_manifest: ${{ steps.state.outputs.publish_manifest }}
+      sha: ${{ steps.state.outputs.sha }}
     steps:
       - uses: actions/checkout@v5
         with:
           # The commit CI actually tested, not whatever main is now.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
-      - id: sha
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
+
       - id: info
         run: node scripts/release.mjs info
-      - id: tag
+
+      - id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.info.outputs.tag }}
         run: |
-          if git rev-parse -q --verify "refs/tags/${{ steps.info.outputs.tag }}" >/dev/null; then
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::${{ steps.info.outputs.tag }} is already released. Bump the version in product/pubspec.yaml to publish a new one."
-          else
-            echo "release=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Releasing ${{ steps.info.outputs.tag }}."
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "build_apk=true" >> "$GITHUB_OUTPUT"
+            echo "publish_manifest=true" >> "$GITHUB_OUTPUT"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            echo "::notice::Releasing $TAG."
+            exit 0
           fi
-      - if: steps.tag.outputs.release == 'true'
+
+          echo "build_apk=false" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse "$TAG^{commit}")" >> "$GITHUB_OUTPUT"
+          if ! assets=$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null); then
+            echo "publish_manifest=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Tag $TAG exists but has no GitHub Release. Delete the tag or bump the version (TRIGGER.md)."
+          elif echo "$assets" | grep -qx "version.json"; then
+            echo "publish_manifest=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$TAG is already released. Bump the version in product/pubspec.yaml to publish a new one."
+          else
+            echo "publish_manifest=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$TAG is released but has no version.json. Attaching it."
+          fi
+
+      - if: steps.state.outputs.build_apk == 'true'
         run: node scripts/release.mjs check
 
   build:
     name: Build signed APK
     needs: prepare
-    if: needs.prepare.outputs.release == 'true'
+    if: needs.prepare.outputs.build_apk == 'true'
     runs-on: ubuntu-latest
-    outputs:
-      sha256: ${{ steps.apk.outputs.sha256 }}
-      size: ${{ steps.apk.outputs.size }}
-      # No `file` output on purpose. GitHub drops any job output that
-      # contains the text of a secret, and the APK name contains "tide",
-      # which is also the key alias secret. The publish job rebuilds the
-      # name from the version instead.
+    # No job outputs here on purpose. GitHub drops any job output containing
+    # the text of a secret, and the APK name contains "tide", which is also
+    # the key alias. The publish job works everything out from the file.
     steps:
       - uses: actions/checkout@v5
         with:
@@ -123,7 +144,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
-          UPDATE_MANIFEST_URL: ${{ vars.UPDATE_MANIFEST_URL || format('https://raw.githubusercontent.com/{0}/main/public/version.json', github.repository) }}
+          UPDATE_MANIFEST_URL: ${{ vars.UPDATE_MANIFEST_URL || format('{0}/{1}/releases/latest/download/version.json', github.server_url, github.repository) }}
         run: |
           {
             echo "SUPABASE_URL=$SUPABASE_URL"
@@ -141,36 +162,37 @@ jobs:
         run: |
           flutter pub get
           flutter build apk --release --dart-define-from-file=.env.release
-
-      - id: apk
-        name: Name and fingerprint the APK
-        run: |
-          file="tide-${{ needs.prepare.outputs.version }}.apk"
-          mv product/build/app/outputs/flutter-apk/app-release.apk "$file"
-          echo "file=$file" >> "$GITHUB_OUTPUT"
-          echo "sha256=$(sha256sum "$file" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-          echo "size=$(stat -c%s "$file")" >> "$GITHUB_OUTPUT"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          mv build/app/outputs/flutter-apk/app-release.apk \
+            "$GITHUB_WORKSPACE/dist/tide-${{ needs.prepare.outputs.version }}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
           name: apk
-          path: ${{ steps.apk.outputs.file }}
+          path: dist/*.apk
           if-no-files-found: error
           retention-days: 7
 
   publish:
     name: Publish release
     needs: [prepare, build]
+    # Runs after a build, and also on its own (build skipped) to attach a
+    # missing version.json to an existing release.
+    if: >-
+      always() &&
+      needs.prepare.outputs.publish_manifest == 'true' &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      SHA: ${{ needs.prepare.outputs.sha }}
     steps:
       - uses: actions/checkout@v5
         with:
           ref: main
           fetch-depth: 0
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: apk
 
       - uses: actions/setup-node@v5
         with:
@@ -179,63 +201,60 @@ jobs:
       # main may have moved on since CI passed. The release describes the
       # commit that was tested, so the script reads that commit's copies.
       - name: Read the released commit's version and notes
-        env:
-          SHA: ${{ needs.prepare.outputs.sha }}
         run: |
           git show "$SHA:CHANGELOG.md" > "$RUNNER_TEMP/CHANGELOG.md"
           git show "$SHA:product/pubspec.yaml" > "$RUNNER_TEMP/pubspec.yaml"
           echo "RELEASE_CHANGELOG=$RUNNER_TEMP/CHANGELOG.md" >> "$GITHUB_ENV"
           echo "RELEASE_PUBSPEC=$RUNNER_TEMP/pubspec.yaml" >> "$GITHUB_ENV"
 
-      - name: Create the GitHub Release
+      - name: Get the freshly built APK
+        if: needs.build.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: dist
+
+      - name: Get the APK from the existing release
+        if: needs.build.result == 'skipped'
+        run: gh release download "$TAG" --pattern "tide-$VERSION.apk" --dir dist
+
+      - name: Write the update manifest
         env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.prepare.outputs.tag }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-          SHA: ${{ needs.prepare.outputs.sha }}
-          SHA256: ${{ needs.build.outputs.sha256 }}
+          APK_BASE_URL: ${{ vars.APK_BASE_URL }}
+          MIN_SUPPORTED_VERSION: ${{ vars.MIN_SUPPORTED_VERSION || '1.0.0' }}
         run: |
-          FILE="tide-$VERSION.apk"
+          FILE="dist/tide-$VERSION.apk"
           if [ ! -f "$FILE" ]; then
-            echo "::error::$FILE was not in the downloaded artifact."
-            ls -la
+            echo "::error::$FILE is missing."
+            ls -la dist || true
             exit 1
           fi
+          base="${APK_BASE_URL:-${{ github.server_url }}/${{ github.repository }}/releases/download/$TAG}"
+          node scripts/release.mjs manifest \
+            --url "$base/tide-$VERSION.apk" \
+            --sha256 "$(sha256sum "$FILE" | cut -d' ' -f1)" \
+            --size "$(stat -c%s "$FILE")" \
+            --min-supported "$MIN_SUPPORTED_VERSION" \
+            --out dist/version.json
+          cat dist/version.json
+
+      # The APK and the manifest go up together, so "latest" never points at
+      # a release whose version.json is not there yet.
+      - name: Create the GitHub Release
+        if: needs.build.result == 'success'
+        run: |
           {
             node scripts/release.mjs notes "$VERSION"
             echo
             echo "---"
-            echo "SHA-256 \`$SHA256\`"
+            echo "SHA-256 \`$(sha256sum "dist/tide-$VERSION.apk" | cut -d' ' -f1)\`"
           } > "$RUNNER_TEMP/notes.md"
-          gh release create "$TAG" "$FILE" \
+          gh release create "$TAG" "dist/tide-$VERSION.apk" dist/version.json \
             --target "$SHA" \
             --title "Tide $VERSION" \
-            --notes-file "$RUNNER_TEMP/notes.md"
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --latest
 
-      - name: Point the update manifest at the new APK
-        env:
-          TAG: ${{ needs.prepare.outputs.tag }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-          SHA256: ${{ needs.build.outputs.sha256 }}
-          SIZE: ${{ needs.build.outputs.size }}
-          APK_BASE_URL: ${{ vars.APK_BASE_URL }}
-        run: |
-          FILE="tide-$VERSION.apk"
-          base="${APK_BASE_URL:-${{ github.server_url }}/${{ github.repository }}/releases/download/$TAG}"
-          node scripts/release.mjs manifest --url "$base/$FILE" --sha256 "$SHA256" --size "$SIZE"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/version.json
-          if git diff --cached --quiet; then
-            echo "public/version.json is already current."
-            exit 0
-          fi
-          # [skip ci]: the manifest commit is output, not a change to check.
-          git commit -m "Release Tide $VERSION [skip ci]"
-          for attempt in 1 2 3; do
-            git pull --rebase origin main && git push origin HEAD:main && exit 0
-            sleep 5
-          done
-          echo "::error::Could not push public/version.json to main."
-          exit 1
+      - name: Attach the manifest to the existing release
+        if: needs.build.result == 'skipped'
+        run: gh release upload "$TAG" dist/version.json --clobber

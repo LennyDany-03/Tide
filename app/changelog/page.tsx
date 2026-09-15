@@ -3,7 +3,10 @@ import { DownloadButton } from "../_components/download-button";
 import { SiteFooter } from "../_components/site-footer";
 import { SiteHeader } from "../_components/site-header";
 import { parseInline, readChangelog, type InlinePart } from "@/lib/changelog";
-import { formatDate, release } from "@/lib/release";
+import { formatDate, getRelease } from "@/lib/release";
+
+// Picks up a new GitHub Release without a redeploy (see lib/release.ts).
+export const revalidate = 900;
 
 export const metadata: Metadata = {
   title: "Changelog",
@@ -41,8 +44,9 @@ function Inline({ parts }: { parts: InlinePart[] }) {
   });
 }
 
-export default function ChangelogPage() {
+export default async function ChangelogPage() {
   const entries = readChangelog();
+  const release = await getRelease();
 
   return (
     <>
