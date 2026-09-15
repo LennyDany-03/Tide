@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  ArrowUpRight,
   FileArrowDown,
   GearSix,
   ShieldCheck,
@@ -11,6 +10,7 @@ import { Phone } from "../_components/phone";
 import { SiteFooter } from "../_components/site-footer";
 import { SiteHeader } from "../_components/site-header";
 import { formatDate, formatSize, getRelease, hasApk } from "@/lib/release";
+import { StartDownload } from "./start-download";
 
 // Picks up a new GitHub Release without a redeploy (see lib/release.ts).
 export const revalidate = 900;
@@ -71,21 +71,15 @@ export default async function ThanksPage() {
               first habit is one swipe away.
             </p>
 
-            {hasApk(release) ? (
-              <p
-                className="rise mt-4 text-sm text-silt"
-                style={{ "--i": 2 } as React.CSSProperties}
-              >
-                Download didn&rsquo;t start?{" "}
-                <a
-                  href={release.android.url}
-                  className="inline-flex items-center gap-1 font-medium text-lantern underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lantern"
-                >
-                  Download the APK Directly
-                  <ArrowUpRight aria-hidden="true" weight="bold" className="size-3.5" />
-                </a>
-              </p>
-            ) : null}
+            <div className="rise" style={{ "--i": 2 } as React.CSSProperties}>
+              {hasApk(release) ? (
+                <StartDownload url={release.android.url} size={size} />
+              ) : (
+                <p className="mt-8 text-silt" role="status">
+                  The download is being prepared. Check back in a few minutes.
+                </p>
+              )}
+            </div>
 
             <ol className="mt-12 grid gap-4 sm:grid-cols-3 lg:max-w-2xl">
               {steps.map((step, i) => (
