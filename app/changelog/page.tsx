@@ -6,7 +6,7 @@ import { parseInline, readChangelog, type InlinePart } from "@/lib/changelog";
 import { formatDate, getRelease } from "@/lib/release";
 
 // Picks up a new GitHub Release without a redeploy (see lib/release.ts).
-export const revalidate = 900;
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Changelog",

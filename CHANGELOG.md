@@ -10,6 +10,12 @@ and versions follow [Semantic Versioning](https://semver.org/). See
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-09-15
+
+### Fixed
+
+- Logging in no longer says "no account" when your keyboard slips a space into your email address.
+
 ## [1.0.2] - 2026-09-15
 
 ### Fixed

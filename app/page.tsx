@@ -15,7 +15,7 @@ import { SiteHeader } from "./_components/site-header";
 import { formatDate, formatSize, getRelease } from "@/lib/release";
 
 // Picks up a new GitHub Release without a redeploy (see lib/release.ts).
-export const revalidate = 900;
+export const revalidate = 300;
 
 /** The app's five palettes, from product/lib/theme/tide_palette.dart. */
 const palettes = [

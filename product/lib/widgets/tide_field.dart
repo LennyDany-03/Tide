@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/tide_colors.dart';
 import '../theme/tide_elevation.dart';
@@ -34,6 +35,8 @@ class TideField extends StatefulWidget {
     this.textInputAction = TextInputAction.next,
     this.textCapitalization = TextCapitalization.none,
     this.autofillHints,
+    this.inputFormatters,
+    this.autocorrect = true,
     this.onSubmitted,
     this.onChanged,
     this.trailing,
@@ -59,6 +62,11 @@ class TideField extends StatefulWidget {
   final TextInputAction textInputAction;
   final TextCapitalization textCapitalization;
   final Iterable<String>? autofillHints;
+  final List<TextInputFormatter>? inputFormatters;
+
+  /// Off for addresses: keyboards "correct" `gmail.com` into `gmail. com`,
+  /// and an address with a space in it belongs to nobody.
+  final bool autocorrect;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
 
@@ -134,7 +142,9 @@ class _TideFieldState extends State<TideField>
           builder: (context, child) {
             final t = _shake.value;
             // Three decaying swings — a nudge, not a tantrum.
-            final offset = t == 0 ? 0.0 : math.sin(t * math.pi * 6) * 7 * (1 - t);
+            final offset = t == 0
+                ? 0.0
+                : math.sin(t * math.pi * 6) * 7 * (1 - t);
             return Transform.translate(offset: Offset(offset, 0), child: child);
           },
           child: AnimatedContainer(
@@ -158,6 +168,9 @@ class _TideFieldState extends State<TideField>
                     textInputAction: widget.textInputAction,
                     textCapitalization: widget.textCapitalization,
                     autofillHints: widget.autofillHints,
+                    inputFormatters: widget.inputFormatters,
+                    autocorrect: widget.autocorrect,
+                    enableSuggestions: widget.autocorrect,
                     onSubmitted: widget.onSubmitted,
                     onChanged: widget.onChanged,
                     decoration: InputDecoration(
@@ -206,11 +219,7 @@ class TideFieldToggle extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.all(10),
-        child: Icon(
-          on ? onIcon : offIcon,
-          size: 19,
-          color: TideColors.silt,
-        ),
+        child: Icon(on ? onIcon : offIcon, size: 19, color: TideColors.silt),
       ),
     );
   }
