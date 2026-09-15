@@ -10,7 +10,10 @@ import Link from "next/link";
 import { Phone } from "../_components/phone";
 import { SiteFooter } from "../_components/site-footer";
 import { SiteHeader } from "../_components/site-header";
-import { formatDate, formatSize, hasApk, release } from "@/lib/release";
+import { formatDate, formatSize, getRelease, hasApk } from "@/lib/release";
+
+// Picks up a new GitHub Release without a redeploy (see lib/release.ts).
+export const revalidate = 900;
 
 export const metadata: Metadata = {
   title: "Thanks for Downloading",
@@ -37,7 +40,8 @@ const steps = [
   },
 ];
 
-export default function ThanksPage() {
+export default async function ThanksPage() {
+  const release = await getRelease();
   const size = formatSize(release.android.size);
 
   return (
@@ -67,7 +71,7 @@ export default function ThanksPage() {
               first habit is one swipe away.
             </p>
 
-            {hasApk ? (
+            {hasApk(release) ? (
               <p
                 className="rise mt-4 text-sm text-silt"
                 style={{ "--i": 2 } as React.CSSProperties}

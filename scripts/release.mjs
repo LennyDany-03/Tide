@@ -6,12 +6,13 @@
 //   node scripts/release.mjs check                      the current version has release notes
 //   node scripts/release.mjs info                       version, build and tag (GITHUB_OUTPUT aware)
 //   node scripts/release.mjs notes [version]            that version's changelog section, as markdown
-//   node scripts/release.mjs manifest --url U --sha256 S --size N
-//                                                       rewrites public/version.json
+//   node scripts/release.mjs manifest --url U --sha256 S --size N [--min-supported X.Y.Z] [--out FILE]
+//                                                       writes the update manifest (default lib/release-fallback.json)
 //
 // The version lives in exactly one place, product/pubspec.yaml. Everything
 // else (the tag, the APK name, the website's version number, the in-app
-// update check) is derived from it by this script.
+// update check) is derived from it by this script. The release workflow
+// attaches the manifest to the GitHub Release as version.json.
 
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -23,7 +24,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const paths = {
   pubspec: process.env.RELEASE_PUBSPEC ?? join(root, "product", "pubspec.yaml"),
   changelog: process.env.RELEASE_CHANGELOG ?? join(root, "CHANGELOG.md"),
-  manifest: join(root, "public", "version.json"),
+  manifest: join(root, "lib", "release-fallback.json"),
 };
 
 const PLACEHOLDER = "Describe what changed.";
@@ -161,28 +162,26 @@ function manifest(args) {
   if (url && !url.startsWith("https://")) fail("--url must be https.");
   if (sha256 && !/^[0-9a-f]{64}$/.test(sha256)) fail("--sha256 must be 64 hex characters.");
 
+  // Raising this forces older installs to update. It is never derived from
+  // the version, so only an explicit setting (the MIN_SUPPORTED_VERSION
+  // repository variable in the release workflow) ever raises it.
+  const minSupported = flag("min-supported") ?? "1.0.0";
+  if (!/^\d+\.\d+\.\d+$/.test(minSupported)) fail("--min-supported must be X.Y.Z.");
+  const out = flag("out") ?? paths.manifest;
+
   const { version, build } = readPubspec();
   const section = sectionFor(version);
-
-  let previous = {};
-  try {
-    previous = JSON.parse(readFileSync(paths.manifest, "utf8"));
-  } catch {
-    // First manifest: nothing to carry over.
-  }
 
   const data = {
     version,
     build,
     releasedAt: section.date ?? today(),
-    // Raising this forces older installs to update. It is carried over
-    // rather than derived, so only an explicit edit ever raises it.
-    minSupportedVersion: previous.minSupportedVersion ?? "1.0.0",
+    minSupportedVersion: minSupported,
     android: { url, sha256, size },
     notes: bullets(section.body),
   };
-  writeFileSync(paths.manifest, JSON.stringify(data, null, 2) + "\n");
-  console.log(`public/version.json -> ${version}+${build}`);
+  writeFileSync(out, JSON.stringify(data, null, 2) + "\n");
+  console.log(`${out} -> ${version}+${build}`);
 }
 
 const [command, ...rest] = process.argv.slice(2);
