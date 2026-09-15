@@ -79,6 +79,12 @@ Future<void> main() async {
     );
     taskRemote = SupabaseTaskRemote(Supabase.instance.client);
   } else {
+    if (SupabaseConfig.url.isNotEmpty && !SupabaseConfig.hasValidUrl) {
+      debugPrint(
+        'Tide: SUPABASE_URL is not a URL (it should be just '
+        'https://<project>.supabase.co). Falling back to demo mode.',
+      );
+    }
     debugPrint(
       'Tide: SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY not set — run with '
       '--dart-define-from-file=.env. Accounts, habits and plans are kept in '

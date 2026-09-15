@@ -43,5 +43,18 @@ abstract final class SupabaseConfig {
     defaultValue: '',
   );
 
-  static bool get isConfigured => url.isNotEmpty && publishableKey.isNotEmpty;
+  /// Whether both values are set and the URL is one Supabase can use.
+  ///
+  /// A malformed URL (a secret pasted as `SUPABASE_URL=https://…`, say) makes
+  /// `Supabase.initialize` throw before the first frame, which leaves the app
+  /// stuck on the native launch screen for good. Treated as unconfigured, the
+  /// build opens in demo mode instead and says why in the log.
+  static bool get isConfigured => publishableKey.isNotEmpty && hasValidUrl;
+
+  static bool get hasValidUrl {
+    final uri = Uri.tryParse(url);
+    return uri != null &&
+        (uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.host.isNotEmpty;
+  }
 }

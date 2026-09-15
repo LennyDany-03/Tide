@@ -10,6 +10,12 @@ and versions follow [Semantic Versioning](https://semver.org/). See
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-15
+
+### Fixed
+
+- Tide 1.0.1 could stay stuck on the launch screen and never open. It now starts normally.
+
 ## [1.0.1] - 2026-09-15
 
 ### Added

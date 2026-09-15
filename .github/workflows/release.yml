@@ -138,6 +138,12 @@ jobs:
 
       # Public, compile-time values only (see product/lib/config/). Missing
       # ones leave that feature in its offline/demo mode rather than failing.
+      #
+      # Secrets are often pasted as the whole .env line ("SUPABASE_URL=https://…")
+      # rather than just the value. Compiled in like that, the app hands
+      # Supabase a URL it cannot parse and never gets past the launch screen
+      # (v1.0.1). So each value is reduced to the bare value first, and a URL
+      # that is still not a URL stops the build instead of shipping.
       - name: Write build configuration
         working-directory: product
         env:
@@ -146,11 +152,47 @@ jobs:
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
           UPDATE_MANIFEST_URL: ${{ vars.UPDATE_MANIFEST_URL || format('{0}/{1}/releases/latest/download/version.json', github.server_url, github.repository) }}
         run: |
+          # The value for $1 out of $2: the "NAME=" line if there is one, else
+          # the first non-blank line, without "export", quotes or whitespace.
+          value_of() {
+            local lines line
+            lines=$(printf '%s\n' "$2" | tr -d '\r')
+            line=$(printf '%s\n' "$lines" | grep -m1 -E "^[[:space:]]*(export[[:space:]]+)?$1=" || true)
+            [ -n "$line" ] || line=$(printf '%s\n' "$lines" | grep -m1 -v '^[[:space:]]*$' || true)
+            printf '%s' "$line" | sed -E \
+              -e "s/^[[:space:]]*(export[[:space:]]+)?$1=//" \
+              -e 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+              -e "s/^\"(.*)\"$/\1/; s/^'(.*)'$/\1/"
+          }
+
+          url=$(value_of SUPABASE_URL "$SUPABASE_URL")
+          key=$(value_of SUPABASE_PUBLISHABLE_KEY "$SUPABASE_PUBLISHABLE_KEY")
+          google=$(value_of GOOGLE_WEB_CLIENT_ID "$GOOGLE_WEB_CLIENT_ID")
+          manifest=$(value_of UPDATE_MANIFEST_URL "$UPDATE_MANIFEST_URL")
+
+          fail=0
+          if [ -n "$url" ] && ! [[ "$url" =~ ^https://[^[:space:]/]+(/[^[:space:]]*)?$ ]]; then
+            echo "::error::SUPABASE_URL is not a URL. The secret must be just the value, e.g. https://abcd.supabase.co"
+            fail=1
+          fi
+          if [[ "$key" =~ [[:space:]=] ]]; then
+            echo "::error::SUPABASE_PUBLISHABLE_KEY looks malformed. The secret must be just the key, e.g. sb_publishable_…"
+            fail=1
+          fi
+          if [ -n "$manifest" ] && ! [[ "$manifest" =~ ^https://[^[:space:]]+$ ]]; then
+            echo "::error::UPDATE_MANIFEST_URL is not a URL."
+            fail=1
+          fi
+          [ "$fail" = 0 ] || exit 1
+          if { [ -n "$url" ] && [ -z "$key" ]; } || { [ -z "$url" ] && [ -n "$key" ]; }; then
+            echo "::warning::Only one of SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY is set. This build runs in demo mode."
+          fi
+
           {
-            echo "SUPABASE_URL=$SUPABASE_URL"
-            echo "SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
-            echo "GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID"
-            echo "UPDATE_MANIFEST_URL=$UPDATE_MANIFEST_URL"
+            echo "SUPABASE_URL=$url"
+            echo "SUPABASE_PUBLISHABLE_KEY=$key"
+            echo "GOOGLE_WEB_CLIENT_ID=$google"
+            echo "UPDATE_MANIFEST_URL=$manifest"
           } > .env.release
 
       - name: Build
