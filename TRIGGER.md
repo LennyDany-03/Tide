@@ -18,7 +18,7 @@ CI green on main ─► Release (.github/workflows/release.yml)
                         │
                         │  github.com/<owner>/<repo>/releases/latest/download/version.json
                         │  always points at the newest release, so:
-                        ├─► website shows the new version within 15 minutes
+                        ├─► website shows the new version at once (or within 5 minutes)
                         └─► installed apps see the update and install it
 ```
 
@@ -76,10 +76,11 @@ Release workflow starts by itself. Watch it under **Actions → Release**.
 
 - **Releases** on GitHub has `vX.Y.Z` with `tide-X.Y.Z.apk`, its SHA-256 and
   `version.json` (the update manifest).
-- The website re-reads that manifest every 15 minutes, with no redeploy
-  needed: it shows the new version, and the thank-you page links to the
-  real APK. The changelog page updates when the merge to `main` redeploys
-  the site.
+- The website shows the new version, and the thank-you page links to the
+  real APK, with no redeploy needed. The last step of the Release workflow
+  tells the site to refresh (see "Refresh the website on release" below);
+  without that set up, the site re-reads the manifest every 5 minutes. The
+  changelog page updates when the merge to `main` redeploys the site.
 - Installed apps find the update on their next launch (or when reopened
   after 6 hours), show "Tide X.Y.Z is ready" once, and keep it under
   **Settings → App updates** after that.
@@ -142,6 +143,11 @@ Never commit the `.jks` file.
 | `SUPABASE_URL`              | same as in `product/.env` (optional: without it, demo mode)  |
 | `SUPABASE_PUBLISHABLE_KEY`  | same as in `product/.env` (optional)                         |
 | `GOOGLE_WEB_CLIENT_ID`      | same as in `product/.env` (optional)                         |
+| `SITE_REVALIDATE_SECRET`    | any long random string (optional, see step 5)                |
+
+Paste only the value, the part after `=` in `product/.env`, not the whole
+`NAME=value` line. The workflow strips a pasted `NAME=` anyway, and stops if
+`SUPABASE_URL` is still not a URL.
 
 Base64 of the keystore:
 
@@ -178,6 +184,20 @@ downloads of a private repository need a login, which the app does not have.
 `UPDATE_MANIFEST_URL` is compiled into the app, so a change reaches people
 from the next release onward.
 
+### 5. Refresh the website on release (optional)
+
+The site caches the release for 5 minutes. To show a new version the moment
+it is published:
+
+1. Make a long random secret, e.g. `openssl rand -hex 32`.
+2. On the website host (Vercel → Project → Settings → Environment Variables),
+   add `REVALIDATE_SECRET` = that secret, then redeploy once.
+3. In GitHub, add the secret `SITE_REVALIDATE_SECRET` = the same value, and
+   the variable `SITE_URL` = the site's address, e.g. `https://tide.example.com`.
+
+After each release the workflow calls `POST <SITE_URL>/api/revalidate`. It
+retries until GitHub serves the new manifest, and never fails the release.
+
 ## When something goes wrong
 
 | Symptom | Fix |
@@ -189,6 +209,8 @@ from the next release onward.
 | Release exists but has no `version.json` | **Actions → Release → Run workflow**. It attaches the manifest without rebuilding. |
 | `Tag vX.Y.Z exists but has no GitHub Release` | Delete the tag (see "Starting a release over") or bump the version. |
 | The app says the checksum did not match | The APK in the release is not the one the manifest describes. Start the release over. |
+| App stuck on the launch screen, or login says "no account" for a real one | A build secret holds the whole `.env` line or the wrong project. Set each secret to just its value and release again. |
+| Website still shows the old version | Wait 5 minutes, or set up step 5. The **Refresh the website** step in the Release run says what happened. |
 | Update installs fail with "App not installed" | The APK was signed with a different key than the installed app. Always use the one release key. |
 
 ## Files involved

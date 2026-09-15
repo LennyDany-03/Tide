@@ -300,3 +300,32 @@ jobs:
       - name: Attach the manifest to the existing release
         if: needs.build.result == 'skipped'
         run: gh release upload "$TAG" dist/version.json --clobber
+
+      # Without this the website finds the release on its own within
+      # RELEASE_REVALIDATE (lib/release.ts). The site answers 409 until
+      # GitHub's latest/download link serves the new manifest, so this retries
+      # for a few minutes. A failure here never fails the release: the APK and
+      # the manifest are already published.
+      - name: Refresh the website
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          REVALIDATE_SECRET: ${{ secrets.SITE_REVALIDATE_SECRET }}
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$REVALIDATE_SECRET" ]; then
+            echo "::notice::SITE_URL / SITE_REVALIDATE_SECRET not set, so the website picks up $VERSION on its own within 5 minutes (TRIGGER.md)."
+            exit 0
+          fi
+          for attempt in $(seq 1 12); do
+            status=$(curl -sS -o "$RUNNER_TEMP/revalidate.json" -w '%{http_code}' \
+              -X POST "${SITE_URL%/}/api/revalidate" \
+              -H "Authorization: Bearer $REVALIDATE_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "{\"version\":\"$VERSION\"}") || status=000
+            cat "$RUNNER_TEMP/revalidate.json" 2>/dev/null; echo
+            case "$status" in
+              200) echo "::notice::Website now shows $VERSION."; exit 0 ;;
+              409|000|5*) echo "Attempt $attempt: not yet ($status). Waiting 20s."; sleep 20 ;;
+              *) echo "::warning::Website refresh refused ($status). Check SITE_REVALIDATE_SECRET matches REVALIDATE_SECRET on the site."; exit 0 ;;
+            esac
+          done
+          echo "::warning::The website did not confirm $VERSION. It will pick it up on its own within 5 minutes."

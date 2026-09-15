@@ -83,6 +83,25 @@ void main() {
         reason: 'the tour belongs to the first sign-in only',
       );
     });
+
+    testWidgets('a space the keyboard slipped into the address is ignored', (
+      tester,
+    ) async {
+      await openAccountForm(tester);
+      // What a phone keyboard does after the full stop in "gmail.com".
+      final at = DemoAuthService.demoEmail.indexOf('@');
+      final typed = DemoAuthService.demoEmail.replaceFirst('.', '. ', at);
+      await fill(tester, [' $typed ', DemoAuthService.demoPassword]);
+
+      expect(find.text(DemoAuthService.demoEmail), findsOneWidget);
+
+      await pressAuthButton(tester, 'Log in');
+
+      expect(find.text('No Tide account uses this email'), findsNothing);
+      expect(find.text('Welcome back,'), findsOneWidget);
+
+      await crossWelcome(tester);
+    });
   });
 
   group('create only makes accounts that do not exist', () {

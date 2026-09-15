@@ -21,8 +21,15 @@ export const MANIFEST_URL =
   process.env.TIDE_MANIFEST_URL ??
   "https://github.com/LennyDany-03/Tide/releases/latest/download/version.json";
 
-/** How often, in seconds, the site looks for a newer release. */
-export const RELEASE_REVALIDATE = 900;
+/**
+ * How often, in seconds, the site looks for a newer release on its own. A
+ * release normally refreshes the site at once through /api/revalidate; this
+ * is the backstop for when that call is not configured or fails.
+ */
+export const RELEASE_REVALIDATE = 300;
+
+/** Cache tag on the manifest fetch, cleared by /api/revalidate. */
+export const RELEASE_TAG = "release";
 
 function isRelease(value: unknown): value is Release {
   const v = value as Release;
@@ -42,7 +49,7 @@ function isRelease(value: unknown): value is Release {
 export async function getRelease(): Promise<Release> {
   try {
     const response = await fetch(MANIFEST_URL, {
-      next: { revalidate: RELEASE_REVALIDATE },
+      next: { revalidate: RELEASE_REVALIDATE, tags: [RELEASE_TAG] },
     });
     if (response.ok) {
       const data: unknown = await response.json();

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
@@ -147,14 +148,21 @@ class _AuthScreenState extends State<AuthScreen> {
     return at > 0 && value.indexOf('.', at) > at + 1 && !value.endsWith('.');
   }
 
+  static final RegExp _whitespace = RegExp(r'\s');
+
+  /// The address as typed, minus any whitespace. No address contains a
+  /// space, but keyboards add one after a full stop ("gmail. com"), and
+  /// sent like that the account is reported as not existing.
+  String get _typedEmail => _email.text.replaceAll(_whitespace, '');
+
   Map<String, String> _validate() {
     final found = <String, String>{};
     if (_signingUp && _name.text.trim().isEmpty) {
       found['name'] = 'What should we call you?';
     }
-    if (_email.text.trim().isEmpty) {
+    if (_typedEmail.isEmpty) {
       found['email'] = 'Email is required';
-    } else if (!_looksLikeEmail(_email.text.trim())) {
+    } else if (!_looksLikeEmail(_typedEmail)) {
       found['email'] = 'That does not look like an email';
     }
     if (_password.text.isEmpty) {
@@ -184,7 +192,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     final store = TideScope.read(context);
-    final email = _email.text.trim();
+    final email = _typedEmail;
     FocusScope.of(context).unfocus();
 
     // The button carries the wait rather than a dialog or a spinner over
@@ -229,7 +237,7 @@ class _AuthScreenState extends State<AuthScreen> {
   /// where it was left: a fresh code goes out as the code screen opens.
   void _enterCode() {
     if (_busy) return;
-    TideScope.read(context).beginVerification(_email.text.trim());
+    TideScope.read(context).beginVerification(_typedEmail);
     context.go(Routes.verifyEmail, extra: CodeDelivery.sendNow);
   }
 
@@ -268,7 +276,7 @@ class _AuthScreenState extends State<AuthScreen> {
   /// goes in the notice with the other half offered as its action. The
   /// typed address survives the switch, so it costs one tap and no typing.
   void _explain(AuthFailure failure, {bool fromGoogle = false}) {
-    final address = fromGoogle ? failure.detail : _email.text.trim();
+    final address = fromGoogle ? failure.detail : _typedEmail;
     final who = address == null || address.isEmpty ? 'this address' : address;
 
     switch (failure.problem) {
@@ -291,7 +299,8 @@ class _AuthScreenState extends State<AuthScreen> {
       case AuthProblem.googleAccount:
         _errors['email'] = 'This email signs in with Google';
         _notice = const _Notice(
-          message: 'This account was made with Google. Use Continue with '
+          message:
+              'This account was made with Google. Use Continue with '
               'Google below.',
         );
       case AuthProblem.wrongPassword:
@@ -319,7 +328,8 @@ class _AuthScreenState extends State<AuthScreen> {
         );
       case AuthProblem.offline:
         _notice = const _Notice(
-          message: 'Tide could not reach the server. Check the connection '
+          message:
+              'Tide could not reach the server. Check the connection '
               'and try again.',
         );
       case AuthProblem.cancelled:
@@ -490,6 +500,8 @@ class _AuthScreenState extends State<AuthScreen> {
           errorTick: _tick,
           keyboardType: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.email],
+          autocorrect: false,
+          inputFormatters: [FilteringTextInputFormatter.deny(_whitespace)],
         ),
         const SizedBox(height: 18),
 
@@ -587,9 +599,7 @@ class _AuthScreenState extends State<AuthScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                _signingUp
-                    ? 'Already have an account?'
-                    : 'New to Tide?',
+                _signingUp ? 'Already have an account?' : 'New to Tide?',
                 style: TideType.labelMuted,
               ),
               const SizedBox(width: 7),

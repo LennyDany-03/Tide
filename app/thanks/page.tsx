@@ -13,7 +13,7 @@ import { formatDate, formatSize, getRelease, hasApk } from "@/lib/release";
 import { StartDownload } from "./start-download";
 
 // Picks up a new GitHub Release without a redeploy (see lib/release.ts).
-export const revalidate = 900;
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Thanks for Downloading",
