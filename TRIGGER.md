@@ -130,6 +130,15 @@ keytool -genkeypair -v -keystore tide-release.jks -alias tide \
 
 Never commit the `.jks` file.
 
+Google sign-in only works in an APK whose signing key Google knows about. In
+Google Cloud → **Clients**, the **Android** client for package
+`com.example.tide` needs this key's SHA-1 (add a second Android client if the
+debug key's SHA-1 is already on one). Get it with:
+
+```bash
+keytool -list -v -keystore tide-release.jks -alias tide | grep SHA1
+```
+
 ### 2. Add repository secrets
 
 **Settings → Secrets and variables → Actions → New repository secret**
@@ -210,6 +219,7 @@ retries until GitHub serves the new manifest, and never fails the release.
 | `Tag vX.Y.Z exists but has no GitHub Release` | Delete the tag (see "Starting a release over") or bump the version. |
 | The app says the checksum did not match | The APK in the release is not the one the manifest describes. Start the release over. |
 | App stuck on the launch screen, or login says "no account" for a real one | A build secret holds the whole `.env` line or the wrong project. Set each secret to just its value and release again. |
+| Google sign-in works from `flutter run` but not in the released APK | Google Cloud only knows the debug key. Add the release key's SHA-1 to an Android client (see "Create the release key"). No new release needed. |
 | Website still shows the old version | Wait 5 minutes, or set up step 5. The **Refresh the website** step in the Release run says what happened. |
 | Update installs fail with "App not installed" | The APK was signed with a different key than the installed app. Always use the one release key. |
 
