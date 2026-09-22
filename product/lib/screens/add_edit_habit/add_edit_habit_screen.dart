@@ -467,7 +467,6 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
 
           FreezeStepper(
             value: _freezes,
-            ceiling: TideScope.of(context).freezeCeiling,
             onChanged: (value) => _edit(() => _freezes = value),
           ),
 

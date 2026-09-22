@@ -54,10 +54,8 @@ android {
                 if (releaseKeystore != null) "release" else "debug",
             )
 
-            // Shrinking is off, so these are inert today. They are wired up
-            // now so that turning it on for a Play release does not silently
-            // strip Razorpay's checkout — which fails only in release, and
-            // only once money is involved. See proguard-rules.pro.
+            // Shrinking is off, so these are inert today. Wired up now so
+            // that turning it on for a Play release is a one-line change.
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

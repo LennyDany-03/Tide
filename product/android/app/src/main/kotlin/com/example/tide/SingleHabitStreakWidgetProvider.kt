@@ -14,24 +14,6 @@ class SingleHabitStreakWidgetProvider : TideHomeWidgetProvider() {
         widgetData: SharedPreferences,
     ) {
         appWidgetIds.forEach { widgetId ->
-            if (WidgetUi.instanceLocked(
-                    context,
-                    SingleHabitStreakWidgetProvider::class.java,
-                    widgetId,
-                    WidgetUi.isPro(widgetData),
-                )
-            ) {
-                appWidgetManager.updateAppWidget(
-                    widgetId,
-                    LockedWidgetViews.build(
-                        context,
-                        R.string.widget_streak_title,
-                        WidgetUi.upgradeUri().toString(),
-                    ),
-                )
-                return@forEach
-            }
-
             val payload = WidgetPayloadReader.singleHabitStreak(widgetData, widgetId)
             val configured = payload?.configured == true
             val views = RemoteViews(context.packageName, R.layout.widget_single_habit_streak)

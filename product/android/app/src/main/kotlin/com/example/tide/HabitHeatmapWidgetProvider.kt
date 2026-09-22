@@ -14,24 +14,6 @@ class HabitHeatmapWidgetProvider : TideHomeWidgetProvider() {
         widgetData: SharedPreferences,
     ) {
         appWidgetIds.forEach { widgetId ->
-            if (WidgetUi.instanceLocked(
-                    context,
-                    HabitHeatmapWidgetProvider::class.java,
-                    widgetId,
-                    WidgetUi.isPro(widgetData),
-                )
-            ) {
-                appWidgetManager.updateAppWidget(
-                    widgetId,
-                    LockedWidgetViews.build(
-                        context,
-                        R.string.widget_heatmap_title,
-                        WidgetUi.upgradeUri().toString(),
-                    ),
-                )
-                return@forEach
-            }
-
             val header = WidgetPayloadReader.heatmapHeader(widgetData, widgetId)
             val configured = header?.configured == true
             val views = RemoteViews(context.packageName, R.layout.widget_habit_heatmap)

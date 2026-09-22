@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../config/pro_features.dart';
 import '../../services/models/milestone.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
@@ -9,7 +8,6 @@ import '../../theme/tide_elevation.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/habit_glyph.dart';
 import '../../widgets/press_scale.dart';
-import '../../widgets/pro_lock.dart';
 import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_surface.dart';
 import 'widgets/milestone_route.dart';
@@ -37,16 +35,8 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
   /// The one door to the share card, so the gate is asked once rather than
   /// at each of the two places a milestone can be tapped.
   ///
-  /// The milestones themselves are free — every badge is earned, shown and
-  /// celebrated on any plan. What Pro buys is turning one into an image to
-  /// send, which is the part that costs nothing to withhold and takes nothing
-  /// away from the habit.
   void _share(BuildContext context, Milestone milestone) {
     final store = TideScope.read(context);
-    if (store.locked(ProFeature.shareCards)) {
-      askForPro(context, ProFeature.shareCards);
-      return;
-    }
     showShareCard(
       context,
       milestone: milestone,

@@ -11,9 +11,8 @@ import 'press_scale.dart';
 /// Sheet chrome: rounded top corners, floating elevation, an optional
 /// header with a dismiss control.
 ///
-/// Both sheets in the app — add/edit habit and the paywall — use this, so
-/// "this is contextual and you can leave" is communicated the same way in
-/// both places.
+/// Every sheet in the app uses this, so "this is contextual and you can
+/// leave" is communicated the same way everywhere.
 class TideSheet extends StatelessWidget {
   const TideSheet({
     super.key,
@@ -34,7 +33,7 @@ class TideSheet extends StatelessWidget {
 
   final VoidCallback? onDismiss;
 
-  /// A short line above the title — "Tide Pro". Sentence case; it names
+  /// A short line above the title — "Appearance". Sentence case; it names
   /// the sheet, it is not a category stamp.
   final String? eyebrow;
 
@@ -151,8 +150,8 @@ class _Header extends StatelessWidget {
 
 /// The × in a sheet corner.
 ///
-/// Plain press feedback and nothing else — the way out of a paywall must
-/// never carry extra friction.
+/// Plain press feedback and nothing else — the way out of a sheet must never
+/// carry extra friction.
 class SheetDismissButton extends StatelessWidget {
   const SheetDismissButton({super.key, required this.onTap});
 

@@ -2,13 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:home_widget/home_widget.dart';
 
-import '../../config/pro_features.dart';
-import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/tide_backdrop.dart';
-import 'widgets/locked_widget_preview.dart';
 import 'widgets/widget_gallery_card.dart';
 import 'widgets/widget_previews.dart';
 
@@ -40,26 +37,6 @@ class HomeWidgetsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final store = TideScope.of(context);
-
-    Widget gated({
-      required ProFeature feature,
-      required String title,
-      required String subtitle,
-      required Widget preview,
-      required String provider,
-    }) {
-      if (store.locked(feature)) {
-        return LockedWidgetPreview(title: title, feature: feature);
-      }
-      return WidgetGalleryCard(
-        title: title,
-        subtitle: subtitle,
-        preview: preview,
-        onAdd: () => _pin(context, provider),
-      );
-    }
-
     return Scaffold(
       backgroundColor: TideColors.deepWater,
       body: Stack(
@@ -116,10 +93,8 @@ class HomeWidgetsScreen extends StatelessWidget {
               const SizedBox(height: 16),
               WidgetGalleryCard(
                 title: 'Streak',
-                subtitle: store.locked(ProFeature.widgetInstances)
-                    ? 'One habit\'s streak. Tap the widget to choose which — '
-                          'Pro adds one for every habit.'
-                    : 'One habit\'s streak. Tap the widget to choose which.',
+                subtitle:
+                    "One habit's streak. Tap the widget to choose which.",
                 preview: const SingleHabitStreakPreview(),
                 onAdd: () => _pin(context, 'SingleHabitStreakWidgetProvider'),
               ),
@@ -140,28 +115,24 @@ class HomeWidgetsScreen extends StatelessWidget {
               const SizedBox(height: 16),
               WidgetGalleryCard(
                 title: 'Heatmap',
-                subtitle: store.locked(ProFeature.habitHeatmapWidget)
-                    ? 'Half a year of one habit. Tap the widget to choose which — '
-                          'Pro adds one for every habit.'
-                    : 'Half a year of one habit. Tap the widget to choose which.',
+                subtitle:
+                    'Half a year of one habit. Tap the widget to choose which.',
                 preview: const HeatmapPreview(),
                 onAdd: () => _pin(context, 'HabitHeatmapWidgetProvider'),
               ),
               const SizedBox(height: 16),
-              gated(
-                feature: ProFeature.habitDashboardWidget,
+              WidgetGalleryCard(
                 title: 'Streaks',
                 subtitle: 'Every habit, its week, and the run behind it.',
                 preview: const HabitDashboardPreview(),
-                provider: 'HabitDashboardWidgetProvider',
+                onAdd: () => _pin(context, 'HabitDashboardWidgetProvider'),
               ),
               const SizedBox(height: 16),
-              gated(
-                feature: ProFeature.weeklyRecapWidget,
+              WidgetGalleryCard(
                 title: 'This week',
                 subtitle: 'Your rate, last week to beat, and your best run.',
                 preview: const WeeklyRecapPreview(),
-                provider: 'WeeklyRecapWidgetProvider',
+                onAdd: () => _pin(context, 'WeeklyRecapWidgetProvider'),
               ),
             ],
           ),

@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../config/app_constants.dart';
-import '../../../config/pro_features.dart';
 import '../../../config/task_copy.dart';
 import '../../../services/tasks/task.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_typography.dart';
-import '../../../widgets/pro_lock.dart';
 import '../../../widgets/press_scale.dart';
 import 'task_sheet.dart';
 
@@ -17,35 +15,25 @@ typedef RepeatChoice = ({TaskRecurrence recurrence, int? months});
 /// row of five cramped segments.
 ///
 /// "Custom" opens a months stepper in place, with the yearly case named, so
-/// "renew the licence every year" is two taps and needs no arithmetic. On the
-/// free plan it is drawn with its badge and opens the paywall.
+/// "renew the licence every year" is two taps and needs no arithmetic.
 Future<RepeatChoice?> showRepeatSheet(
   BuildContext context, {
   required TaskRecurrence current,
   required int? months,
-  required bool customLocked,
 }) {
   return showTaskSheet<RepeatChoice>(
     context,
     title: 'Repeat',
-    builder: (context) => _RepeatOptions(
-      current: current,
-      months: months ?? 12,
-      customLocked: customLocked,
-    ),
+    builder: (context) =>
+        _RepeatOptions(current: current, months: months ?? 12),
   );
 }
 
 class _RepeatOptions extends StatefulWidget {
-  const _RepeatOptions({
-    required this.current,
-    required this.months,
-    required this.customLocked,
-  });
+  const _RepeatOptions({required this.current, required this.months});
 
   final TaskRecurrence current;
   final int months;
-  final bool customLocked;
 
   @override
   State<_RepeatOptions> createState() => _RepeatOptionsState();
@@ -88,15 +76,7 @@ class _RepeatOptionsState extends State<_RepeatOptions> {
           label: 'Custom',
           detail: _custom ? null : 'Every few months',
           selected: _custom,
-          trailing: widget.customLocked ? const ProBadge(compact: true) : null,
-          onTap: () {
-            if (widget.customLocked) {
-              Navigator.of(context).pop();
-              askForPro(context, ProFeature.taskCustomRepeat);
-              return;
-            }
-            setState(() => _custom = true);
-          },
+          onTap: () => setState(() => _custom = true),
         ),
         if (_custom) ...[
           const SizedBox(height: 8),

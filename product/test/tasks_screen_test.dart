@@ -129,18 +129,17 @@ void main() {
     expect(store.open.single.title, 'Call Marco about the mooring');
   });
 
-  testWidgets('a locked Pro control opens the paywall, not a dead end', (
-    tester,
-  ) async {
+  testWidgets('the archive opens straight from the header', (tester) async {
+    // This used to be the one gated control on the screen: tapping Archive
+    // raised the paywall. Tide is free, so it opens the archive itself.
     await openTasks(tester);
-    // The paywall's buttons are sized for real type; the test font's square
-    // glyphs are wider, so the sheet gets a wider phone.
     tester.view.physicalSize = const Size(1500, 2800);
     await settle(tester);
 
     await tester.tap(find.bySemanticsLabel('Archive'));
     await settle(tester, 600);
 
-    expect(find.text('Tide Pro'), findsWidgets);
+    expect(find.text('Archive'), findsWidgets);
+    expect(find.text('Tide Pro'), findsNothing);
   });
 }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
-import '../../config/pro_features.dart';
 import '../../config/task_copy.dart';
 import '../../services/tasks/task.dart';
 import '../../services/tasks/task_scope.dart';
@@ -10,7 +9,6 @@ import '../../theme/tide_colors.dart';
 import '../../theme/tide_elevation.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/pro_lock.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/tide_button.dart';
 import '../tasks/widgets/due_date_sheet.dart';
@@ -108,8 +106,6 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     );
   }
 
-  bool _locked(ProFeature feature) => TaskScope.read(context).locked(feature);
-
   /// Writes the draft, once. Every way out of the screen comes through here.
   void _save() {
     if (_settled) return;
@@ -183,9 +179,6 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       context,
       current: _recurrence,
       months: _months,
-      customLocked:
-          _locked(ProFeature.taskCustomRepeat) &&
-          _original?.recurrence != TaskRecurrence.custom,
     );
     if (choice == null || !mounted) return;
     setState(() {
@@ -194,17 +187,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     });
   }
 
-  bool get _reminderLocked =>
-      _locked(ProFeature.taskReminders) &&
-      _reminders.length >= AppConstants.freeTaskReminders &&
-      _reminders.length >= (_original?.reminders.length ?? 0);
-
   Future<void> _addReminder() async {
     FocusScope.of(context).unfocus();
-    if (_reminderLocked) {
-      askForPro(context, ProFeature.taskReminders);
-      return;
-    }
     final store = TaskScope.read(context);
     final at = await showReminderSheet(context, due: _due);
     if (at == null || !mounted) return;
@@ -331,15 +315,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                             ? 'Add a reminder'
                             : 'Add another',
                         muted: true,
-                        badge: _reminderLocked,
                         onTap: _addReminder,
                       ),
                     ],
                   ),
-                  if (_reminderLocked)
-                    const _ProFootnote(ProFeature.taskReminders)
-                  else if (_reminders.isNotEmpty &&
-                      !_locked(ProFeature.taskReminders))
+                  if (_reminders.isNotEmpty)
                     _Footnote(
                       'Snooze ${AppConstants.taskSnoozeMinutes} minutes from '
                       'the notification.',
@@ -366,7 +346,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                   ),
                   const SizedBox(height: 22),
 
-                  _GroupLabel('Tags', badge: _locked(ProFeature.taskTags)),
+                  const _GroupLabel('Tags'),
                   _tagsBlock(),
                 ],
               ),
@@ -469,7 +449,6 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
   }
 
   Widget _tagsBlock() {
-    final locked = _locked(ProFeature.taskTags);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -481,7 +460,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               for (final tag in _tags)
                 TagChip(
                   label: '#$tag',
-                  selected: !locked,
+                  selected: true,
                   onTap: null,
                   onRemove: () =>
                       setState(() => _tags = [..._tags]..remove(tag)),
@@ -492,24 +471,14 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         ],
         _Group(
           children: [
-            if (locked)
-              _Row(
-                icon: Icons.sell_outlined,
-                label: 'Add a tag',
-                muted: true,
-                badge: true,
-                onTap: () => askForPro(context, ProFeature.taskTags),
-              )
-            else
-              _InputRow(
-                controller: _tagInput,
-                icon: Icons.sell_outlined,
-                hint: 'Add a tag',
-                onSubmitted: _addTag,
-              ),
+            _InputRow(
+              controller: _tagInput,
+              icon: Icons.sell_outlined,
+              hint: 'Add a tag',
+              onSubmitted: _addTag,
+            ),
           ],
         ),
-        if (locked) const _ProFootnote(ProFeature.taskTags),
       ],
     );
   }
@@ -681,11 +650,10 @@ class _TitleBlock extends StatelessWidget {
 }
 
 class _GroupLabel extends StatelessWidget {
-  const _GroupLabel(this.text, {this.trailing, this.badge = false});
+  const _GroupLabel(this.text, {this.trailing});
 
   final String text;
   final String? trailing;
-  final bool badge;
 
   @override
   Widget build(BuildContext context) {
@@ -694,10 +662,6 @@ class _GroupLabel extends StatelessWidget {
       child: Row(
         children: [
           Text(text, style: TideType.sectionHeader),
-          if (badge) ...[
-            const SizedBox(width: 8),
-            const ProBadge(compact: true),
-          ],
           const Spacer(),
           if (trailing != null) Text(trailing!, style: TideType.labelMuted),
         ],
@@ -748,7 +712,6 @@ class _Row extends StatelessWidget {
     this.onClear,
     this.active = false,
     this.muted = false,
-    this.badge = false,
   });
 
   final IconData icon;
@@ -758,7 +721,6 @@ class _Row extends StatelessWidget {
   final VoidCallback? onClear;
   final bool active;
   final bool muted;
-  final bool badge;
 
   @override
   Widget build(BuildContext context) {
@@ -793,10 +755,6 @@ class _Row extends StatelessWidget {
                 ),
               ),
             ),
-            if (badge) ...[
-              const ProBadge(compact: true),
-              const SizedBox(width: 8),
-            ],
             if (value != null)
               Flexible(
                 child: Text(
@@ -920,16 +878,3 @@ class _Footnote extends StatelessWidget {
   }
 }
 
-class _ProFootnote extends StatelessWidget {
-  const _ProFootnote(this.feature);
-
-  final ProFeature feature;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 8, 6, 0),
-      child: ProHint(feature: feature),
-    );
-  }
-}

@@ -45,7 +45,7 @@ class WidgetListService : RemoteViewsService() {
                 KIND_TASKS -> tasks = WidgetPayloadReader.todayTasks(data)
                     ?.takeIf { it.signedIn }?.rows.orEmpty()
                 KIND_STREAKS -> streaks = WidgetPayloadReader.habitDashboard(data)
-                    ?.takeIf { it.signedIn && it.isPro }?.rows.orEmpty()
+                    ?.takeIf { it.signedIn }?.rows.orEmpty()
             }
         }
 

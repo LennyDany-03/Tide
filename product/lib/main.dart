@@ -17,10 +17,6 @@ import 'screens/update/update_dialog.dart';
 import 'services/auth/auth_service.dart';
 import 'services/auth/demo_auth_service.dart';
 import 'services/auth/supabase_auth_service.dart';
-import 'services/billing/billing_service.dart';
-import 'services/billing/demo_billing_service.dart';
-import 'services/billing/razorpay_gateway.dart';
-import 'services/billing/supabase_billing_service.dart';
 import 'services/device_flags.dart';
 import 'services/habits/demo_habit_repository.dart';
 import 'services/habits/habit_repository.dart';
@@ -57,10 +53,10 @@ Future<void> main() async {
   // refreshing it for as long as the refresh token is valid — which is until
   // the person logs out.
   final flags = await DeviceFlags.load();
+  await _forgetEntitlementCache();
 
   final AuthService auth;
   final HabitRepository habits;
-  final BillingService billing;
   TaskRemote? taskRemote;
   if (SupabaseConfig.isConfigured) {
     await Supabase.initialize(
@@ -69,14 +65,6 @@ Future<void> main() async {
     );
     auth = SupabaseAuthService(Supabase.instance.client);
     habits = await SupabaseHabitRepository.load(Supabase.instance.client);
-    // The Razorpay key id is not passed in here. It comes back with the order
-    // from `razorpay-create-order`, so rotating keys is a dashboard change and
-    // a secrets change rather than an app release — and the app has one fewer
-    // piece of merchant configuration it can be shipped without.
-    billing = await SupabaseBillingService.load(
-      Supabase.instance.client,
-      gateway: RazorpayGateway(),
-    );
     taskRemote = SupabaseTaskRemote(Supabase.instance.client);
   } else {
     if (SupabaseConfig.url.isNotEmpty && !SupabaseConfig.hasValidUrl) {
@@ -87,12 +75,11 @@ Future<void> main() async {
     }
     debugPrint(
       'Tide: SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY not set — run with '
-      '--dart-define-from-file=.env. Accounts, habits and plans are kept in '
-      'memory for this run, and no payment is ever taken.',
+      '--dart-define-from-file=.env. Accounts and habits are kept in memory '
+      'for this run.',
     );
     auth = DemoAuthService();
     habits = DemoHabitRepository();
-    billing = DemoBillingService();
   }
 
   // The to-do list lives on the device first and the server second, so it is
@@ -129,7 +116,6 @@ Future<void> main() async {
       auth: auth,
       flags: flags,
       habits: habits,
-      billing: billing,
       taskLocal: taskLocal,
       taskRemote: taskRemote,
       taskReminders: taskReminders,
@@ -139,6 +125,23 @@ Future<void> main() async {
       updates: updates,
     ),
   );
+}
+
+/// Drops the Tide Pro entitlement `SharedPreferences` blobs left by an
+/// earlier build.
+///
+/// Tide is free and nothing reads these any more, so they are dead bytes on
+/// every device that ever ran a build with billing in it. Cheap, idempotent,
+/// and silent on failure — a device that cannot clear them still launches.
+Future<void> _forgetEntitlementCache() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in prefs.getKeys().toList()) {
+      if (key.startsWith('tide.entitlement.')) await prefs.remove(key);
+    }
+  } catch (error) {
+    debugPrint('Could not clear the old entitlement cache: $error');
+  }
 }
 
 /// The home-screen widget tap that started this process, if one did. Read
@@ -162,7 +165,6 @@ class TideApp extends StatefulWidget {
     this.auth,
     this.flags,
     this.habits,
-    this.billing,
     this.taskLocal,
     this.taskRemote,
     this.taskReminders,
@@ -203,12 +205,6 @@ class TideApp extends StatefulWidget {
   /// in memory and a returning account opens on the demo history.
   final HabitRepository? habits;
 
-  /// Who says whether an account is Pro, and who takes the money. `main`
-  /// passes Supabase and Razorpay; left null, plans are kept in memory and
-  /// every payment succeeds without one being taken — which is what every
-  /// widget test runs on.
-  final BillingService? billing;
-
   /// Where the to-do list is kept on the device. Left null, in memory.
   final TaskLocal? taskLocal;
 
@@ -241,7 +237,6 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
         widget.flags ??
         DeviceFlags.memory(onboardingSeen: widget.startOnboarded),
     repository: widget.habits,
-    billing: widget.billing,
     widgetBridge: widget.widgetBridge,
   );
 
@@ -331,8 +326,8 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
   /// Shows a newly found release once, on Today.
   ///
   /// Today rather than wherever the app happens to be: a panel arriving over
-  /// the habit editor or the paywall interrupts an errand, and Today is where
-  /// every launch lands anyway. After the first showing a release waits in
+  /// the habit editor interrupts an errand, and Today is where every launch
+  /// lands anyway. After the first showing a release waits in
   /// Settings; only a required update is raised again.
   void _announceUpdate() {
     final updates = widget.updates;
@@ -419,27 +414,26 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
       case 'dashboard':
       case 'insights':
         _router.go(Routes.insights);
-      case 'upgrade':
-        _router.go(Routes.today);
-        unawaited(_router.push(Routes.upgrade));
       case 'task':
         final id = uri.queryParameters['id'];
         if (id != null) _openTask(id);
       case 'quick-add':
         _router.go(Routes.today);
-        unawaited(
-          _router.push(_store.canAddHabit ? Routes.newHabit : Routes.upgrade),
-        );
+        unawaited(_router.push(Routes.newHabit));
       case 'heatmap':
         final id = uri.queryParameters['id'];
         if (id == null || _store.habitById(id) == null) return;
         _router.go(Routes.today);
         unawaited(_router.push(Routes.habit(id)));
+      // Tide is free, so nothing is locked and there is no paywall to open.
+      // A widget placed by a build that still had one can go on firing these
+      // until the launcher redraws it, so they land on Today rather than
+      // falling through to nothing.
+      case 'upgrade':
       case 'dashboard-locked':
       case 'heatmap-locked':
       case 'recap-locked':
         _router.go(Routes.today);
-        unawaited(_router.push(Routes.upgrade));
       case 'setup':
         final id = int.tryParse(uri.queryParameters['id'] ?? '');
         final kind = HabitWidgetKind.byName(uri.queryParameters['kind']);

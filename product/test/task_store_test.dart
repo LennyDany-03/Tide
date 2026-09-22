@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart' show DateUtils;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tide/config/app_constants.dart';
 import 'package:tide/services/auth/demo_auth_service.dart';
-import 'package:tide/services/billing/demo_billing_service.dart';
 import 'package:tide/services/device_flags.dart';
 import 'package:tide/services/tasks/task.dart';
 import 'package:tide/services/tasks/task_local.dart';
@@ -67,10 +65,9 @@ class FakeTaskRemote implements TaskRemote {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  TideStore tide({bool pro = false}) => TideStore(
+  TideStore tide() => TideStore(
     auth: DemoAuthService(signedIn: true),
     flags: DeviceFlags.memory(onboardingSeen: true),
-    billing: pro ? DemoBillingService.pro() : DemoBillingService(),
   );
 
   late FakeTaskRemote remote;
@@ -292,72 +289,11 @@ void main() {
     });
   });
 
-  group('the free plan', () {
-    Task base(TaskStore tasks) =>
-        tasks.byId(tasks.add(title: 'Gear service').id)!;
-
-    test('cannot add a custom repeat, a second reminder, tags or archive', () {
-      final tasks = store(tide());
-      final t = base(tasks);
-      final soon = DateTime.now().add(const Duration(days: 1));
-
-      tasks.update(
-        t.copyWith(
-          recurrence: TaskRecurrence.custom,
-          customRecurrenceMonths: 6,
-          reminders: [soon, soon.add(const Duration(hours: 1))],
-          tags: ['gear'],
-        ),
-      );
-      final saved = tasks.byId(t.id)!;
-      expect(saved.recurrence, TaskRecurrence.none);
-      expect(saved.reminders, hasLength(AppConstants.freeTaskReminders));
-      expect(saved.tags, isEmpty);
-
-      tasks.toggleComplete(t.id);
-      expect(tasks.archiveCompleted(), isFalse);
-      expect(tasks.archived, isEmpty);
-      expect(tasks.setTagFilter('gear'), isFalse);
-    });
-
-    test('basic repeats and one reminder are free', () {
-      final tasks = store(tide());
-      final t = base(tasks);
-      final soon = DateTime.now().add(const Duration(days: 1));
-      tasks.update(
-        t.copyWith(recurrence: TaskRecurrence.monthly, reminders: [soon]),
-      );
-
-      final saved = tasks.byId(t.id)!;
-      expect(saved.recurrence, TaskRecurrence.monthly);
-      expect(saved.reminders, [soon]);
-    });
-
-    test('keeps what a lapsed plan set up, without letting it grow', () {
-      final tasks = store(tide());
-      final soon = DateTime.now().add(const Duration(days: 1));
-      final before = base(tasks).copyWith(
-        recurrence: TaskRecurrence.custom,
-        customRecurrenceMonths: 12,
-        reminders: [soon, soon.add(const Duration(hours: 1))],
-        tags: ['gear', 'boat'],
-      );
-      final edited = before.copyWith(
-        title: 'Gear service, renamed',
-        reminders: [...before.reminders, soon.add(const Duration(hours: 2))],
-        tags: ['gear', 'new'],
-      );
-
-      final allowed = tasks.withinPlan(edited, before);
-      expect(allowed.recurrence, TaskRecurrence.custom);
-      expect(allowed.reminders, hasLength(2));
-      expect(allowed.tags, ['gear']);
-    });
-  });
-
-  group('Pro', () {
+  group('everything the list can do', () {
+    // These were all Pro once. Tide is free, so this group is the proof that
+    // no ceiling came back with a later edit.
     test('custom repeats, several reminders, tags and the archive', () {
-      final tasks = store(tide(pro: true));
+      final tasks = store(tide());
       final t = tasks.byId(tasks.add(title: 'Storm prep').id)!;
       final soon = DateTime.now().add(const Duration(days: 1));
 

@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
 import '../../config/app_routes.dart';
-import '../../config/pro_features.dart';
 import '../../services/habits/habit_repository.dart' show SyncStatus;
 import '../../services/tasks/task.dart';
 import '../../services/tasks/task_scope.dart';
@@ -14,7 +13,6 @@ import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/gauge_number.dart';
 import '../../widgets/hold_to_fill.dart';
-import '../../widgets/pro_lock.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/tide_ring.dart';
 import '../../widgets/tide_tab_bar.dart';
@@ -81,14 +79,7 @@ class _TasksScreenState extends State<TasksScreen> {
 
   void _open(Task task) => context.push(Routes.task(task.id));
 
-  void _openArchive() {
-    final store = TaskScope.read(context);
-    if (store.locked(ProFeature.taskArchive)) {
-      askForPro(context, ProFeature.taskArchive);
-      return;
-    }
-    context.push(Routes.taskArchive);
-  }
+  void _openArchive() => context.push(Routes.taskArchive);
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +87,6 @@ class _TasksScreenState extends State<TasksScreen> {
     final open = store.open;
     final completed = store.completed;
     final filter = store.activeTagFilter;
-    final showTags = !store.locked(ProFeature.taskTags);
     final today = store.today;
 
     return ListView(
@@ -110,7 +100,6 @@ class _TasksScreenState extends State<TasksScreen> {
         _Header(
           status: store.status,
           pending: store.hasPendingChanges,
-          archiveLocked: store.locked(ProFeature.taskArchive),
           onOptions: () => showListOptionsSheet(context),
           onArchive: _openArchive,
         ),
@@ -147,7 +136,7 @@ class _TasksScreenState extends State<TasksScreen> {
         if (open.isEmpty)
           _EmptyList(filter: filter, anyDone: completed.isNotEmpty)
         else
-          ..._sections(store, open, showTags),
+          ..._sections(store, open),
         if (completed.isNotEmpty) ...[
           const SizedBox(height: 22),
           _CompletedHead(
@@ -170,7 +159,7 @@ class _TasksScreenState extends State<TasksScreen> {
                           child: TaskCard(
                             key: ValueKey('done-${task.id}'),
                             task: task,
-                            showTags: showTags || task.tags.isNotEmpty,
+                            showTags: true,
                             onComplete: () => _complete(task),
                             onDelete: () => _delete(task),
                             onOpen: () => _open(task),
@@ -178,12 +167,8 @@ class _TasksScreenState extends State<TasksScreen> {
                         ),
                       const SizedBox(height: 6),
                       _CompletedActions(
-                        archiveLocked: store.locked(ProFeature.taskArchive),
                         onArchive: () {
-                          if (!store.archiveCompleted()) {
-                            askForPro(context, ProFeature.taskArchive);
-                            return;
-                          }
+                          store.archiveCompleted();
                           _snack('Moved to the archive.');
                         },
                         onClear: () {
@@ -201,7 +186,7 @@ class _TasksScreenState extends State<TasksScreen> {
 
   /// Due-date order gets Overdue / Today / Upcoming / No date; tag order gets
   /// one heading per first tag. Each heading carries its count.
-  List<Widget> _sections(TaskStore store, List<Task> open, bool showTags) {
+  List<Widget> _sections(TaskStore store, List<Task> open) {
     final today = DateUtils.dateOnly(DateTime.now());
     String headingOf(Task task) {
       if (store.sort == TaskSort.tag) {
@@ -231,7 +216,7 @@ class _TasksScreenState extends State<TasksScreen> {
             child: TaskCard(
               key: ValueKey('open-${task.id}'),
               task: task,
-              showTags: showTags || task.tags.isNotEmpty,
+              showTags: true,
               onComplete: () => _complete(task),
               onDelete: () => _delete(task),
               onOpen: () => _open(task),
@@ -246,14 +231,12 @@ class _Header extends StatelessWidget {
   const _Header({
     required this.status,
     required this.pending,
-    required this.archiveLocked,
     required this.onOptions,
     required this.onArchive,
   });
 
   final SyncStatus status;
   final bool pending;
-  final bool archiveLocked;
   final VoidCallback onOptions;
   final VoidCallback onArchive;
 
@@ -314,8 +297,6 @@ class _Header extends StatelessWidget {
               label: 'Archive',
               onTap: onArchive,
             ),
-            if (archiveLocked)
-              const Positioned(right: -3, top: -3, child: _LockDot()),
           ],
         ),
       ],
@@ -559,24 +540,6 @@ class _SectionHead extends StatelessWidget {
   }
 }
 
-class _LockDot extends StatelessWidget {
-  const _LockDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 16,
-      height: 16,
-      decoration: BoxDecoration(
-        color: TideColors.shoal,
-        shape: BoxShape.circle,
-        border: Border.all(color: TideColors.hairline),
-      ),
-      child: Icon(Icons.lock_rounded, size: 9, color: TideColors.lantern),
-    );
-  }
-}
-
 class _IconButton extends StatelessWidget {
   const _IconButton({
     required this.icon,
@@ -660,12 +623,10 @@ class _CompletedHead extends StatelessWidget {
 
 class _CompletedActions extends StatelessWidget {
   const _CompletedActions({
-    required this.archiveLocked,
     required this.onArchive,
     required this.onClear,
   });
 
-  final bool archiveLocked;
   final VoidCallback onArchive;
   final VoidCallback onClear;
 
@@ -694,10 +655,6 @@ class _CompletedActions extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text('Archive all', style: TideType.label),
-                  if (archiveLocked) ...[
-                    const SizedBox(width: 8),
-                    const ProBadge(compact: true),
-                  ],
                 ],
               ),
             ),

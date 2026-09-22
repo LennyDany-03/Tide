@@ -297,11 +297,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: TourAnchor(
                       stop: TourStop.add,
                       child: AddHabitTile(
-                        atLimit: !store.canAddHabit,
-                        used: store.isPro ? null : store.activeHabitCount,
-                        onTap: () => context.push(
-                          store.canAddHabit ? Routes.newHabit : Routes.upgrade,
-                        ),
+                        onTap: () => context.push(Routes.newHabit),
                       ),
                     ),
                   ),

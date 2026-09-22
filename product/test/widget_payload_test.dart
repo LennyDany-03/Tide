@@ -117,17 +117,6 @@ void main() {
   });
 
   group('WidgetPayload.habitDashboard', () {
-    test('carries isPro through unchanged', () {
-      expect(
-        WidgetPayload.habitDashboard([], isPro: true, asOf: _today)['isPro'],
-        isTrue,
-      );
-      expect(
-        WidgetPayload.habitDashboard([], isPro: false, asOf: _today)['isPro'],
-        isFalse,
-      );
-    });
-
     test('orders rows by current streak, longest first', () {
       final habits = [
         _streakHabit('a', 'A', 2),
@@ -135,11 +124,7 @@ void main() {
         _streakHabit('c', 'C', 1),
       ];
 
-      final payload = WidgetPayload.habitDashboard(
-        habits,
-        isPro: true,
-        asOf: _today,
-      );
+      final payload = WidgetPayload.habitDashboard(habits, asOf: _today);
       final rows = (payload['rows'] as List).cast<Map<String, Object?>>();
 
       expect(rows.map((r) => r['id']), ['b', 'a', 'c']);
@@ -154,11 +139,7 @@ void main() {
           _streakHabit('$i', 'Habit $i', i),
       ];
 
-      final payload = WidgetPayload.habitDashboard(
-        habits,
-        isPro: true,
-        asOf: _today,
-      );
+      final payload = WidgetPayload.habitDashboard(habits, asOf: _today);
 
       expect(payload['rows'], hasLength(WidgetPayload.maxListRows));
       final rows = (payload['rows'] as List).cast<Map<String, Object?>>();
@@ -182,7 +163,7 @@ void main() {
     test('habitDashboard', () {
       final payload = WidgetPayload.habitDashboard([
         _streakHabit('1', 'Water', 3),
-      ], isPro: true, asOf: _today);
+      ], asOf: _today);
 
       expect(jsonDecode(jsonEncode(payload)), payload);
     });
@@ -310,16 +291,11 @@ void main() {
   });
 
   group('WidgetPayload.weeklyRecap', () {
-    test('carries isPro through, and reports the best current streak', () {
+    test('reports the best current streak', () {
       final habits = [_streakHabit('1', 'A', 2), _streakHabit('2', 'B', 7)];
 
-      final payload = WidgetPayload.weeklyRecap(
-        habits,
-        isPro: true,
-        asOf: _today,
-      );
+      final payload = WidgetPayload.weeklyRecap(habits, asOf: _today);
 
-      expect(payload['isPro'], isTrue);
       expect(payload['bestStreak'], 7);
       expect(payload['weekPercent'], isA<int>());
       expect(payload['lastWeekPercent'], isA<int>());
@@ -327,11 +303,9 @@ void main() {
     });
 
     test('sends one day-strip value per day from Monday through today', () {
-      final payload = WidgetPayload.weeklyRecap(
-        [_streakHabit('1', 'A', 10)],
-        isPro: true,
-        asOf: _today,
-      );
+      final payload = WidgetPayload.weeklyRecap([
+        _streakHabit('1', 'A', 10),
+      ], asOf: _today);
 
       final days = payload['days']! as List;
       expect(days, hasLength(_today.weekday));

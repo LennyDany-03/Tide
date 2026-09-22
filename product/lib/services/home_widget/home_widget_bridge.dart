@@ -58,7 +58,6 @@ class HomeWidgetBridge {
   /// — before this bridge has heard of it — can already draw its lock or its
   /// signed-out state instead of a setup prompt it could not honour.
   static const _keySignedIn = 'tide_signed_in';
-  static const _keyIsPro = 'tide_is_pro';
 
   static String _streakKey(int id) => 'single_habit_streak_$id';
   static String _heatmapKey(int id) => 'habit_heatmap_$id';
@@ -79,10 +78,9 @@ class HomeWidgetBridge {
   void scheduleHabitSync({
     required bool signedIn,
     required List<Habit> habits,
-    required bool isPro,
     required Map<int, String> widgetHabits,
   }) {
-    _pendingHabits = _HabitState(signedIn, habits, isPro, widgetHabits);
+    _pendingHabits = _HabitState(signedIn, habits, widgetHabits);
     _habitsTimer ??= Timer(_delay, () {
       _habitsTimer = null;
       final next = _pendingHabits;
@@ -97,13 +95,12 @@ class HomeWidgetBridge {
   Future<void> syncHabitsNow({
     required bool signedIn,
     required List<Habit> habits,
-    required bool isPro,
     required Map<int, String> widgetHabits,
   }) {
     _habitsTimer?.cancel();
     _habitsTimer = null;
     _pendingHabits = null;
-    return _writeHabits(_HabitState(signedIn, habits, isPro, widgetHabits));
+    return _writeHabits(_HabitState(signedIn, habits, widgetHabits));
   }
 
   void scheduleTaskSync({required bool signedIn, required List<Task> tasks}) {
@@ -116,29 +113,10 @@ class HomeWidgetBridge {
     });
   }
 
-  /// Whether a placed widget of [kind] is past what the plan allows: a free
-  /// account gets the first Streak and the first Heatmap; every later copy
-  /// is Pro. Mirrors `WidgetUi.instanceLocked` on the native side.
-  static Future<bool> instanceLocked(
-    HabitWidgetKind kind,
-    int widgetId, {
-    required bool isPro,
-  }) async {
-    if (isPro) return false;
-    try {
-      final ids = (await _installed())[kind.provider] ?? const [];
-      return ids.isNotEmpty && ids.first != widgetId;
-    } catch (error) {
-      debugPrint('Could not list widgets: $error');
-      return false;
-    }
-  }
-
   Future<void> _writeHabits(_HabitState state) async {
     try {
       final installed = await _installed();
       await HomeWidget.saveWidgetData<bool>(_keySignedIn, state.signedIn);
-      await HomeWidget.saveWidgetData<bool>(_keyIsPro, state.isPro);
 
       final out = jsonEncode(WidgetPayload.signedOut());
       await HomeWidget.saveWidgetData<String>(
@@ -148,17 +126,13 @@ class HomeWidgetBridge {
       await HomeWidget.saveWidgetData<String>(
         _keyDashboard,
         state.signedIn
-            ? jsonEncode(
-                WidgetPayload.habitDashboard(state.habits, isPro: state.isPro),
-              )
+            ? jsonEncode(WidgetPayload.habitDashboard(state.habits))
             : out,
       );
       await HomeWidget.saveWidgetData<String>(
         _keyRecap,
         state.signedIn
-            ? jsonEncode(
-                WidgetPayload.weeklyRecap(state.habits, isPro: state.isPro),
-              )
+            ? jsonEncode(WidgetPayload.weeklyRecap(state.habits))
             : out,
       );
 
@@ -230,11 +204,10 @@ class HomeWidgetBridge {
 }
 
 class _HabitState {
-  _HabitState(this.signedIn, this.habits, this.isPro, this.widgetHabits);
+  _HabitState(this.signedIn, this.habits, this.widgetHabits);
 
   final bool signedIn;
   final List<Habit> habits;
-  final bool isPro;
   final Map<int, String> widgetHabits;
 
   Habit? habitFor(int widgetId) {

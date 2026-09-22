@@ -11,17 +11,13 @@ import '../screens/habit_detail/habit_detail_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/home_widgets/home_widgets_screen.dart';
 import '../screens/insights/insights_screen.dart';
-import '../screens/billing/billing_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
-import '../screens/pro_pass/pro_pass_screen.dart';
-import '../screens/pro_welcome/pro_welcome_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/shell/tide_shell.dart';
 import '../screens/splash/splash_screen.dart';
 import '../screens/task_archive/task_archive_screen.dart';
 import '../screens/task_editor/task_editor_screen.dart';
 import '../screens/tasks/tasks_screen.dart';
-import '../screens/upgrade/upgrade_sheet.dart';
 import '../screens/verify_email/verify_email_screen.dart';
 import '../screens/welcome/welcome_screen.dart';
 import '../screens/widget_setup/widget_setup_screen.dart';
@@ -46,11 +42,7 @@ abstract final class Routes {
   static const settings = '/settings';
   static const milestones = '/milestones';
   static const newHabit = '/habit/new';
-  static const upgrade = '/upgrade';
   static const appearance = '/appearance';
-  static const proWelcome = '/pro/welcome';
-  static const proPass = '/pro/pass';
-  static const billing = '/billing';
   static const homeWidgets = '/settings/widgets';
   static const widgetSetupPath = '/widget-setup';
 
@@ -282,43 +274,8 @@ abstract final class AppRoutes {
           ),
         ),
 
-        // The paywall stays a sheet. It genuinely is contextual — it
-        // interrupts an action and hands it back — and it is on screen for
-        // a few seconds, not a few minutes.
-        GoRoute(
-          path: Routes.upgrade,
-          parentNavigatorKey: _rootKey,
-          pageBuilder: (context, state) => _sheet(state, const UpgradeSheet()),
-        ),
-
-        // What happens after a payment, and the pass it hands over.
-        //
-        // The welcome is opaque and full-screen: it is the one moment the app
-        // has the person's whole attention on purpose, and compositing a
-        // dimmed Settings behind a four-second sequence would cost frames on
-        // the screen least able to spare them.
-        GoRoute(
-          path: Routes.proWelcome,
-          parentNavigatorKey: _rootKey,
-          pageBuilder: (context, state) =>
-              _fade(state, const ProWelcomeScreen()),
-        ),
-        GoRoute(
-          path: Routes.proPass,
-          parentNavigatorKey: _rootKey,
-          pageBuilder: (context, state) => _page(state, const ProPassScreen()),
-        ),
-
-        // Plan and receipts. A full page rather than a sheet — it is somewhere
-        // you go and read, and it can be as long as the history is.
-        GoRoute(
-          path: Routes.billing,
-          parentNavigatorKey: _rootKey,
-          pageBuilder: (context, state) => _page(state, const BillingScreen()),
-        ),
-
-        // The widget gallery. A full page for the same reason billing is —
-        // somewhere you go and look, not a contextual sheet.
+        // The widget gallery. A full page rather than a contextual sheet —
+        // somewhere you go and look.
         GoRoute(
           path: Routes.homeWidgets,
           parentNavigatorKey: _rootKey,

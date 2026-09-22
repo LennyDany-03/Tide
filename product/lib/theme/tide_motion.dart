@@ -268,49 +268,4 @@ abstract final class TideMotion {
   /// moving on by itself — it is the last thing the app says to the account,
   /// and it should not leave before it has been read.
   static const Duration farewell = Duration(milliseconds: 1700);
-
-  // --- Tide Pro ---------------------------------------------------------
-
-  /// The whole welcome sequence after a payment: the crown of light, the mark,
-  /// the ticket assembling, the sheen, the features arriving, the button.
-  ///
-  /// The longest single animation in the app, and the rarest — most people see
-  /// it once. [UnlockCelebration] runs 2.3s for something that happens a
-  /// handful of times a year; this happens once and hands over an object, so
-  /// it is allowed longer. It is also the only long one that is skippable,
-  /// which is what makes the length safe: nobody is held in it.
-  static const Duration proWelcome = Duration(milliseconds: 4200);
-
-  /// Skipping it. Not instant — a sequence that snaps to its end reads as a
-  /// glitch rather than as a fast-forward.
-  static const Duration proSkip = Duration(milliseconds: 420);
-
-  /// One pass of light across the pass. Replayed on tap, never looped: a foil
-  /// that keeps glinting turns a rare object into an idle animation.
-  static const Duration proSheen = Duration(milliseconds: 900);
-  static const Curve proSheenCurve = Curves.easeInOutCubic;
-
-  /// A plan changing state on the billing card: the cancelled notice opening
-  /// under the plan, and the action below it turning from Cancel into Resume.
-  ///
-  /// **The first [planChangeLeadIn] of the forward pass is deliberately
-  /// still.** Cancelling is a hold inside a dialog, and that dialog takes
-  /// [tabSwitch] plus a frame to leave. Without the wait, every structural
-  /// beat — the note opening, the mark drawing down its edge — plays out
-  /// behind the scrim, and the screen is simply *different* when it clears
-  /// rather than having changed in front of somebody. A plan that arrives on
-  /// a realtime broadcast instead spends that lead-in doing nothing, which
-  /// costs a fifth of a second nobody is watching.
-  ///
-  /// Each beat eases inside its own window rather than being a slice of one
-  /// eased whole: an easeOutCubic sliced at 62% has spent 73% of its travel
-  /// in the first quarter of the time, which is how a 310ms opening became a
-  /// 150ms one.
-  static const Duration planChange = Duration(milliseconds: 780);
-  static const Duration planChangeLeadIn = Duration(milliseconds: 220);
-
-  /// Closing it again. Resuming is a tap on the card itself with nothing
-  /// covering it, so there is nothing to wait for and the pass runs shorter.
-  static const Duration planChangeBack = Duration(milliseconds: 420);
-  static const Curve planChangeCurve = Curves.easeOutCubic;
 }

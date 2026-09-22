@@ -3,8 +3,6 @@ package com.example.tide
 import android.app.ActivityOptions
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -17,38 +15,16 @@ import es.antonborri.home_widget.HomeWidgetLaunchIntent
 /**
  * Shared drawing decisions for every Tide home-screen widget.
  *
- * The Dart side ([HomeWidgetBridge.instanceLocked], the `tide_signed_in` /
- * `tide_is_pro` keys) mirrors this so a widget placed before the next
- * Flutter sync still draws the lock or the setup prompt rather than a
- * habit it is not allowed to show.
+ * The Dart side mirrors the `tide_signed_in` key so a widget placed before
+ * the next Flutter sync still draws the setup prompt rather than a habit it
+ * has nothing to show for.
  */
 object WidgetUi {
     const val KEY_SIGNED_IN = "tide_signed_in"
-    const val KEY_IS_PRO = "tide_is_pro"
 
     data class Size(val widthDp: Int, val heightDp: Int)
 
     fun signedIn(data: SharedPreferences): Boolean = data.getBoolean(KEY_SIGNED_IN, false)
-
-    fun isPro(data: SharedPreferences): Boolean = data.getBoolean(KEY_IS_PRO, false)
-
-    /**
-     * Free accounts get the oldest placed widget of a type; every later
-     * copy is Pro. Widget ids increase, so the smallest id is the first
-     * one the launcher assigned.
-     */
-    fun instanceLocked(
-        context: Context,
-        provider: Class<out AppWidgetProvider>,
-        widgetId: Int,
-        isPro: Boolean,
-    ): Boolean {
-        if (isPro) return false
-        val ids = AppWidgetManager.getInstance(context)
-            .getAppWidgetIds(ComponentName(context, provider))
-            .sorted()
-        return ids.isNotEmpty() && ids.first() != widgetId
-    }
 
     /**
      * The widget's current size in dp. Launchers report a range: portrait
@@ -132,7 +108,6 @@ object WidgetUi {
     fun setupUri(kind: String, widgetId: Int): Uri =
         Uri.parse("tide://widget/setup?id=$widgetId&kind=$kind")
 
-    fun upgradeUri(): Uri = Uri.parse("tide://widget/upgrade")
 
     fun habitUri(id: String, type: String): Uri {
         val host = if (type == "binary") "habit" else "habit-detail"

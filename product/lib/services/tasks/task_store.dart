@@ -6,7 +6,6 @@ import 'package:flutter/material.dart' show DateUtils;
 import 'package:flutter/widgets.dart' show AppLifecycleListener;
 
 import '../../config/app_constants.dart';
-import '../../config/pro_features.dart';
 import '../habits/habit_repository.dart' show SyncStatus;
 import '../tide_store.dart';
 import 'task.dart';
@@ -34,8 +33,8 @@ class TaskCompletion {
 /// this is a side module, so it must not cost the habit screens anything.
 /// [TideStore] is listened to by every habit screen; putting tasks in it would
 /// rebuild Today on every ticked checkbox. This store only *reads* the
-/// habit store — who is signed in, and whether they are Pro — and nothing in
-/// the habit tracker knows it exists.
+/// habit store — who is signed in — and nothing in the habit tracker knows
+/// it exists.
 ///
 /// **Offline first.** Every change lands in the list and on the device
 /// before anything touches the network, and the UI never waits on a
@@ -60,9 +59,7 @@ class TaskStore extends ChangeNotifier {
   }) : local = local ?? MemoryTaskLocal(),
        reminders = reminders ?? NoTaskReminders(),
        _clock = clock ?? DateTime.now {
-    _pro = tide.isPro;
     tide.sessionChanges.addListener(_onSession);
-    tide.addListener(_onTide);
     tide.addLogOutHook(_beforeLogOut);
     _reconnects = reconnects?.listen((_) => unawaited(sync()));
     _openAccount(tide.account?.id);
@@ -90,7 +87,6 @@ class TaskStore extends ChangeNotifier {
 
   String? _accountId;
   List<Task> _tasks = const [];
-  late bool _pro;
 
   // --- Reads ----------------------------------------------------------------
 
@@ -108,11 +104,9 @@ class TaskStore extends ChangeNotifier {
 
   TaskSort sort = TaskSort.dueDate;
 
-  /// Only honoured on Pro. A plan that lapses keeps the value but stops
-  /// applying it, so the list never silently shows less than it holds.
   String? tagFilter;
 
-  String? get activeTagFilter => locked(ProFeature.taskTags) ? null : tagFilter;
+  String? get activeTagFilter => tagFilter;
 
   /// Incomplete tasks: by due date (undated last), then by when they were
   /// made — or, sorted by tag, by first tag with untagged last.
@@ -180,8 +174,6 @@ class TaskStore extends ChangeNotifier {
   SyncStatus _status = SyncStatus.localOnly;
   SyncStatus get status => remote == null ? SyncStatus.localOnly : _status;
 
-  bool locked(ProFeature feature) => tide.locked(feature);
-
   static int _byDue(Task a, Task b) {
     final ad = a.dueDate, bd = b.dueDate;
     if (ad != bd) {
@@ -232,11 +224,11 @@ class TaskStore extends ChangeNotifier {
     return task;
   }
 
-  /// Saves an edit from the full editor, within what the plan allows.
+  /// Saves an edit from the full editor.
   void update(Task edited) {
     final before = byId(edited.id);
     if (before == null || before.isDeleted) return;
-    final allowed = withinPlan(edited, before);
+    final allowed = withinLimits(edited);
     if (allowed.sameContent(before)) return;
     _put(allowed.copyWith(updatedAt: _clock()));
   }
@@ -319,10 +311,8 @@ class TaskStore extends ChangeNotifier {
     }
   }
 
-  /// Moves every completed task into the archive. False on the free plan,
-  /// changing nothing; the caller opens the paywall.
+  /// Moves every completed task into the archive.
   bool archiveCompleted() {
-    if (locked(ProFeature.taskArchive)) return false;
     final now = _clock();
     final done = completed;
     if (done.isEmpty) return true;
@@ -353,9 +343,7 @@ class TaskStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// False on the free plan; the caller opens the paywall.
   bool setTagFilter(String? tag) {
-    if (tag != null && locked(ProFeature.taskTags)) return false;
     tagFilter = tag;
     notifyListeners();
     return true;
@@ -363,53 +351,18 @@ class TaskStore extends ChangeNotifier {
 
   Future<bool> requestReminderPermission() => reminders.requestPermission();
 
-  /// [edited] cut back to what the plan allows, given what the task already
-  /// had.
+  /// [edited] with its custom repeat clamped to a sane number of months.
   ///
-  /// Enforced here and not only in the editor, so no path around the screen
-  /// gets past it. And it only stops things *growing*: a task set up while a
-  /// plan was running keeps its extra reminders, tags and custom repeat when
-  /// the plan ends — the gate must not take away what somebody already has.
-  Task withinPlan(Task edited, Task? before) {
-    var task = edited;
-
-    if (locked(ProFeature.taskCustomRepeat) &&
-        task.recurrence == TaskRecurrence.custom &&
-        before?.recurrence != TaskRecurrence.custom) {
-      task = task.copyWith(
-        recurrence: before?.recurrence ?? TaskRecurrence.none,
-        customRecurrenceMonths: before?.customRecurrenceMonths,
-      );
-    }
-    if (task.recurrence == TaskRecurrence.custom) {
-      final months = (task.customRecurrenceMonths ?? 0).clamp(
+  /// This used to also cut a task back to what a paid plan allowed. Tide is
+  /// free, so the only rule left is the one that was never about a plan.
+  Task withinLimits(Task edited) {
+    if (edited.recurrence != TaskRecurrence.custom) return edited;
+    return edited.copyWith(
+      customRecurrenceMonths: (edited.customRecurrenceMonths ?? 0).clamp(
         1,
         AppConstants.maxCustomRepeatMonths,
-      );
-      task = task.copyWith(customRecurrenceMonths: months);
-    }
-
-    if (locked(ProFeature.taskReminders)) {
-      final ceiling = math.max(
-        AppConstants.freeTaskReminders,
-        before?.reminders.length ?? 0,
-      );
-      if (task.reminders.length > ceiling) {
-        task = task.copyWith(reminders: task.reminders.take(ceiling).toList());
-      }
-    }
-
-    if (locked(ProFeature.taskTags)) {
-      final had = before?.tags ?? const <String>[];
-      task = task.copyWith(tags: task.tags.where(had.contains).toList());
-    }
-
-    if (locked(ProFeature.taskArchive) &&
-        task.isArchived &&
-        !(before?.isArchived ?? false)) {
-      task = task.copyWith(isArchived: false);
-    }
-    return task;
+      ),
+    );
   }
 
   // --- The list and the device -----------------------------------------------
@@ -480,10 +433,7 @@ class TaskStore extends ChangeNotifier {
     _reminderDebounce = Timer(const Duration(milliseconds: 300), () {
       if (_accountId == null) return;
       unawaited(
-        reminders.schedule(
-          _visible.toList(),
-          snooze: !locked(ProFeature.taskReminders),
-        ),
+        reminders.schedule(_visible.toList(), snooze: true),
       );
     });
   }
@@ -496,15 +446,6 @@ class TaskStore extends ChangeNotifier {
     final previous = _accountId;
     if (previous != null) _closeAccount(previous, forget: next == null);
     _openAccount(next);
-  }
-
-  void _onTide() {
-    // The habit store notifies on every habit logged; only a plan change
-    // matters here.
-    if (tide.isPro == _pro) return;
-    _pro = tide.isPro;
-    notifyListeners();
-    _scheduleReminders();
   }
 
   void _openAccount(String? accountId) {
@@ -753,7 +694,6 @@ class TaskStore extends ChangeNotifier {
   @override
   void dispose() {
     tide.sessionChanges.removeListener(_onSession);
-    tide.removeListener(_onTide);
     tide.removeLogOutHook(_beforeLogOut);
     unawaited(_reconnects?.cancel());
     final accountId = _accountId;

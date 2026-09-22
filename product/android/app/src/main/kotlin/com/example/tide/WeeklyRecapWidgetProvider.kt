@@ -20,19 +20,9 @@ class WeeklyRecapWidgetProvider : TideHomeWidgetProvider() {
     ) {
         val payload = WidgetPayloadReader.weeklyRecap(widgetData)
 
-        appWidgetIds.forEach { widgetId ->
-            if (payload?.isPro != true) {
-                appWidgetManager.updateAppWidget(
-                    widgetId,
-                    LockedWidgetViews.build(
-                        context,
-                        R.string.widget_recap_title,
-                        WidgetUi.upgradeUri().toString(),
-                    ),
-                )
-                return@forEach
-            }
+        if (payload == null) return
 
+        appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.widget_weekly_recap)
             val delta = payload.weekPercent - payload.lastWeekPercent
             val up = delta >= 0
