@@ -18,12 +18,16 @@ class DeviceFlags {
     this._toursDone,
     this._pendingVerification,
     this._widgetHabits,
+    this._paletteId,
   );
 
   /// Remembers nothing past the process — tests, and a caller that has not
   /// loaded storage.
-  DeviceFlags.memory({bool onboardingSeen = false, String? pendingVerification})
-    : this._(null, onboardingSeen, {}, pendingVerification, {});
+  DeviceFlags.memory({
+    bool onboardingSeen = false,
+    String? pendingVerification,
+    String? paletteId,
+  }) : this._(null, onboardingSeen, {}, pendingVerification, {}, paletteId);
 
   static Future<DeviceFlags> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -33,6 +37,7 @@ class DeviceFlags {
       {...?prefs.getStringList(_toursKey)},
       prefs.getString(_pendingKey),
       _decodeWidgetHabits(prefs.getString(_widgetHabitsKey)),
+      prefs.getString(_paletteKey),
     );
   }
 
@@ -40,12 +45,14 @@ class DeviceFlags {
   static const String _toursKey = 'tide.tours_done';
   static const String _pendingKey = 'tide.pending_verification';
   static const String _widgetHabitsKey = 'tide.widget_habits';
+  static const String _paletteKey = 'tide.palette';
 
   final SharedPreferences? _prefs;
   bool _onboardingSeen;
   final Set<String> _toursDone;
   String? _pendingVerification;
   final Map<int, String> _widgetHabits;
+  String? _paletteId;
 
   bool get onboardingSeen => _onboardingSeen;
 
@@ -80,6 +87,19 @@ class DeviceFlags {
           ? _prefs?.remove(_pendingKey)
           : _prefs?.setString(_pendingKey, email),
     );
+  }
+
+  /// The id of the palette picked on this device, or null for the default.
+  ///
+  /// Per device rather than per account: it is chosen during onboarding,
+  /// before there is an account, and the app has to be drawn in it from the
+  /// very first frame of the next launch — before any session is restored.
+  String? get paletteId => _paletteId;
+
+  void setPaletteId(String id) {
+    if (id == _paletteId) return;
+    _paletteId = id;
+    unawaited(_prefs?.setString(_paletteKey, id));
   }
 
   /// Which habit each placed Streak or Heatmap widget shows, by the

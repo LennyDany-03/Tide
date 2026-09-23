@@ -19,6 +19,12 @@ class MainActivity : FlutterActivity() {
      */
     override fun shouldHandleDeeplinking(): Boolean = false
 
+    /** The icon follows the palette once the app is off screen. */
+    override fun onStop() {
+        super.onStop()
+        runCatching { LauncherIcon.apply(this) }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         // The widget habit picker hands the user straight back to the home
@@ -29,6 +35,11 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "moveToBack" -> {
                         moveTaskToBack(true)
+                        result.success(null)
+                    }
+                    "setLauncherIcon" -> {
+                        val palette = call.argument<String>("palette")
+                        if (palette != null) LauncherIcon.request(this, palette)
                         result.success(null)
                     }
                     else -> result.notImplemented()

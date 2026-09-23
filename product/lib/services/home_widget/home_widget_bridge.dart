@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
+import '../app_window.dart';
 import '../models/habit.dart';
 import '../tasks/task.dart';
 import 'widget_payload.dart';
@@ -58,6 +59,21 @@ class HomeWidgetBridge {
   /// — before this bridge has heard of it — can already draw its lock or its
   /// signed-out state instead of a setup prompt it could not honour.
   static const _keySignedIn = 'tide_signed_in';
+
+  /// The active palette's id, read by `WidgetTheme.kt` to pick the widget
+  /// layouts and drawables generated for it.
+  static const _keyPalette = 'tide_palette';
+
+  /// Every provider, for a change that repaints all of them.
+  static const _allProviders = [
+    _todayProvider,
+    _dashboardProvider,
+    _recapProvider,
+    _tasksProvider,
+    'QuickAddWidgetProvider',
+    'SingleHabitStreakWidgetProvider',
+    'HabitHeatmapWidgetProvider',
+  ];
 
   static String _streakKey(int id) => 'single_habit_streak_$id';
   static String _heatmapKey(int id) => 'habit_heatmap_$id';
@@ -177,6 +193,23 @@ class HomeWidgetBridge {
       await HomeWidget.updateWidget(androidName: _tasksProvider);
     } catch (error) {
       debugPrint('Task widget sync failed: $error');
+    }
+  }
+
+  /// Puts the home screen in the palette the app is drawn in: every widget
+  /// is redrawn in it, and the launcher icon is swapped for its own.
+  ///
+  /// Not debounced: a palette change is one deliberate tap, and the widgets
+  /// should have changed by the time the home screen is next seen.
+  Future<void> setPalette(String id) async {
+    unawaited(AppWindow.setLauncherIcon(id));
+    try {
+      await HomeWidget.saveWidgetData<String>(_keyPalette, id);
+      for (final provider in _allProviders) {
+        await HomeWidget.updateWidget(androidName: provider);
+      }
+    } catch (error) {
+      debugPrint('Widget palette sync failed: $error');
     }
   }
 

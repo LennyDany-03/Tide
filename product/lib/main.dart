@@ -43,7 +43,6 @@ import 'widgets/tour/tour_host.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(TideTheme.overlayStyle);
 
   // All of this is read before the first frame, while the native launch
   // window is still up, so the app knows where it is going before it draws
@@ -53,6 +52,11 @@ Future<void> main() async {
   // refreshing it for as long as the refresh token is valid — which is until
   // the person logs out.
   final flags = await DeviceFlags.load();
+  // The palette this device last chose, in place before the splash draws a
+  // single pixel — otherwise the logo would play in Midnight and then snap.
+  // The status bar is styled from it too, so light palettes get dark icons.
+  TideColors.use(TidePalettes.byId(flags.paletteId ?? ''));
+  SystemChrome.setSystemUIOverlayStyle(TideTheme.overlayStyle);
   await _forgetEntitlementCache();
 
   final AuthService auth;

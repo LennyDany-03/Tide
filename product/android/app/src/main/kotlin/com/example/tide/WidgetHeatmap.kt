@@ -73,15 +73,15 @@ object WidgetHeatmap {
         val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = max(1.2f * unit, cellH * 0.12f)
-            color = context.getColor(R.color.tide_lantern)
+            color = WidgetTheme.color(context, R.color.tide_lantern)
         }
         val tiers = intArrayOf(
-            context.getColor(R.color.tide_cell_rest),
-            context.getColor(R.color.tide_cell_empty),
-            context.getColor(R.color.tide_cell_1),
-            context.getColor(R.color.tide_cell_2),
-            context.getColor(R.color.tide_cell_3),
-            context.getColor(R.color.tide_cell_4),
+            WidgetTheme.color(context, R.color.tide_cell_rest),
+            WidgetTheme.color(context, R.color.tide_cell_empty),
+            WidgetTheme.color(context, R.color.tide_cell_1),
+            WidgetTheme.color(context, R.color.tide_cell_2),
+            WidgetTheme.color(context, R.color.tide_cell_3),
+            WidgetTheme.color(context, R.color.tide_cell_4),
         )
         val rect = RectF()
 

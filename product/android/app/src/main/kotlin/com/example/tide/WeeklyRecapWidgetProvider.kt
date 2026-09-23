@@ -23,7 +23,7 @@ class WeeklyRecapWidgetProvider : TideHomeWidgetProvider() {
         if (payload == null) return
 
         appWidgetIds.forEach { widgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_weekly_recap)
+            val views = RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_weekly_recap))
             val delta = payload.weekPercent - payload.lastWeekPercent
             val up = delta >= 0
 
@@ -36,16 +36,16 @@ class WeeklyRecapWidgetProvider : TideHomeWidgetProvider() {
             views.setTextViewText(R.id.recap_delta, if (up) "+$delta%" else "$delta%")
             views.setTextColor(
                 R.id.recap_delta,
-                context.getColor(if (up) R.color.tide_lantern else R.color.tide_coral),
+                WidgetTheme.color(context, if (up) R.color.tide_lantern else R.color.tide_coral),
             )
             views.setImageViewResource(
                 R.id.recap_delta_icon,
-                if (up) R.drawable.ic_widget_trend else R.drawable.ic_widget_trend_down,
+                WidgetTheme.drawable(context, if (up) R.drawable.ic_widget_trend else R.drawable.ic_widget_trend_down),
             )
             views.setInt(
                 R.id.recap_delta_pill,
                 "setBackgroundResource",
-                if (up) R.drawable.widget_pill_lantern else R.drawable.widget_pill_coral,
+                WidgetTheme.drawable(context, if (up) R.drawable.widget_pill_lantern else R.drawable.widget_pill_coral),
             )
 
             // Short widgets drop the day strip before squeezing the ring.
@@ -56,7 +56,7 @@ class WeeklyRecapWidgetProvider : TideHomeWidgetProvider() {
             for (i in dayIds.indices) {
                 views.setImageViewResource(
                     dayIds[i],
-                    WidgetUi.dayDrawable(payload.days.getOrNull(i), isToday = i == today),
+                    WidgetUi.dayDrawable(context, payload.days.getOrNull(i), isToday = i == today),
                 )
             }
 

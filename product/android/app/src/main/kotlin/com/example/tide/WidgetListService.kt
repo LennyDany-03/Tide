@@ -66,56 +66,56 @@ class WidgetListService : RemoteViewsService() {
         }
 
         private fun todayRow(row: WidgetPayloadReader.TodayRow) =
-            RemoteViews(context.packageName, R.layout.widget_today_row).apply {
+            RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_today_row)).apply {
                 setTextViewText(R.id.today_name, row.name)
                 setTextColor(
                     R.id.today_name,
-                    context.getColor(if (row.done) R.color.tide_silt else R.color.tide_bone),
+                    WidgetTheme.color(context, if (row.done) R.color.tide_silt else R.color.tide_bone),
                 )
                 setImageViewResource(
                     R.id.today_status,
-                    if (row.done) R.drawable.widget_check_done else R.drawable.widget_check_open,
+                    WidgetTheme.drawable(context, if (row.done) R.drawable.widget_check_done else R.drawable.widget_check_open),
                 )
-                setImageViewResource(R.id.today_flame, WidgetUi.flame(row.streak))
+                setImageViewResource(R.id.today_flame, WidgetUi.flame(context, row.streak))
                 setTextViewText(R.id.today_streak, row.streak.toString())
                 setTextColor(
                     R.id.today_streak,
-                    context.getColor(if (row.streak > 0) R.color.tide_bone else R.color.tide_silt),
+                    WidgetTheme.color(context, if (row.streak > 0) R.color.tide_bone else R.color.tide_silt),
                 )
                 fillIn(this, R.id.today_row, WidgetUi.habitUri(row.id, row.type))
             }
 
         private fun taskRow(row: WidgetPayloadReader.TaskRow) =
-            RemoteViews(context.packageName, R.layout.widget_task_row).apply {
+            RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_task_row)).apply {
                 setTextViewText(R.id.tasks_title, row.title)
                 setTextViewText(R.id.tasks_due, row.due)
                 setImageViewResource(
                     R.id.tasks_status,
-                    if (row.overdue) R.drawable.widget_check_overdue else R.drawable.widget_check_open,
+                    WidgetTheme.drawable(context, if (row.overdue) R.drawable.widget_check_overdue else R.drawable.widget_check_open),
                 )
                 setTextColor(
                     R.id.tasks_due,
-                    context.getColor(if (row.overdue) R.color.tide_coral else R.color.tide_silt),
+                    WidgetTheme.color(context, if (row.overdue) R.color.tide_coral else R.color.tide_silt),
                 )
                 setInt(
                     R.id.tasks_due,
                     "setBackgroundResource",
-                    if (row.overdue) R.drawable.widget_pill_coral else R.drawable.widget_pill,
+                    WidgetTheme.drawable(context, if (row.overdue) R.drawable.widget_pill_coral else R.drawable.widget_pill),
                 )
                 fillIn(this, R.id.tasks_row, Uri.parse("tide://widget/task?id=${row.id}"))
             }
 
         private fun streakRow(row: WidgetPayloadReader.DashboardRow) =
-            RemoteViews(context.packageName, R.layout.widget_dashboard_row).apply {
+            RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_dashboard_row)).apply {
                 setTextViewText(R.id.dashboard_name, row.name)
                 setTextViewText(R.id.dashboard_streak, row.streak.toString())
                 setTextColor(
                     R.id.dashboard_streak,
-                    context.getColor(if (row.streak > 0) R.color.tide_bone else R.color.tide_silt),
+                    WidgetTheme.color(context, if (row.streak > 0) R.color.tide_bone else R.color.tide_silt),
                 )
-                setImageViewResource(R.id.dashboard_flame, WidgetUi.flame(row.streak))
+                setImageViewResource(R.id.dashboard_flame, WidgetUi.flame(context, row.streak))
                 for (i in weekIds.indices) {
-                    setImageViewResource(weekIds[i], WidgetUi.weekDrawable(row.week.getOrElse(i) { 0 }))
+                    setImageViewResource(weekIds[i], WidgetUi.weekDrawable(context, row.week.getOrElse(i) { 0 }))
                 }
                 fillIn(this, R.id.dashboard_row, WidgetUi.habitUri(row.id, "binary"))
             }
@@ -125,7 +125,7 @@ class WidgetListService : RemoteViewsService() {
         }
 
         override fun getLoadingView(): RemoteViews =
-            RemoteViews(context.packageName, R.layout.widget_list_loading)
+            RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_list_loading))
 
         override fun getViewTypeCount(): Int = 1
 

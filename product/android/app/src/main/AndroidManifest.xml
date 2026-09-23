@@ -42,10 +42,8 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
+            <!-- No LAUNCHER filter here: the launcher entry is one of the
+                 aliases below, so the icon can follow the palette. -->
 
             <!-- A home-screen widget tap opens this Activity directly
                  (HomeWidgetLaunchIntent targets it by component, not by
@@ -56,6 +54,67 @@
                 <action android:name="es.antonborri.home_widget.action.LAUNCH"/>
             </intent-filter>
         </activity>
+
+        <!-- The launcher icon, one alias per palette (icons from
+             tool/brand_assets_test.dart). Exactly one is enabled at a time;
+             MainActivity switches them when the app leaves the foreground
+             after the palette changes. Midnight is on by default, so a fresh
+             install shows the standard icon. -->
+        <activity-alias
+            android:name=".LauncherMidnight"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherDeepWater"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_deep_water"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherInk"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_ink"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherBlossom"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_blossom"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherPaper"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_paper"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
 
         <!-- Today's Habits and Habit Dashboard home-screen widgets. See
              lib/services/home_widget/ for what writes their data, and

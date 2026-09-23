@@ -31,7 +31,8 @@ import 'tide_scope.dart';
 /// Who is signed in comes from [auth] and survives a restart until the
 /// person logs out; whether this device has seen onboarding, whether an
 /// account has had its tour, and whether a sign-up is waiting on its emailed
-/// code come from [flags]. Preferences and the palette are still per session.
+/// code come from [flags], as does the palette. Other preferences are still
+/// per session.
 class TideStore extends ChangeNotifier {
   TideStore({
     AuthService? auth,
@@ -45,6 +46,11 @@ class TideStore extends ChangeNotifier {
     _habits = this.repository.cached(openAccount);
     _acknowledgedMilestones = _unlockedIds().toSet();
     firstRun = !this.flags.onboardingSeen;
+    final savedPalette = this.flags.paletteId;
+    if (savedPalette != null) palette = TidePalettes.byId(savedPalette);
+    // Once per launch as well as on every change, so widgets placed by a
+    // build from before they followed the palette catch up without a tap.
+    unawaited(widgetBridge?.setPalette(palette.id));
     _remoteChanges = this.repository.changes.listen(_applyRemote);
     _restore(this.auth.currentAccount);
     _accountChanges = this.auth.accountChanges.listen(
@@ -146,8 +152,10 @@ class TideStore extends ChangeNotifier {
 
   /// The palette the whole app is drawn in.
   ///
-  /// Session-only: the app opens on [TidePalettes.standard] (Midnight) every
-  /// launch.
+  /// Remembered on this device by [flags], so the app reopens in the palette
+  /// it was closed in; [TidePalettes.standard] (Midnight) until one is picked.
+  /// An id from a newer build that this one does not ship falls back to the
+  /// standard palette.
   TidePalette palette = TidePalettes.standard;
 
   bool dailyReminders = true;
@@ -910,6 +918,8 @@ class TideStore extends ChangeNotifier {
   void setPalette(TidePalette next) {
     if (identical(next, palette)) return;
     palette = next;
+    flags.setPaletteId(next.id);
+    unawaited(widgetBridge?.setPalette(next.id));
     TideTheme.applyPalette(next);
     notifyListeners();
   }

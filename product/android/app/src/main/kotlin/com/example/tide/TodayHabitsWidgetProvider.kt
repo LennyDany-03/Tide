@@ -19,7 +19,7 @@ class TodayHabitsWidgetProvider : TideHomeWidgetProvider() {
         val percent = if (total > 0) done * 100 / total else 0
 
         appWidgetIds.forEach { widgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_today_habits)
+            val views = RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_today_habits))
 
             views.setTextViewText(
                 R.id.today_meta,

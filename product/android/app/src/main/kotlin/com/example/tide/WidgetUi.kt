@@ -102,8 +102,10 @@ object WidgetUi {
     }
 
     /** A lit flame for a running streak, an unlit one for zero. */
-    fun flame(streak: Int): Int =
-        if (streak > 0) R.drawable.ic_widget_flame else R.drawable.ic_widget_flame_out
+    fun flame(context: Context, streak: Int): Int = WidgetTheme.drawable(
+        context,
+        if (streak > 0) R.drawable.ic_widget_flame else R.drawable.ic_widget_flame_out,
+    )
 
     fun setupUri(kind: String, widgetId: Int): Uri =
         Uri.parse("tide://widget/setup?id=$widgetId&kind=$kind")
@@ -154,7 +156,10 @@ object WidgetUi {
      * A Weekly Recap day-strip cell: [value] is that day's share kept (-1
      * nothing asked), or null for a day still to come.
      */
-    fun dayDrawable(value: Double?, isToday: Boolean): Int = when {
+    fun dayDrawable(context: Context, value: Double?, isToday: Boolean): Int =
+        WidgetTheme.drawable(context, dayOriginal(value, isToday))
+
+    private fun dayOriginal(value: Double?, isToday: Boolean): Int = when {
         value == null -> R.drawable.widget_day_future
         value < 0 -> R.drawable.widget_day_rest
         value >= 1.0 -> R.drawable.widget_day_4
@@ -165,7 +170,10 @@ object WidgetUi {
         else -> R.drawable.widget_day_3
     }
 
-    fun weekDrawable(code: Int): Int = when (code) {
+    fun weekDrawable(context: Context, code: Int): Int =
+        WidgetTheme.drawable(context, weekOriginal(code))
+
+    private fun weekOriginal(code: Int): Int = when (code) {
         2 -> R.drawable.widget_week_kept
         1 -> R.drawable.widget_week_missed
         3 -> R.drawable.widget_week_today

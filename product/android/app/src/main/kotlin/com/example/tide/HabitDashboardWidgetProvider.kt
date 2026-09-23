@@ -15,7 +15,7 @@ class HabitDashboardWidgetProvider : TideHomeWidgetProvider() {
         val payload = WidgetPayloadReader.habitDashboard(widgetData)
 
         appWidgetIds.forEach { widgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_habit_dashboard)
+            val views = RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_habit_dashboard))
             val alight = payload?.rows?.count { it.streak > 0 } ?: 0
 
             views.setTextViewText(

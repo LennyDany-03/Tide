@@ -17,7 +17,7 @@ Future<void> reachAuth(WidgetTester tester) async {
 
   await tester.tap(find.text('Show me how'));
   await settle(tester);
-  for (var i = 0; i < 3; i++) {
+  for (var i = 0; i < 4; i++) {
     await tester.tap(find.text('Next'));
     await settle(tester);
   }

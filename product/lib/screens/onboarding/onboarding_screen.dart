@@ -12,6 +12,7 @@ import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_button.dart';
 import '../../widgets/tide_line_gauge.dart';
 import 'widgets/explainer_step.dart';
+import 'widgets/palette_step.dart';
 import 'widgets/ready_step.dart';
 import 'widgets/welcome_step.dart';
 
@@ -23,11 +24,13 @@ import 'widgets/welcome_step.dart';
 /// is available inside the product in a screen the user has not yet been
 /// given a reason to want. Configuration is not onboarding, it is homework.
 ///
-/// So it explains instead. Five pages: what Tide is, then the three things
+/// So it explains instead. Six pages: what Tide is, then the three things
 /// it does — log, hold, read — each *performed* on a loop rather than
-/// described, then the hand-off. The one thing it writes is that it has been
-/// seen, kept on the device so no later launch shows it again; the real
-/// output of the flow is a user who knows what the swipe does.
+/// described, then the one question worth asking up front (which palette,
+/// because it is the first thing every later launch shows), then the
+/// hand-off. It writes two things, both kept on the device: the palette, and
+/// that it has been seen so no later launch shows it again; the real output
+/// of the flow is a user who knows what the swipe does.
 ///
 /// Two affordances the wizard did not need and this does. **Back**, because
 /// an explanation you can only move forward through is a slideshow you are
@@ -55,7 +58,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   int _step = 0;
 
-  static const int _stepCount = 5;
+  static const int _stepCount = 6;
 
   /// The label on the primary button.
   ///
@@ -248,6 +251,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           'building is the pattern, not the number.',
       demo: HistoryLoopDemo(),
     ),
+    4 => const PaletteStep(),
     _ => AnimatedBuilder(
       animation: _morph,
       builder: (context, _) => ReadyStep(morph: _morph.value),

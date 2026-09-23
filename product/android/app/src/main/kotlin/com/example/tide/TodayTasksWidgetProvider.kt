@@ -19,7 +19,7 @@ class TodayTasksWidgetProvider : TideHomeWidgetProvider() {
         val total = payload?.total ?: 0
 
         appWidgetIds.forEach { widgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_today_tasks)
+            val views = RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_today_tasks))
 
             views.setTextViewText(
                 R.id.tasks_meta,

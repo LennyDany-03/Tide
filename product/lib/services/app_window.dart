@@ -17,4 +17,18 @@ abstract final class AppWindow {
       // Tests and hosts without the native half.
     }
   }
+
+  /// Asks for the launcher icon drawn in [paletteId]. Android switches it
+  /// the next time the app leaves the screen (see LauncherIcon.kt); a no-op
+  /// everywhere else.
+  static Future<void> setLauncherIcon(String paletteId) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _channel.invokeMethod<void>('setLauncherIcon', {
+        'palette': paletteId,
+      });
+    } on MissingPluginException {
+      // Tests and hosts without the native half.
+    }
+  }
 }
