@@ -5,8 +5,10 @@ import '../../config/app_constants.dart';
 import '../../config/task_copy.dart';
 import '../../services/tasks/task.dart';
 import '../../services/tasks/task_scope.dart';
+import '../../services/tasks/task_store.dart' show TaskCompletion;
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_elevation.dart';
+import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/press_scale.dart';
@@ -116,33 +118,77 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
 
   void _done() => context.pop();
 
-  void _complete() {
+  /// Completes the task, or reopens a finished one.
+  ///
+  /// [lastStep] is set when ticking that step is what finished the task.
+  /// Undo then takes the tick back as well — otherwise it would return a
+  /// task with every step done and nothing left to finish it with.
+  void _complete({String? lastStep}) {
     final store = TaskScope.read(context);
     final messenger = ScaffoldMessenger.of(context);
-    _save();
     final wasDone = _original!.isCompleted;
-    final completion = store.toggleComplete(widget.taskId);
+    _save();
+    // Unticking a step on a finished task already reopened it on save;
+    // toggling again would try to finish it straight back.
+    final saved = store.byId(widget.taskId);
+    final completion = saved != null && saved.isCompleted == wasDone
+        ? store.toggleComplete(widget.taskId)
+        : null;
+    final undo = completion == null
+        ? null
+        : lastStep == null
+        ? completion
+        : TaskCompletion(
+            before: completion.before.copyWith(
+              subtasks: [
+                for (final s in completion.before.subtasks)
+                  s.id == lastStep ? s.copyWith(isCompleted: false) : s,
+              ],
+            ),
+            spawnedId: completion.spawnedId,
+          );
     context.pop();
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          persist: false,
+          duration: TideMotion.snackHold,
           content: Text(
             wasDone
                 ? 'Moved back to your list.'
+                : lastStep != null
+                ? 'Last step done. Task complete.'
                 : completion?.spawnedId != null
                 ? 'Completed. The next one is on your list.'
                 : 'Completed.',
             style: TideType.label,
           ),
-          action: completion == null
+          action: undo == null
               ? null
               : SnackBarAction(
                   label: 'Undo',
-                  onPressed: () => store.undoCompletion(completion),
+                  onPressed: () => store.undoCompletion(undo),
                 ),
         ),
       );
+  }
+
+  /// Ticks a step, or unticks it. Ticking the last open step finishes the
+  /// task — the steps are what the task is made of, so once they are all
+  /// done there is nothing left to finish.
+  void _toggleStep(Subtask step) {
+    setState(() {
+      _subtasks = [
+        for (final s in _subtasks)
+          s.id == step.id ? s.copyWith(isCompleted: !s.isCompleted) : s,
+      ];
+    });
+    final finished =
+        !step.isCompleted &&
+        !_original!.isCompleted &&
+        _subtasks.every((s) => s.isCompleted);
+    if (finished) _complete(lastStep: step.id);
   }
 
   void _delete() {
@@ -156,6 +202,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          persist: false,
+          duration: TideMotion.snackHold,
           content: Text('Task deleted.', style: TideType.label),
           action: SnackBarAction(
             label: 'Undo',
@@ -242,6 +290,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     final media = MediaQuery.of(context);
     final bottom = media.viewInsets.bottom > 0 ? 0.0 : media.padding.bottom;
     final done = original.isCompleted;
+    final stepsLeft = _subtasks.where((s) => !s.isCompleted).length;
 
     return PopScope(
       onPopInvokedWithResult: (didPop, _) {
@@ -358,16 +407,27 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 border: Border(top: BorderSide(color: TideColors.hairline)),
               ),
               child: TideButton(
-                label: done ? 'Mark as not done' : 'Mark as complete',
-                variant: done
+                label: done
+                    ? 'Mark as not done'
+                    : stepsLeft > 0
+                    ? 'Finish ${TaskCopy.steps(stepsLeft)} first'
+                    : 'Mark as complete',
+                variant: done || stepsLeft > 0
                     ? TideButtonVariant.secondary
                     : TideButtonVariant.primary,
                 icon: Icon(
-                  done ? Icons.undo_rounded : Icons.check_rounded,
+                  done
+                      ? Icons.undo_rounded
+                      : stepsLeft > 0
+                      ? Icons.checklist_rounded
+                      : Icons.check_rounded,
                   size: 19,
-                  color: done ? TideColors.bone : TideColors.onLantern,
+                  color: done || stepsLeft > 0
+                      ? TideColors.bone
+                      : TideColors.onLantern,
                 ),
-                onPressed: _complete,
+                // The task finishes with its last step, not before it.
+                onPressed: !done && stepsLeft > 0 ? null : _complete,
               ),
             ),
           ],
@@ -386,14 +446,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
             button: true,
             label: step.title,
             child: PressScale(
-              onTap: () => setState(() {
-                _subtasks = [
-                  for (final s in _subtasks)
-                    s.id == step.id
-                        ? s.copyWith(isCompleted: !s.isCompleted)
-                        : s,
-                ];
-              }),
+              onTap: () => _toggleStep(step),
               child: Padding(
                 padding: const EdgeInsets.all(6),
                 child: Container(
@@ -877,4 +930,3 @@ class _Footnote extends StatelessWidget {
     );
   }
 }
-

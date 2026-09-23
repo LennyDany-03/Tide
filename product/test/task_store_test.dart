@@ -353,4 +353,64 @@ void main() {
       expect(local.swipeHintSeen, isTrue);
     });
   });
+
+  /// A task is made of its steps, so it finishes with the last one and not
+  /// before it.
+  group('steps', () {
+    Task withSteps(TaskStore tasks, List<bool> ticked) {
+      final a = tasks.add(title: 'Move house');
+      tasks.update(
+        tasks
+            .byId(a.id)!
+            .copyWith(
+              subtasks: [
+                for (var i = 0; i < ticked.length; i++)
+                  Subtask(id: 's$i', title: 'Step $i', isCompleted: ticked[i]),
+              ],
+            ),
+      );
+      return tasks.byId(a.id)!;
+    }
+
+    test('a task with a step still open cannot be completed', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, false]);
+      expect(task.subtasksLeft, 1);
+
+      expect(tasks.toggleComplete(task.id), isNull);
+      expect(tasks.byId(task.id)!.isCompleted, isFalse);
+      expect(
+        tasks.byId(task.id)!.subtasks.last.isCompleted,
+        isFalse,
+        reason: 'completing used to tick every step on the way past',
+      );
+    });
+
+    test('once every step is ticked it completes', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, true]);
+
+      expect(tasks.toggleComplete(task.id), isNotNull);
+      expect(tasks.byId(task.id)!.isCompleted, isTrue);
+    });
+
+    test('unticking a step on a finished task reopens it', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, true]);
+      tasks.toggleComplete(task.id);
+
+      final done = tasks.byId(task.id)!;
+      tasks.update(
+        done.copyWith(
+          subtasks: [
+            done.subtasks.first,
+            done.subtasks.last.copyWith(isCompleted: false),
+          ],
+        ),
+      );
+
+      expect(tasks.byId(task.id)!.isCompleted, isFalse);
+      expect(tasks.byId(task.id)!.completedAt, isNull);
+    });
+  });
 }

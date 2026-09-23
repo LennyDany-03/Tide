@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../services/models/tide_glyph.dart';
@@ -162,7 +160,6 @@ class _SwipeLoopDemoState extends _LoopState<SwipeLoopDemo> {
                       child: SwipeLogBackground(
                         offset: drag,
                         width: width,
-                        phase: t * 2 * math.pi * 3,
                         radius: TideElevation.radius20,
                       ),
                     ),

@@ -53,6 +53,9 @@ abstract final class TaskCopy {
     return count == 1 ? 'Every month' : 'Every $count months';
   }
 
+  /// "1 step", "3 steps".
+  static String steps(int count) => count == 1 ? '1 step' : '$count steps';
+
   static String time(DateTime moment) {
     final t = TimeOfDay.fromDateTime(moment);
     final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;

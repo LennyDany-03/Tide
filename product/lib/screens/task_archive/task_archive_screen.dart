@@ -5,6 +5,7 @@ import '../../config/app_constants.dart';
 import '../../services/tasks/task.dart';
 import '../../services/tasks/task_scope.dart';
 import '../../theme/tide_colors.dart';
+import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/tide_tab_bar.dart';
@@ -97,6 +98,8 @@ class TaskArchiveScreen extends StatelessWidget {
                 ..hideCurrentSnackBar()
                 ..showSnackBar(
                   SnackBar(
+                    persist: false,
+                    duration: TideMotion.snackHold,
                     content: Text('Task deleted.', style: TideType.label),
                     action: SnackBarAction(
                       label: 'Undo',

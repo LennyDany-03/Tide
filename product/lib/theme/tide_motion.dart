@@ -84,7 +84,12 @@ abstract final class TideMotion {
   // --- Gestures ---------------------------------------------------------
 
   /// Fraction of card width a swipe must cross to commit.
-  static const double swipeThreshold = 0.4;
+  ///
+  /// Shared by habit and task cards. It was 0.4 on habits and 0.32 on
+  /// tasks, and the task swipe was the one that felt right: 0.4 of a card
+  /// is most of a thumb's comfortable reach, so a habit swipe was often a
+  /// stretch that sprang back.
+  static const double swipeThreshold = 0.32;
 
   /// The speed, in pixels per second, at which a horizontal drag stops being
   /// an action on a card and becomes a page thrown at the tab bar.
@@ -132,6 +137,15 @@ abstract final class TideMotion {
   static const Duration holdStep = Duration(milliseconds: 260);
 
   // --- Feedback ---------------------------------------------------------
+
+  /// How long a snackbar stands before it leaves by itself.
+  ///
+  /// Every snackbar passes this with `persist: false`. Since Flutter 3.29 a
+  /// snackbar that carries an action — every Undo in the app — defaults to
+  /// `persist: true` and waits for that action to be tapped, so "Task
+  /// deleted. Undo" sat over the tab bar until you undid something you
+  /// meant to do.
+  static const Duration snackHold = Duration(seconds: 4);
 
   /// A single habit's completion ripple.
   static const Duration ripple = Duration(milliseconds: 620);

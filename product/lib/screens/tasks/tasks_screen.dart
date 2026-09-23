@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
 import '../../config/app_routes.dart';
+import '../../config/task_copy.dart';
 import '../../services/habits/habit_repository.dart' show SyncStatus;
 import '../../services/tasks/task.dart';
 import '../../services/tasks/task_scope.dart';
@@ -43,6 +44,8 @@ class _TasksScreenState extends State<TasksScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          persist: false,
+          duration: TideMotion.snackHold,
           content: Text(message, style: TideType.label),
           action: undo == null
               ? null
@@ -66,6 +69,16 @@ class _TasksScreenState extends State<TasksScreen> {
           ? 'Completed. The next one is on your list.'
           : 'Completed.',
       undo: () => store.undoCompletion(completion),
+    );
+  }
+
+  /// A right swipe on a task whose steps are not all ticked. It finishes
+  /// with its last step, so say how many are left rather than nothing.
+  void _blocked(Task task) {
+    final left = task.subtasksLeft;
+    _snack(
+      '${TaskCopy.steps(left)} still open. The task completes with its last '
+      'step.',
     );
   }
 
@@ -218,6 +231,7 @@ class _TasksScreenState extends State<TasksScreen> {
               task: task,
               showTags: true,
               onComplete: () => _complete(task),
+              onBlocked: () => _blocked(task),
               onDelete: () => _delete(task),
               onOpen: () => _open(task),
             ),
@@ -622,10 +636,7 @@ class _CompletedHead extends StatelessWidget {
 }
 
 class _CompletedActions extends StatelessWidget {
-  const _CompletedActions({
-    required this.onArchive,
-    required this.onClear,
-  });
+  const _CompletedActions({required this.onArchive, required this.onClear});
 
   final VoidCallback onArchive;
   final VoidCallback onClear;

@@ -228,12 +228,21 @@ class TaskStore extends ChangeNotifier {
   void update(Task edited) {
     final before = byId(edited.id);
     if (before == null || before.isDeleted) return;
-    final allowed = withinLimits(edited);
+    var allowed = withinLimits(edited);
+    // A finished task that has gained an open step — one unticked, or a new
+    // one added — is not finished any more.
+    if (allowed.isCompleted && allowed.subtasksLeft > 0) {
+      allowed = allowed.copyWith(isCompleted: false, completedAt: null);
+    }
     if (allowed.sameContent(before)) return;
     _put(allowed.copyWith(updatedAt: _clock()));
   }
 
   /// Ticks a task off, or back on.
+  ///
+  /// A task with steps still open is refused and left as it is: it completes
+  /// once its last step does. The screens check [Task.subtasksLeft] first so
+  /// they can say why; this is the guard behind them.
   ///
   /// Completing a repeating task makes its next occurrence at the same time,
   /// so it is on the list the moment this one leaves it.
@@ -249,10 +258,11 @@ class TaskStore extends ChangeNotifier {
       return null;
     }
 
+    if (task.subtasksLeft > 0) return null;
+
     final done = task.copyWith(
       isCompleted: true,
       completedAt: now,
-      subtasks: [for (final s in task.subtasks) s.copyWith(isCompleted: true)],
       updatedAt: now,
     );
     final next = task.successor(
@@ -432,9 +442,7 @@ class TaskStore extends ChangeNotifier {
     _reminderDebounce?.cancel();
     _reminderDebounce = Timer(const Duration(milliseconds: 300), () {
       if (_accountId == null) return;
-      unawaited(
-        reminders.schedule(_visible.toList(), snooze: true),
-      );
+      unawaited(reminders.schedule(_visible.toList(), snooze: true));
     });
   }
 

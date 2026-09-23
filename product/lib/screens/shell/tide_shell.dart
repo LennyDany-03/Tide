@@ -252,6 +252,11 @@ class _BranchStackState extends State<_BranchStack>
     super.didUpdateWidget(old);
     if (old.currentIndex == widget.currentIndex) return;
 
+    // The branch left behind stays mounted, and so does whatever field in
+    // it had focus — so the To-do tab's quick-add kept the keyboard up over
+    // Today. Nothing on the arriving tab asked for it; let it go.
+    FocusManager.instance.primaryFocus?.unfocus();
+
     if (widget.currentIndex == _handedOver) {
       // Our own swipe landing. The offset was re-based onto this branch the
       // moment the finger lifted and the shell is only now catching up;

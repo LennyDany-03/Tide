@@ -328,7 +328,17 @@ class TideStore extends ChangeNotifier {
 
   /// Logs [amount] against [habitId] for [date], replacing whatever was
   /// there. Passing null logs the habit's full target.
+  ///
+  /// Nothing (zero or less) is an unlog, not a log of zero. A count stepped
+  /// back from 1 to 0 in the log sheet used to leave a `0` entry behind,
+  /// which is a day with a row in it — something logged — that holds none
+  /// of the habit. Every reader then had to agree that a zero row means
+  /// empty; now there is only one way for a day to be empty.
   void log(String habitId, {num? amount, DateTime? date}) {
+    if (amount != null && amount <= 0) {
+      unlog(habitId, date: date);
+      return;
+    }
     final day = DateUtils.dateOnly(date ?? DateTime.now());
     final before = habitById(habitId);
     final wasComplete = before?.isCompleteOn(day) ?? false;

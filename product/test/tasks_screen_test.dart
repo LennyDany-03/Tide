@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
+import 'package:tide/services/tasks/task.dart';
 import 'package:tide/services/tasks/task_scope.dart';
 import 'package:tide/widgets/tide_tab_bar.dart';
 
@@ -141,5 +142,59 @@ void main() {
 
     expect(find.text('Archive'), findsWidgets);
     expect(find.text('Tide Pro'), findsNothing);
+  });
+
+  testWidgets('the Undo bar leaves by itself', (tester) async {
+    // A snackbar with an action persists by default since Flutter 3.29, so
+    // "Task deleted. Undo" used to sit over the tab bar until tapped.
+    await openTasks(tester);
+    await quickAdd(tester, 'Paint the shed');
+
+    await swipe(tester, 'Paint the shed', -260);
+    expect(find.text('Task deleted.'), findsOneWidget);
+
+    await outlastSnackbar(tester);
+    expect(find.text('Task deleted.'), findsNothing);
+    expect(find.text('Paint the shed'), findsNothing, reason: 'still deleted');
+  });
+
+  testWidgets('a task with steps left will not swipe complete', (tester) async {
+    await openTasks(tester);
+    await quickAdd(tester, 'Move house');
+    final store = TaskScope.read(tester.element(find.byType(TideTabBar)));
+    final task = store.open.single;
+    store.update(
+      task.copyWith(
+        subtasks: const [
+          Subtask(id: 'a', title: 'Pack', isCompleted: true),
+          Subtask(id: 'b', title: 'Book a van'),
+        ],
+      ),
+    );
+    await settle(tester);
+
+    await swipe(tester, 'Move house', 260);
+
+    expect(find.text('Move house'), findsOneWidget, reason: 'sprang back');
+    expect(store.open.single.isCompleted, isFalse);
+    expect(find.textContaining('1 step still open'), findsOneWidget);
+    await outlastSnackbar(tester);
+  });
+
+  testWidgets('leaving the tab puts the keyboard away', (tester) async {
+    await openTasks(tester);
+    await tester.tap(find.widgetWithText(TextField, 'Add a task'));
+    await settle(tester);
+    expect(tester.testTextInput.isVisible, isTrue);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(TideTabBar),
+        matching: find.text('Today'),
+      ),
+    );
+    await settle(tester);
+
+    expect(tester.testTextInput.isVisible, isFalse);
   });
 }

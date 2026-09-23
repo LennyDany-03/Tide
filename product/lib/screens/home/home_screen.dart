@@ -7,6 +7,7 @@ import '../../services/models/habit.dart';
 import '../../services/streak_calculator.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
+import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/gauge_number.dart';
@@ -124,6 +125,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          persist: false,
+          duration: TideMotion.snackHold,
           content: Text(
             streak > 0
                 ? '${habit.name} paused. Your $streak day streak is held.'
