@@ -197,4 +197,45 @@ void main() {
 
     expect(tester.testTextInput.isVisible, isFalse);
   });
+
+  testWidgets('a long press lists what a task can do', (tester) async {
+    await openTasks(tester);
+    await quickAdd(tester, 'Paint the shed');
+
+    await tester.longPress(find.text('Paint the shed'));
+    await settle(tester);
+
+    expect(find.text('Edit task'), findsOneWidget);
+    expect(find.text('Mark as complete'), findsOneWidget);
+    expect(find.text('Move to today'), findsOneWidget);
+    expect(find.text('Delete task'), findsOneWidget);
+
+    await tester.tap(find.text('Delete task'));
+    await settle(tester);
+
+    expect(find.text('Paint the shed'), findsNothing);
+    expect(find.text('Task deleted.'), findsOneWidget);
+    await outlastSnackbar(tester);
+  });
+
+  testWidgets('the menu on a task with steps left points at the steps', (
+    tester,
+  ) async {
+    await openTasks(tester);
+    await quickAdd(tester, 'Move house');
+    final store = TaskScope.read(tester.element(find.byType(TideTabBar)));
+    store.update(
+      store.open.single.copyWith(
+        subtasks: const [Subtask(id: 'a', title: 'Pack')],
+      ),
+    );
+    await settle(tester);
+
+    await tester.longPress(find.text('Move house'));
+    await settle(tester);
+
+    expect(find.text('Mark as complete'), findsNothing);
+    expect(find.text('Finish the steps'), findsOneWidget);
+    expect(find.text('1 step left'), findsOneWidget);
+  });
 }

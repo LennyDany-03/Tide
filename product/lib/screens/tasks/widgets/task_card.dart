@@ -43,6 +43,7 @@ class TaskCard extends StatefulWidget {
     required this.onDelete,
     required this.onOpen,
     this.onBlocked,
+    this.onMenu,
     this.showTags = true,
     this.completeLabel,
   });
@@ -56,6 +57,11 @@ class TaskCard extends StatefulWidget {
 
   /// A right swipe on a task whose steps are not all done.
   final VoidCallback? onBlocked;
+
+  /// A long press anywhere on the card: the menu of what it can do. Long
+  /// press and the horizontal drag settle in the gesture arena on their own
+  /// — movement picks the drag, stillness picks the press.
+  final VoidCallback? onMenu;
 
   /// Off on the free plan unless the task already carries tags from a plan
   /// that has since ended — then they are still shown, never hidden.
@@ -208,6 +214,12 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                       onHorizontalDragEnd: _onEnd,
                       child: PressScale(
                         onTap: widget.onOpen,
+                        onLongPress: widget.onMenu == null
+                            ? null
+                            : () {
+                                HapticFeedback.mediumImpact();
+                                widget.onMenu!();
+                              },
                         scale: 0.985,
                         haptic: false,
                         child: _Face(

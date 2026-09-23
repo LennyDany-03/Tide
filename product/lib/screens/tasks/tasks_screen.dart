@@ -19,6 +19,7 @@ import '../../widgets/tide_ring.dart';
 import '../../widgets/tide_tab_bar.dart';
 import 'widgets/list_options_sheet.dart';
 import 'widgets/quick_add_bar.dart';
+import 'widgets/task_actions_sheet.dart';
 import 'widgets/task_card.dart';
 
 /// The to-do list: a side module next to the habit tracker.
@@ -92,6 +93,31 @@ class _TasksScreenState extends State<TasksScreen> {
 
   void _open(Task task) => context.push(Routes.task(task.id));
 
+  Future<void> _menu(Task task) async {
+    final action = await showTaskActionsSheet(context, task: task);
+    if (action == null || !mounted) return;
+    final store = TaskScope.read(context);
+    final today = DateUtils.dateOnly(DateTime.now());
+    switch (action) {
+      case TaskAction.edit:
+        _open(task);
+      case TaskAction.complete:
+        _complete(task);
+      case TaskAction.dueToday:
+        store.update(task.copyWith(dueDate: today));
+        _snack('Moved to today.');
+      case TaskAction.dueTomorrow:
+        store.update(
+          task.copyWith(
+            dueDate: DateTime(today.year, today.month, today.day + 1),
+          ),
+        );
+        _snack('Moved to tomorrow.');
+      case TaskAction.delete:
+        _delete(task);
+    }
+  }
+
   void _openArchive() => context.push(Routes.taskArchive);
 
   @override
@@ -109,6 +135,9 @@ class _TasksScreenState extends State<TasksScreen> {
         20,
         TideTabBar.reservedHeight(context) + 40,
       ),
+      // Scrolling the list is looking at it, not typing into the field at
+      // its head, so a drag puts the keyboard away.
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         _Header(
           status: store.status,
@@ -176,6 +205,7 @@ class _TasksScreenState extends State<TasksScreen> {
                             onComplete: () => _complete(task),
                             onDelete: () => _delete(task),
                             onOpen: () => _open(task),
+                            onMenu: () => _menu(task),
                           ),
                         ),
                       const SizedBox(height: 6),
@@ -234,6 +264,7 @@ class _TasksScreenState extends State<TasksScreen> {
               onBlocked: () => _blocked(task),
               onDelete: () => _delete(task),
               onOpen: () => _open(task),
+              onMenu: () => _menu(task),
             ),
           ),
       ],
