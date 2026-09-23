@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../services/models/milestone.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
-import '../../theme/tide_elevation.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/habit_glyph.dart';
 import '../../widgets/press_scale.dart';
@@ -43,10 +42,6 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
       streak: store.allTimeBestStreak,
       accountName: store.accountName,
     );
-  }
-
-  void _simulate() {
-    TideScope.read(context).simulateNextUnlock();
   }
 
   @override
@@ -136,31 +131,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                     clean: store.cleanStreak,
                     onTap: () => _share(context, status.milestone),
                   ),
-                const SizedBox(height: 20),
               ],
-
-              // A demo affordance, kept deliberately: the unlock moment is
-              // the best animation in the app and would otherwise be
-              // unreachable without waiting sixty days for it.
-              PressScale(
-                onTap: _simulate,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  // Outlined and quiet. It is a demo control sitting under
-                  // the route, and a filled accent block would make the
-                  // least important thing on the screen the loudest.
-                  decoration: BoxDecoration(
-                    borderRadius: TideElevation.radius12,
-                    border: Border.all(color: TideColors.hairline),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Simulate next unlock',
-                      style: TideType.button.copyWith(color: TideColors.silt),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
           const Positioned(top: 0, left: 0, right: 0, child: TideTopScrim()),

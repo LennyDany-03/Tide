@@ -42,8 +42,19 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
-            <!-- No LAUNCHER filter here: the launcher entry is one of the
-                 aliases below, so the icon can follow the palette. -->
+            <!-- No launcher entry here: that is one of the aliases below, so
+                 the icon can follow the palette. This filter exists for
+                 `flutter run`, which launches the first activity whose filter
+                 names MAIN + LAUNCHER — without it, that was .LauncherMidnight,
+                 and the launch failed once the palette had disabled it. The
+                 data scheme keeps the home screen from listing it: a launcher
+                 asks for MAIN + LAUNCHER with no data, which this can't match,
+                 while flutter_tools only checks the action and category. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+                <data android:scheme="tide-dev-launch"/>
+            </intent-filter>
 
             <!-- A home-screen widget tap opens this Activity directly
                  (HomeWidgetLaunchIntent targets it by component, not by

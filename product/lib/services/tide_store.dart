@@ -163,11 +163,6 @@ class TideStore extends ChangeNotifier {
   bool weeklyRecap = false;
   bool haptics = true;
 
-  /// Added to the computed best streak by the milestones screen's
-  /// "simulate next unlock" control, so the celebration can be seen without
-  /// waiting sixty days for it.
-  int _simulatedBonus = 0;
-
   // --- History window -----------------------------------------------------
 
   /// Whether [date] is a day this app will draw. Days in the future are
@@ -257,7 +252,7 @@ class TideStore extends ChangeNotifier {
   }
 
   int get allTimeBestStreak =>
-      StreakCalculator.bestStreakAcross(_habits) + _simulatedBonus;
+      StreakCalculator.bestStreakAcross(_habits);
 
   int get cleanStreak => StreakCalculator.cleanStreak(_habits);
 
@@ -322,19 +317,6 @@ class TideStore extends ChangeNotifier {
 
   void acknowledgeCelebration(Milestone milestone) {
     _acknowledgedMilestones.add(milestone.id);
-    notifyListeners();
-  }
-
-  /// Pushes the best streak far enough to cross the next locked threshold.
-  /// A demo affordance, kept because the unlock burst is the biggest moment
-  /// in the app and otherwise unreachable.
-  void simulateNextUnlock() {
-    final locked = milestones.where(
-      (m) => !m.unlocked && m.milestone.kind == MilestoneKind.streak,
-    );
-    if (locked.isEmpty) return;
-    final next = locked.first.milestone;
-    _simulatedBonus += next.threshold - allTimeBestStreak;
     notifyListeners();
   }
 
@@ -842,7 +824,6 @@ class TideStore extends ChangeNotifier {
     // and the server's copy replaces that as soon as it arrives.
     repository.open(next.id);
     _habits = isNew ? const [] : repository.cached(next.id);
-    _simulatedBonus = 0;
     _pendingHabitCue = null;
     _acknowledgedMilestones = isNew ? {} : _unlockedIds().toSet();
     repository.remember(_habits);
