@@ -110,6 +110,25 @@ abstract final class TideGradients {
     stops: const [0, 0.6],
   );
 
+  /// The water in the tab pool. Same idea as [tideFill] — brightest at the
+  /// lit surface, thinning downward — but it keeps a floor: the pool is a
+  /// few pixels deep, and water that fades to nothing that fast reads as a
+  /// line rather than as something with depth.
+  ///
+  /// Far lighter on a light palette, where the accent is ink: at dark
+  /// strength the pool went to a grey blob that drowned the icon in it.
+  static LinearGradient get tabWater {
+    final light = TideColors.palette.isLight;
+    return LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        TideColors.lantern.withValues(alpha: light ? 0.14 : 0.42),
+        TideColors.lantern.withValues(alpha: light ? 0.04 : 0.12),
+      ],
+    );
+  }
+
   // --- Fire -------------------------------------------------------------
 
   /// The streak flame's fill: pale and hot on the side the app's one light

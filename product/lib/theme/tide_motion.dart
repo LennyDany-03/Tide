@@ -55,9 +55,29 @@ abstract final class TideMotion {
   static const double tabSlide = 4;
   static const Curve tabCurve = Curves.easeOutCubic;
 
-  /// The sliding pill under the active tab / inside a segmented control.
+  /// The sliding pill inside a segmented control.
   static const Duration pillSlide = Duration(milliseconds: 280);
   static const Curve pillCurve = Curves.easeOutCubic;
+
+  /// The pool of water behind the selected tab, travelling to a new tab.
+  ///
+  /// Its two edges run on different clocks. The leading edge sets off at
+  /// once and lands early; the trailing edge waits a beat and catches up —
+  /// so the pool stretches in flight and gathers itself on arrival, the way
+  /// a drop runs down glass. One rigid capsule sliding across reads as a
+  /// part of the bar moving; a stretch reads as water.
+  static const Duration tabTide = Duration(milliseconds: 520);
+  static const Curve tabLead = Interval(0, 0.66, curve: Curves.easeOutCubic);
+  static const Curve tabTrail = Interval(0.1, 1, curve: Curves.easeOutQuart);
+
+  /// The furthest the pool's two edges may drift apart, in tabs. Without a
+  /// cap the stretch grows with the distance, and a jump from the last tab
+  /// to the first drew a bar across three of them: a drop has a length.
+  static const double tabStretch = 1.1;
+
+  /// The selected icon's small lift, timed to the pool arriving under it
+  /// rather than to the tap — the icon answers the water, not the finger.
+  static const Curve tabPop = Interval(0.4, 1, curve: Curves.easeOut);
 
   /// The duration dial following a thumb. Short enough that the arc never
   /// feels towed behind the finger; long enough to smooth a touch that
