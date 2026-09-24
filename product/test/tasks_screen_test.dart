@@ -29,8 +29,14 @@ void main() {
     await settle(tester);
   }
 
+  /// The fast path through the new-task drawer: open, type, Return.
   Future<void> quickAdd(WidgetTester tester, String title) async {
-    await tester.enterText(find.widgetWithText(TextField, 'Add a task'), title);
+    await tester.tap(find.bySemanticsLabel('New task'));
+    await settle(tester);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'What needs doing?'),
+      title,
+    );
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await settle(tester);
   }
@@ -62,9 +68,25 @@ void main() {
 
     expect(tester.widget<TideTabBar>(find.byType(TideTabBar)).currentIndex, 1);
     expect(
-      find.text('Nothing on your list — add something above.'),
+      find.text('Nothing on your list. Tap New task to add one.'),
       findsOneWidget,
     );
+  });
+
+  // It once sat on the bar on any phone with a gesture bar: the bar's
+  // reserved height was rebuilt from a view padding the Scaffold strips out
+  // of its body, so it came up one gesture bar short.
+  testWidgets('the New task button floats clear of the tab bar', (
+    tester,
+  ) async {
+    // A 24pt gesture bar at 3x.
+    tester.view.padding = const FakeViewPadding(bottom: 72);
+    tester.view.viewPadding = const FakeViewPadding(bottom: 72);
+    await openTasks(tester);
+
+    final button = tester.getRect(find.bySemanticsLabel('New task'));
+    final bar = tester.getRect(find.byType(TideTabBar));
+    expect(bar.top - button.bottom, greaterThanOrEqualTo(16));
   });
 
   testWidgets('a task goes in with one field and is completed by a swipe '
@@ -181,21 +203,87 @@ void main() {
     await outlastSnackbar(tester);
   });
 
-  testWidgets('leaving the tab puts the keyboard away', (tester) async {
+  testWidgets('the new-task drawer takes a whole task in one go', (
+    tester,
+  ) async {
     await openTasks(tester);
-    await tester.tap(find.widgetWithText(TextField, 'Add a task'));
+    await tester.tap(find.bySemanticsLabel('New task'));
     await settle(tester);
-    expect(tester.testTextInput.isVisible, isTrue);
 
-    await tester.tap(
-      find.descendant(
-        of: find.byType(TideTabBar),
-        matching: find.text('Today'),
-      ),
+    expect(
+      tester.testTextInput.isVisible,
+      isTrue,
+      reason: 'the title is focused as the drawer rises',
     );
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'What needs doing?'),
+      'Move house',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Add details'),
+      'The flat on Harbour Street',
+    );
+    await tester.tap(find.text('Tomorrow'));
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Add a step'),
+      'Pack',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.next);
+    await settle(tester);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Add a step'),
+      'Book a van',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.next);
     await settle(tester);
 
+    await tester.tap(find.text('Add task'));
+    await settle(tester);
+
+    final store = TaskScope.read(tester.element(find.byType(TideTabBar)));
+    final task = store.open.single;
+    final today = DateUtils.dateOnly(DateTime.now());
+    expect(task.title, 'Move house');
+    expect(task.description, 'The flat on Harbour Street');
+    expect(task.dueDate, DateTime(today.year, today.month, today.day + 1));
+    expect(task.subtasks.map((s) => s.title), ['Pack', 'Book a van']);
+    expect(find.text('Move house'), findsOneWidget);
     expect(tester.testTextInput.isVisible, isFalse);
+    await outlastSnackbar(tester);
+  });
+
+  testWidgets('the drawer will not add a task with no title', (tester) async {
+    await openTasks(tester);
+    await tester.tap(find.bySemanticsLabel('New task'));
+    await settle(tester);
+
+    await tester.tap(find.text('Add task'));
+    await settle(tester);
+
+    final store = TaskScope.read(tester.element(find.byType(TideTabBar)));
+    expect(store.open, isEmpty);
+    expect(
+      find.text('What needs doing?'),
+      findsOneWidget,
+      reason: 'still open',
+    );
+  });
+
+  testWidgets('a section folds away when its heading is tapped', (
+    tester,
+  ) async {
+    await openTasks(tester);
+    await quickAdd(tester, 'Paint the shed');
+    await outlastSnackbar(tester);
+
+    await tester.tap(find.text('Someday'));
+    await settle(tester);
+    expect(find.text('Paint the shed'), findsNothing);
+
+    await tester.tap(find.text('Someday'));
+    await settle(tester);
+    expect(find.text('Paint the shed'), findsOneWidget);
   });
 
   testWidgets('a long press lists what a task can do', (tester) async {

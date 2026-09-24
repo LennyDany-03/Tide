@@ -211,14 +211,35 @@ class TaskStore extends ChangeNotifier {
 
   // --- Mutations -------------------------------------------------------------
 
-  Task add({required String title, DateTime? dueDate}) {
+  /// A new task, written once with everything the new-task drawer gathered —
+  /// rather than a bare title followed by an edit, which would queue two
+  /// writes for one decision.
+  Task add({
+    required String title,
+    DateTime? dueDate,
+    String? description,
+    TaskRecurrence recurrence = TaskRecurrence.none,
+    int? customRecurrenceMonths,
+    List<DateTime> reminders = const [],
+    List<Subtask> subtasks = const [],
+  }) {
     final now = _clock();
-    final task = Task(
-      id: tide.newHabitId(),
-      title: title.trim(),
-      dueDate: dueDate == null ? null : DateUtils.dateOnly(dueDate),
-      createdAt: now,
-      updatedAt: now,
+    final notes = description?.trim();
+    final task = withinLimits(
+      Task(
+        id: tide.newHabitId(),
+        title: title.trim(),
+        description: notes == null || notes.isEmpty ? null : notes,
+        dueDate: dueDate == null ? null : DateUtils.dateOnly(dueDate),
+        recurrence: recurrence,
+        customRecurrenceMonths: recurrence == TaskRecurrence.custom
+            ? customRecurrenceMonths
+            : null,
+        reminders: [...reminders]..sort(),
+        subtasks: subtasks,
+        createdAt: now,
+        updatedAt: now,
+      ),
     );
     _put(task);
     return task;

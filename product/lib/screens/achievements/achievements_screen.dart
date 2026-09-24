@@ -74,7 +74,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           ListView(
             padding: EdgeInsets.fromLTRB(
               20,
-              MediaQuery.paddingOf(context).top + 16,
+              MediaQuery.viewPaddingOf(context).top + 16,
               20,
               40 + MediaQuery.paddingOf(context).bottom,
             ),

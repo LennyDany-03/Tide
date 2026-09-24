@@ -287,8 +287,6 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       );
     }
 
-    final media = MediaQuery.of(context);
-    final bottom = media.viewInsets.bottom > 0 ? 0.0 : media.padding.bottom;
     final done = original.isCompleted;
     final stepsLeft = _subtasks.where((s) => !s.isCompleted).length;
 
@@ -401,33 +399,41 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               ),
             ),
             Container(
-              padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + bottom),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
               decoration: BoxDecoration(
                 color: TideColors.deepWater,
                 border: Border(top: BorderSide(color: TideColors.hairline)),
               ),
-              child: TideButton(
-                label: done
-                    ? 'Mark as not done'
-                    : stepsLeft > 0
-                    ? 'Finish ${TaskCopy.steps(stepsLeft)} first'
-                    : 'Mark as complete',
-                variant: done || stepsLeft > 0
-                    ? TideButtonVariant.secondary
-                    : TideButtonVariant.primary,
-                icon: Icon(
-                  done
-                      ? Icons.undo_rounded
+              // Clear of the gesture bar, which the keyboard covers when it
+              // is up. Only this reads the inset: the whole editor reading
+              // `MediaQuery.of` rebuilt on every frame of the keyboard's slide.
+              child: SafeArea(
+                top: false,
+                left: false,
+                right: false,
+                child: TideButton(
+                  label: done
+                      ? 'Mark as not done'
                       : stepsLeft > 0
-                      ? Icons.checklist_rounded
-                      : Icons.check_rounded,
-                  size: 19,
-                  color: done || stepsLeft > 0
-                      ? TideColors.bone
-                      : TideColors.onLantern,
+                      ? 'Finish ${TaskCopy.steps(stepsLeft)} first'
+                      : 'Mark as complete',
+                  variant: done || stepsLeft > 0
+                      ? TideButtonVariant.secondary
+                      : TideButtonVariant.primary,
+                  icon: Icon(
+                    done
+                        ? Icons.undo_rounded
+                        : stepsLeft > 0
+                        ? Icons.checklist_rounded
+                        : Icons.check_rounded,
+                    size: 19,
+                    color: done || stepsLeft > 0
+                        ? TideColors.bone
+                        : TideColors.onLantern,
+                  ),
+                  // The task finishes with its last step, not before it.
+                  onPressed: !done && stepsLeft > 0 ? null : _complete,
                 ),
-                // The task finishes with its last step, not before it.
-                onPressed: !done && stepsLeft > 0 ? null : _complete,
               ),
             ),
           ],
@@ -551,7 +557,7 @@ class _Header extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         12,
-        MediaQuery.paddingOf(context).top + 8,
+        MediaQuery.viewPaddingOf(context).top + 8,
         16,
         8,
       ),

@@ -65,7 +65,7 @@ class _WidgetSetupScreenState extends State<WidgetSetupScreen> {
     final store = TideScope.of(context);
     final habits = [...store.habits, ...store.pausedHabits];
     final current = store.widgetHabitId(widget.widgetId);
-    final top = MediaQuery.paddingOf(context).top;
+    final top = MediaQuery.viewPaddingOf(context).top;
     final bottom = MediaQuery.paddingOf(context).bottom;
 
     return PopScope(

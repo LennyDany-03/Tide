@@ -44,13 +44,11 @@ class TideSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-
     return Align(
       alignment: Alignment.bottomCenter,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: media.size.height * maxHeightFactor,
+          maxHeight: MediaQuery.sizeOf(context).height * maxHeightFactor,
         ),
         child: Container(
           decoration: BoxDecoration(
@@ -88,7 +86,7 @@ class TideSheet extends StatelessWidget {
                         20,
                         12,
                         20,
-                        20 + media.padding.bottom,
+                        20 + MediaQuery.paddingOf(context).bottom,
                       ),
                       child: footer,
                     ),

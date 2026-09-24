@@ -45,6 +45,7 @@ class TaskCard extends StatefulWidget {
     this.onBlocked,
     this.onMenu,
     this.showTags = true,
+    this.overdueInHeading = false,
     this.completeLabel,
   });
 
@@ -66,6 +67,10 @@ class TaskCard extends StatefulWidget {
   /// Off on the free plan unless the task already carries tags from a plan
   /// that has since ended — then they are still shown, never hidden.
   final bool showTags;
+
+  /// The card sits under an "Overdue" heading, so its due chip gives the
+  /// date alone rather than saying "Overdue" again on every card.
+  final bool overdueInHeading;
 
   /// What the right swipe says. Defaults to "Complete", or "Reopen" on a
   /// finished task.
@@ -225,6 +230,7 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                         child: _Face(
                           task: widget.task,
                           showTags: widget.showTags,
+                          overdueInHeading: widget.overdueInHeading,
                         ),
                       ),
                     ),
@@ -273,10 +279,15 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
 
 /// The card itself.
 class _Face extends StatelessWidget {
-  const _Face({required this.task, required this.showTags});
+  const _Face({
+    required this.task,
+    required this.showTags,
+    required this.overdueInHeading,
+  });
 
   final Task task;
   final bool showTags;
+  final bool overdueInHeading;
 
   @override
   Widget build(BuildContext context) {
@@ -292,7 +303,7 @@ class _Face extends StatelessWidget {
       else if (task.dueDate != null)
         _Chip(
           icon: overdue ? Icons.error_outline_rounded : Icons.event_rounded,
-          text: overdue
+          text: overdue && !overdueInHeading
               ? 'Overdue · ${TaskCopy.due(task.dueDate!, now: now)}'
               : TaskCopy.due(task.dueDate!, now: now),
           tone: overdue || dueToday ? _Tone.accent : _Tone.plain,
@@ -316,7 +327,7 @@ class _Face extends StatelessWidget {
     ];
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
       decoration: BoxDecoration(
         color: done
             ? Color.lerp(TideColors.shelf, TideColors.deepWater, 0.45)
@@ -360,7 +371,7 @@ class _Face extends StatelessWidget {
                   ),
                 ],
                 if (meta.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 7),
                   Wrap(spacing: 6, runSpacing: 6, children: meta),
                 ],
               ],

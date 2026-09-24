@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
@@ -18,7 +19,7 @@ import '../../widgets/press_scale.dart';
 import '../../widgets/tide_ring.dart';
 import '../../widgets/tide_tab_bar.dart';
 import 'widgets/list_options_sheet.dart';
-import 'widgets/quick_add_bar.dart';
+import 'widgets/new_task_sheet.dart';
 import 'widgets/task_actions_sheet.dart';
 import 'widgets/task_card.dart';
 
@@ -39,6 +40,44 @@ class TasksScreen extends StatefulWidget {
 
 class _TasksScreenState extends State<TasksScreen> {
   bool _showCompleted = false;
+
+  /// Sections folded shut this session, by heading. A long Overdue run is
+  /// the usual reason: seven cards of old news between you and today.
+  final Set<String> _collapsed = {};
+
+  /// The store whose launcher-shortcut requests this screen answers.
+  TaskStore? _requests;
+
+  /// Whether the New task button shows its label. It folds to a square `+`
+  /// while the list is read downwards — the full pill sat over the foot of
+  /// the last card — and opens again on the way back up. A notifier rather
+  /// than state, so a scroll rebuilds the button and not the list.
+  final ValueNotifier<bool> _fabExpanded = ValueNotifier(true);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final store = TaskScope.read(context);
+    if (identical(store, _requests)) return;
+    _requests?.quickAddRequests.removeListener(_newTask);
+    _requests = store..quickAddRequests.addListener(_newTask);
+  }
+
+  @override
+  void dispose() {
+    _requests?.quickAddRequests.removeListener(_newTask);
+    _fabExpanded.dispose();
+    super.dispose();
+  }
+
+  /// Opens the new-task drawer — from the button, or from the launcher's
+  /// "New task" shortcut.
+  Future<void> _newTask() async {
+    final task = await showNewTaskSheet(context);
+    if (task == null || !mounted) return;
+    final store = TaskScope.read(context);
+    _snack('Task added.', undo: () => store.delete(task.id));
+  }
 
   void _snack(String message, {VoidCallback? undo}) {
     ScaffoldMessenger.of(context)
@@ -128,16 +167,57 @@ class _TasksScreenState extends State<TasksScreen> {
     final filter = store.activeTagFilter;
     final today = store.today;
 
+    final bar = TideTabBar.reservedHeight(context);
+
+    return Stack(
+      children: [
+        NotificationListener<UserScrollNotification>(
+          onNotification: (note) {
+            if (note.direction == ScrollDirection.reverse) {
+              _fabExpanded.value = false;
+            } else if (note.direction == ScrollDirection.forward) {
+              _fabExpanded.value = true;
+            }
+            return false;
+          },
+          child: _list(store, open, completed, filter, today, bar),
+        ),
+        // Floating, so adding is one reach from anywhere in a long list
+        // rather than a scroll back to the top first.
+        Positioned(
+          right: 20,
+          bottom: bar + 18,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _fabExpanded,
+            builder: (context, expanded, _) =>
+                _NewTaskButton(expanded: expanded, onTap: _newTask),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _list(
+    TaskStore store,
+    List<Task> open,
+    List<Task> completed,
+    String? filter,
+    ({int done, int total, int overdue}) today,
+    double bar,
+  ) {
     return ListView(
       padding: EdgeInsets.fromLTRB(
         20,
+        // `padding`, as on every tab. Inside the shell's body the Scaffold
+        // holds it steady while the keyboard moves; `viewPadding` there is
+        // stripped and restored as the keyboard opens, and reading it rebuilt
+        // this list under the new-task drawer just as the keyboard set off.
         MediaQuery.paddingOf(context).top + 24,
         20,
-        TideTabBar.reservedHeight(context) + 40,
+        // Clear of the tab bar and of the New task button over the foot of
+        // the list, so the last card can scroll out from under both.
+        bar + 44 + _NewTaskButton.height,
       ),
-      // Scrolling the list is looking at it, not typing into the field at
-      // its head, so a drag puts the keyboard away.
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         _Header(
           status: store.status,
@@ -153,12 +233,7 @@ class _TasksScreenState extends State<TasksScreen> {
             overdue: today.overdue,
             open: open.length,
           ),
-          const SizedBox(height: 14),
         ],
-        QuickAddBar(
-          focusRequests: store.quickAddRequests,
-          onAdd: (title, due) => store.add(title: title, dueDate: due),
-        ),
         if (filter != null) ...[
           const SizedBox(height: 12),
           Align(
@@ -249,24 +324,47 @@ class _TasksScreenState extends State<TasksScreen> {
     for (final task in open) {
       groups.putIfAbsent(headingOf(task), () => []).add(task);
     }
+    // Under a heading that already says Overdue, each card repeating it is
+    // noise — the date alone is what tells them apart.
+    final byDue = store.sort == TaskSort.dueDate;
 
     return [
       for (final entry in groups.entries) ...[
-        _SectionHead(title: entry.key, count: entry.value.length),
-        for (final task in entry.value)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: TaskCard(
-              key: ValueKey('open-${task.id}'),
-              task: task,
-              showTags: true,
-              onComplete: () => _complete(task),
-              onBlocked: () => _blocked(task),
-              onDelete: () => _delete(task),
-              onOpen: () => _open(task),
-              onMenu: () => _menu(task),
-            ),
-          ),
+        _SectionHead(
+          title: entry.key,
+          count: entry.value.length,
+          expanded: !_collapsed.contains(entry.key),
+          onTap: () => setState(() {
+            if (!_collapsed.remove(entry.key)) _collapsed.add(entry.key);
+          }),
+        ),
+        AnimatedSize(
+          duration: TideMotion.tabSwitch,
+          curve: TideMotion.tabCurve,
+          alignment: Alignment.topCenter,
+          child: _collapsed.contains(entry.key)
+              ? const SizedBox(width: double.infinity)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final task in entry.value)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: TaskCard(
+                          key: ValueKey('open-${task.id}'),
+                          task: task,
+                          showTags: true,
+                          overdueInHeading: byDue && entry.key == 'Overdue',
+                          onComplete: () => _complete(task),
+                          onBlocked: () => _blocked(task),
+                          onDelete: () => _delete(task),
+                          onOpen: () => _open(task),
+                          onMenu: () => _menu(task),
+                        ),
+                      ),
+                  ],
+                ),
+        ),
       ],
     ];
   }
@@ -472,7 +570,9 @@ class _SwipeHint extends StatelessWidget {
                   ),
                   const TextSpan(text: ' to complete, '),
                   TextSpan(text: 'left', style: TideType.label),
-                  const TextSpan(text: ' to delete. Tap to edit.'),
+                  const TextSpan(
+                    text: ' to delete. Tap to edit, hold for more.',
+                  ),
                 ],
               ),
               style: TideType.labelMuted.copyWith(color: TideColors.bone),
@@ -510,7 +610,7 @@ class _EmptyList extends StatelessWidget {
         : 'All clear';
     final body = filter != null
         ? 'Clear the filter to see the rest of your list.'
-        : 'Nothing on your list — add something above.';
+        : 'Nothing on your list. Tap New task to add one.';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 48, 12, 12),
@@ -542,44 +642,139 @@ class _EmptyList extends StatelessWidget {
   }
 }
 
+/// A section heading, which folds its section away when tapped.
 class _SectionHead extends StatelessWidget {
-  const _SectionHead({required this.title, required this.count});
+  const _SectionHead({
+    required this.title,
+    required this.count,
+    required this.expanded,
+    required this.onTap,
+  });
 
   final String title;
   final int count;
+  final bool expanded;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final overdue = title == 'Overdue';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 22, 2, 10),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: TideType.heading.copyWith(
-              fontSize: 15,
-              color: overdue ? TideColors.lantern : TideColors.bone,
+    return Semantics(
+      button: true,
+      expanded: expanded,
+      child: PressScale(
+        onTap: onTap,
+        scale: 0.99,
+        haptic: false,
+        child: Padding(
+          // Opaque to taps across the whole row, not only the words.
+          padding: const EdgeInsets.fromLTRB(2, 18, 2, 10),
+          child: ColoredBox(
+            color: Colors.transparent,
+            child: _headRow(overdue),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headRow(bool overdue) {
+    return Row(
+      children: [
+        Text(
+          title,
+          style: TideType.heading.copyWith(
+            fontSize: 15,
+            color: overdue ? TideColors.lantern : TideColors.bone,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: overdue
+                ? TideColors.lantern.withValues(alpha: 0.12)
+                : TideColors.bone.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '$count',
+            style: TideType.gauge(
+              12,
+              color: overdue ? TideColors.lantern : TideColors.silt,
             ),
           ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-              color: overdue
-                  ? TideColors.lantern.withValues(alpha: 0.12)
-                  : TideColors.bone.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '$count',
-              style: TideType.gauge(
-                12,
-                color: overdue ? TideColors.lantern : TideColors.silt,
+        ),
+        const Spacer(),
+        AnimatedRotation(
+          turns: expanded ? 0 : -0.25,
+          duration: TideMotion.tabSwitch,
+          curve: TideMotion.tabCurve,
+          child: Icon(
+            Icons.expand_more_rounded,
+            size: 20,
+            color: TideColors.silt,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The way into the new-task drawer, floating over the foot of the list.
+class _NewTaskButton extends StatelessWidget {
+  const _NewTaskButton({required this.expanded, required this.onTap});
+
+  final bool expanded;
+  final VoidCallback onTap;
+
+  static const double height = 52;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'New task',
+      excludeSemantics: true,
+      child: PressScale(
+        onTap: onTap,
+        child: Container(
+          height: height,
+          // Folded, the icon sits centred in a square of [height].
+          padding: const EdgeInsets.symmetric(horizontal: (height - 22) / 2),
+          decoration: BoxDecoration(
+            color: TideColors.lantern,
+            // The cards' radius, not a pill: over a column of r12 cards a
+            // fully round button read as a sticker from another app.
+            borderRadius: TideElevation.radius12,
+            // A low glow: a strong one spilled onto the frosted tab bar
+            // under it, which blurred it into a lit smear along the bar.
+            boxShadow: TideElevation.lanternGlow(intensity: 0.35),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add_rounded, size: 22, color: TideColors.onLantern),
+              AnimatedSize(
+                duration: TideMotion.pillSlide,
+                curve: TideMotion.pillCurve,
+                child: expanded
+                    ? Padding(
+                        padding: const EdgeInsets.only(left: 8, right: 5),
+                        child: Text(
+                          'New task',
+                          maxLines: 1,
+                          softWrap: false,
+                          style: TideType.button.copyWith(
+                            color: TideColors.onLantern,
+                          ),
+                        ),
+                      )
+                    : const SizedBox(height: height),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

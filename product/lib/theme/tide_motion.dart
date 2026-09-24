@@ -76,6 +76,16 @@ abstract final class TideMotion {
   static const Duration sheetOut = Duration(milliseconds: 260);
   static const Curve sheetCurve = Curves.easeOutCubic;
 
+  /// A drawer that opens with the keyboard — the new-task drawer.
+  ///
+  /// Shorter than [sheetIn] on purpose: the keyboard rises at the same time
+  /// and carries the drawer up with it, and a 380ms slide still decelerating
+  /// after the keyboard had landed read as two motions fighting — lag, to
+  /// the eye, even at a steady frame rate. Android's keyboard takes roughly
+  /// this long, so the two arrive together.
+  static const Duration drawerIn = Duration(milliseconds: 280);
+  static const Curve drawerCurve = Curves.easeOutQuart;
+
   /// The FAB morphing into a sheet header, and the onboarding ring morphing
   /// into Home's ring.
   static const Duration morph = Duration(milliseconds: 460);

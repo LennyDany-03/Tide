@@ -293,13 +293,6 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // The home indicator's inset, except while the keyboard is up — the
-    // scaffold has already lifted the whole body by then, and adding the
-    // gesture inset on top of that leaves a band of dead ground between the
-    // save button and the keys.
-    final media = MediaQuery.of(context);
-    final bottom = media.viewInsets.bottom > 0 ? 0.0 : media.padding.bottom;
-
     return PopScope(
       canPop: !_dirty || _leaving,
       onPopInvokedWithResult: (didPop, _) {
@@ -319,7 +312,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
                 children: [
                   _header(),
                   Expanded(child: _form(context)),
-                  _footer(bottom),
+                  _footer(),
                 ],
               ),
               const Positioned(
@@ -339,7 +332,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         14,
-        MediaQuery.paddingOf(context).top + 10,
+        MediaQuery.viewPaddingOf(context).top + 10,
         20,
         6,
       ),
@@ -386,17 +379,27 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
     );
   }
 
-  Widget _footer(double bottom) {
+  Widget _footer() {
     return Container(
-      padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + bottom),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       decoration: BoxDecoration(
         color: TideColors.deepWater,
         border: Border(top: BorderSide(color: TideColors.hairline)),
       ),
-      child: TideButton(
-        label: _isEditing ? 'Save changes' : 'Create habit',
-        phase: _phase,
-        onPressed: _save,
+      // The home indicator's inset, except while the keyboard is up — the
+      // scaffold has lifted the body by then, and the body's padding drops
+      // to nothing, so there is no dead band between the button and the
+      // keys. Read here alone: the screen reading `MediaQuery.of` for it
+      // rebuilt the whole form on every frame of the keyboard's slide.
+      child: SafeArea(
+        top: false,
+        left: false,
+        right: false,
+        child: TideButton(
+          label: _isEditing ? 'Save changes' : 'Create habit',
+          phase: _phase,
+          onPressed: _save,
+        ),
       ),
     );
   }

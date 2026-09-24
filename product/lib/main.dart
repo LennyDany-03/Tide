@@ -497,11 +497,12 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
             builder: (context, child) {
               // Lock text scaling to a sane band: the gauge readouts are a
               // fixed-width instrument panel and fall apart past this.
-              final scale = MediaQuery.textScalerOf(
-                context,
-              ).clamp(minScaleFactor: 0.9, maxScaleFactor: 1.2);
-              return MediaQuery(
-                data: MediaQuery.of(context).copyWith(textScaler: scale),
+              // Clamped through the text-scaler aspect alone. Copying the whole
+              // `MediaQuery.of` here rebuilt this builder — and the hosts below
+              // it — on every frame of the keyboard's slide.
+              return MediaQuery.withClampedTextScaling(
+                minScaleFactor: 0.9,
+                maxScaleFactor: 1.2,
                 // Completion may be logged from Today, the calendar, a detail
                 // screen or a sheet. Keeping this above the router gives all
                 // of them the same reward without duplicating UI glue in four

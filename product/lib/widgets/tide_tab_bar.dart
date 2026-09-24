@@ -78,13 +78,17 @@ class TideTabBar extends StatelessWidget {
   static const BorderRadius _radius = TideElevation.radius20;
 
   /// Everything the bar occupies at the bottom of the screen, including the
-  /// system gesture inset.
+  /// system gesture inset — for a screen inside the shell's body, which is
+  /// where every caller is.
   ///
-  /// Read from `viewPadding` rather than `padding`, so it returns the same
-  /// number in the bar's own slot and inside the body — where `extendBody`
-  /// has already rewritten `padding.bottom` to mean something else.
+  /// Read from the body's `padding`, which `extendBody` sets to the height
+  /// the bar's slot was actually laid out at. It used to be rebuilt from
+  /// `viewPadding`, but the Scaffold strips the bottom view padding out of a
+  /// body that has a bottom bar: the sum came up one gesture bar short —
+  /// the New task button sat on the bar, and last rows never quite cleared
+  /// it — and it changed as the keyboard opened, rebuilding every tab.
   static double reservedHeight(BuildContext context) =>
-      barHeight + bottomGap + MediaQuery.viewPaddingOf(context).bottom;
+      MediaQuery.paddingOf(context).bottom;
 
   @override
   Widget build(BuildContext context) {

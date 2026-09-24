@@ -54,11 +54,10 @@ class _SheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
     return Container(
       constraints: BoxConstraints(
         maxWidth: 520,
-        maxHeight: media.size.height * 0.85,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
       ),
       decoration: BoxDecoration(
         color: TideColors.shoal,
@@ -98,7 +97,7 @@ class _SheetFrame extends StatelessWidget {
                   12,
                   4,
                   12,
-                  14 + media.padding.bottom,
+                  14 + MediaQuery.paddingOf(context).bottom,
                 ),
                 child: child,
               ),
