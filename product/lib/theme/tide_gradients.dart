@@ -129,6 +129,40 @@ abstract final class TideGradients {
     );
   }
 
+  // --- Milestone cards --------------------------------------------------
+
+  /// The share card's ground: lit where the app's one light falls, deepest
+  /// in the far corner. A flat ground made the exported image look like a
+  /// screenshot of a sheet rather than a thing made to be posted.
+  static LinearGradient get cardGround => LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [TideColors.shelf, TideColors.deepWater, TideColors.trench],
+    stops: const [0, 0.55, 1],
+  );
+
+  /// Light pooled around a scene's bright object — a moon, a lamp, the
+  /// last point of a spiral. Falls to nothing, so it has no edge to find.
+  static RadialGradient cardGlow(Color light, {double strength = 1}) =>
+      RadialGradient(
+        colors: [
+          light.withValues(alpha: 0.34 * strength),
+          light.withValues(alpha: 0.1 * strength),
+          light.withValues(alpha: 0),
+        ],
+        stops: const [0, 0.45, 1],
+      );
+
+  /// The mask a card's scene is drawn through: whole at the top, gone by
+  /// its foot, so the picture dissolves into the ground under the name
+  /// instead of stopping at a line.
+  static LinearGradient get cardSceneFade => const LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Colors.white, Colors.white, Colors.transparent],
+    stops: [0, 0.62, 1],
+  );
+
   // --- Fire -------------------------------------------------------------
 
   /// The streak flame's fill: pale and hot on the side the app's one light

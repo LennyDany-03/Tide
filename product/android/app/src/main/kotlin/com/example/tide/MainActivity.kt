@@ -48,5 +48,8 @@ class MainActivity : FlutterActivity() {
 
         // In-app updates for the sideloaded build. See UpdateInstaller.kt.
         UpdateInstaller(this).register(flutterEngine.dartExecutor.binaryMessenger)
+
+        // Milestone cards out to WhatsApp, Instagram and the rest. See CardShare.kt.
+        CardShare(this).register(flutterEngine.dartExecutor.binaryMessenger)
     }
 }

@@ -31,16 +31,20 @@ class AchievementsScreen extends StatefulWidget {
 }
 
 class _AchievementsScreenState extends State<AchievementsScreen> {
-  /// The one door to the share card, so the gate is asked once rather than
-  /// at each of the two places a milestone can be tapped.
+  /// The one door to the share card, from either place a milestone can be
+  /// tapped.
   ///
+  /// A streak badge's card carries the best run behind it; a clean-days
+  /// badge is about freezes, not length, so it carries none.
   void _share(BuildContext context, Milestone milestone) {
     final store = TideScope.read(context);
     showShareCard(
       context,
       milestone: milestone,
-      streak: store.allTimeBestStreak,
       accountName: store.accountName,
+      bestRun: milestone.kind == MilestoneKind.streak
+          ? store.allTimeBestStreak
+          : null,
     );
   }
 

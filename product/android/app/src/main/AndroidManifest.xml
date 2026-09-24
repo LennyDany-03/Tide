@@ -241,6 +241,18 @@
                 android:resource="@xml/update_paths"/>
         </provider>
 
+        <!-- Shares a rendered milestone card with the app it is sent to.
+             Only the card cache is exposed (res/xml/share_paths.xml). -->
+        <provider
+            android:name=".CardShareProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_paths"/>
+        </provider>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -256,6 +268,17 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- The milestone share sheet only offers an app that is installed,
+             and from Android 11 an app cannot see another without asking
+             here (CardShare.kt). The intent entry is for finding
+             Instagram's story composer among its share targets. -->
+        <package android:name="com.whatsapp"/>
+        <package android:name="com.whatsapp.w4b"/>
+        <package android:name="com.instagram.android"/>
+        <intent>
+            <action android:name="android.intent.action.SEND"/>
+            <data android:mimeType="image/png"/>
         </intent>
     </queries>
 </manifest>
