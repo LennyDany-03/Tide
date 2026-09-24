@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../theme/tide_colors.dart';
-import '../../../theme/tide_typography.dart';
-import '../../../widgets/tide_surface.dart';
+import '../theme/tide_colors.dart';
+import '../theme/tide_typography.dart';
+import 'tide_surface.dart';
 
 /// A titled group of settings rows on one raised surface.
 ///

@@ -13,6 +13,7 @@ import 'config/app_constants.dart';
 import 'config/app_routes.dart';
 import 'config/supabase_config.dart';
 import 'config/update_config.dart';
+import 'screens/tide_call/call_deck.dart';
 import 'screens/update/update_dialog.dart';
 import 'services/auth/auth_service.dart';
 import 'services/auth/demo_auth_service.dart';
@@ -22,11 +23,15 @@ import 'services/habits/demo_habit_repository.dart';
 import 'services/habits/habit_repository.dart';
 import 'services/habits/supabase_habit_repository.dart';
 import 'services/home_widget/home_widget_bridge.dart';
-import 'services/tasks/local_task_reminders.dart';
+import 'services/reminders/android_reminder_platform.dart';
+import 'services/reminders/darwin_reminder_platform.dart';
+import 'services/reminders/reminder_platform.dart';
+import 'services/reminders/reminder_scope.dart';
+import 'services/reminders/reminder_settings.dart';
+import 'services/reminders/reminder_store.dart';
 import 'services/tasks/reconnects.dart';
 import 'services/tasks/task_local.dart';
 import 'services/tasks/task_remote.dart';
-import 'services/tasks/task_reminders.dart';
 import 'services/tasks/task_scope.dart';
 import 'services/tasks/task_store.dart';
 import 'services/tide_scope.dart';
@@ -89,12 +94,18 @@ Future<void> main() async {
   // The to-do list lives on the device first and the server second, so it is
   // set up whether or not a project is configured.
   final taskLocal = await PrefsTaskLocal.open();
-  final taskReminders = await LocalTaskReminders.create();
   final mobile =
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
   final launchUri = mobile ? await _widgetLaunchUri() : null;
+
+  // Reminders for habits and to-dos alike. Read before the first frame too,
+  // for the same reason as a widget tap: a launch from a reminder skips the
+  // splash and lands on what it was about.
+  final reminderPrefs = await ReminderPrefs.load();
+  final reminders = await _reminderPlatform(reminderPrefs);
+  final reminderLaunch = await _reminderLaunch(reminders);
 
   // Only the sideloaded Android build updates itself; iOS and the web are
   // updated by their stores and hosts. A build compiled without a manifest
@@ -115,20 +126,53 @@ Future<void> main() async {
       // A widget tap is an errand — "choose this widget's habit", "open that
       // task" — and three seconds of logo in front of it reads as the tap
       // not having worked.
-      showSplash: launchUri == null,
+      showSplash: launchUri == null && reminderLaunch == null,
       launchUri: launchUri,
+      reminderLaunch: reminderLaunch,
       auth: auth,
       flags: flags,
       habits: habits,
       taskLocal: taskLocal,
       taskRemote: taskRemote,
-      taskReminders: taskReminders,
+      reminders: reminders,
+      reminderPrefs: reminderPrefs,
       reconnects: mobile ? connectionRestored() : null,
       homeShortcuts: mobile,
       widgetBridge: mobile ? HomeWidgetBridge() : null,
       updates: updates,
     ),
   );
+}
+
+/// The lock screen's Tide Call. `TideCallActivity` starts a second engine on
+/// this entry point rather than on [main], so the one thing reachable over
+/// the lock screen is the call: no router, no store, no account.
+@pragma('vm:entry-point')
+Future<void> tideCallMain() => runTideCall();
+
+/// Native scheduling and ringing on Android, `flutter_local_notifications`
+/// on iOS, nothing anywhere else.
+Future<ReminderPlatform> _reminderPlatform(ReminderPrefs prefs) async {
+  if (kIsWeb) return NoReminderPlatform();
+  try {
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => await AndroidReminderPlatform.create(prefs),
+      TargetPlatform.iOS => await DarwinReminderPlatform.create(),
+      _ => NoReminderPlatform(),
+    };
+  } catch (error) {
+    debugPrint('Reminders unavailable: $error');
+    return NoReminderPlatform();
+  }
+}
+
+Future<ReminderOpen?> _reminderLaunch(ReminderPlatform reminders) async {
+  try {
+    return await reminders.takeLaunch();
+  } catch (error) {
+    debugPrint('Could not read the reminder launch: $error');
+    return null;
+  }
 }
 
 /// Drops the Tide Pro entitlement `SharedPreferences` blobs left by an
@@ -171,7 +215,9 @@ class TideApp extends StatefulWidget {
     this.habits,
     this.taskLocal,
     this.taskRemote,
-    this.taskReminders,
+    this.reminders,
+    this.reminderPrefs,
+    this.reminderLaunch,
     this.reconnects,
     this.homeShortcuts = false,
     this.widgetBridge,
@@ -216,8 +262,16 @@ class TideApp extends StatefulWidget {
   /// device — which is what every widget test runs on.
   final TaskRemote? taskRemote;
 
-  /// Task reminders. Left null, they stay on the task and never fire.
-  final TaskReminders? taskReminders;
+  /// Where habit and to-do reminders are scheduled and rung. Left null,
+  /// nothing rings: every test, the web and desktop.
+  final ReminderPlatform? reminders;
+
+  /// Settings → Reminders, kept on the device. Left null, in memory.
+  final ReminderPrefs? reminderPrefs;
+
+  /// The reminder tap that launched the app, handled once the first frame is
+  /// up. Later taps arrive on the reminder store's `opened` stream.
+  final ReminderOpen? reminderLaunch;
 
   /// One event each time the connection comes back, to sync the list.
   final Stream<void>? reconnects;
@@ -244,15 +298,21 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
     widgetBridge: widget.widgetBridge,
   );
 
+  late final ReminderStore _reminders = ReminderStore(
+    tide: _store,
+    platform: widget.reminders,
+    prefs: widget.reminderPrefs,
+  );
+
   late final TaskStore _tasks = TaskStore(
     tide: _store,
     local: widget.taskLocal,
     remote: widget.taskRemote,
-    reminders: widget.taskReminders,
+    reminders: _reminders.taskReminders,
     reconnects: widget.reconnects,
   );
 
-  StreamSubscription<String>? _openedReminders;
+  StreamSubscription<ReminderOpen>? _openedReminders;
   StreamSubscription<Uri?>? _widgetTaps;
 
   late final GoRouter _router = AppRoutes.build(
@@ -280,6 +340,9 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
   /// the next [TideStore.sessionChanges] once somebody is signed in.
   Uri? _pendingWidgetLaunch;
 
+  /// The same, for a reminder tap.
+  ReminderOpen? _pendingReminder;
+
   @override
   void initState() {
     super.initState();
@@ -291,7 +354,14 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
     _store.addListener(_onStore);
     _store.sessionChanges.addListener(_openPendingWidgetLaunch);
     _router.routerDelegate.addListener(_trackRoute);
-    _openedReminders = _tasks.reminders.opened.listen(_openTask);
+    _reminders.attachTasks(_tasks);
+    _openedReminders = _reminders.opened.listen(_openReminder);
+    final reminderLaunch = widget.reminderLaunch;
+    if (reminderLaunch != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _openReminder(reminderLaunch),
+      );
+    }
     if (widget.homeShortcuts) {
       _registerShortcuts();
       _registerHomeWidgetTaps();
@@ -391,6 +461,29 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
   void _openPendingWidgetLaunch() {
     final pending = _pendingWidgetLaunch;
     if (pending != null && _store.signedIn) _openFromWidget(pending);
+    final reminder = _pendingReminder;
+    if (reminder != null && _store.signedIn) _openReminder(reminder);
+  }
+
+  /// A reminder was tapped. A heads-up or a missed reminder opens what it
+  /// was about; a call tapped inside the app (iOS) opens the call itself.
+  void _openReminder(ReminderOpen open) {
+    if (!_store.signedIn) {
+      _pendingReminder = open;
+      return;
+    }
+    _pendingReminder = null;
+    switch (open.target) {
+      case ReminderOpenTarget.habit:
+        if (_store.habitById(open.id) == null) return;
+        _router.go(Routes.today);
+        unawaited(_router.push(Routes.habit(open.id)));
+      case ReminderOpenTarget.task:
+        _openTask(open.id);
+      case ReminderOpenTarget.call:
+        if (open.calls.isEmpty) return;
+        unawaited(_router.push(Routes.call, extra: CallRequest(open.calls)));
+    }
   }
 
   void _openFromWidget(Uri? uri) {
@@ -471,6 +564,7 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
     unawaited(_openedReminders?.cancel());
     unawaited(_widgetTaps?.cancel());
     _tasks.dispose();
+    _reminders.dispose();
     _onToday.dispose();
     _store.sessionChanges.removeListener(_openPendingWidgetLaunch);
     _store
@@ -487,43 +581,46 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
       store: _store,
       child: TaskScope(
         store: _tasks,
-        child: TourAnchorScope(
-          registry: _anchors,
-          child: MaterialApp.router(
-            title: AppConstants.appName,
-            debugShowCheckedModeBanner: false,
-            theme: TideTheme.current,
-            routerConfig: _router,
-            builder: (context, child) {
-              // Lock text scaling to a sane band: the gauge readouts are a
-              // fixed-width instrument panel and fall apart past this.
-              // Clamped through the text-scaler aspect alone. Copying the whole
-              // `MediaQuery.of` here rebuilt this builder — and the hosts below
-              // it — on every frame of the keyboard's slide.
-              return MediaQuery.withClampedTextScaling(
-                minScaleFactor: 0.9,
-                maxScaleFactor: 1.2,
-                // Completion may be logged from Today, the calendar, a detail
-                // screen or a sheet. Keeping this above the router gives all
-                // of them the same reward without duplicating UI glue in four
-                // interaction paths.
-                //
-                // The tour sits under the celebration rather than over it:
-                // the tour's last step opens the add sheet and ends itself, so
-                // the only way the two could overlap is a reward earned while
-                // a scrim is up, and a reward must never be dimmed.
-                child: CelebrationHost(
-                  child: TourHost(
-                    // The router is not reachable from this builder's own
-                    // context — it lives below the app — so the one action the
-                    // tour can take is handed in from out here.
-                    onAddHabit: () => _router.push(Routes.newHabit),
-                    onToday: _onToday,
-                    child: child ?? const SizedBox.shrink(),
+        child: ReminderScope(
+          store: _reminders,
+          child: TourAnchorScope(
+            registry: _anchors,
+            child: MaterialApp.router(
+              title: AppConstants.appName,
+              debugShowCheckedModeBanner: false,
+              theme: TideTheme.current,
+              routerConfig: _router,
+              builder: (context, child) {
+                // Lock text scaling to a sane band: the gauge readouts are a
+                // fixed-width instrument panel and fall apart past this.
+                // Clamped through the text-scaler aspect alone. Copying the whole
+                // `MediaQuery.of` here rebuilt this builder — and the hosts below
+                // it — on every frame of the keyboard's slide.
+                return MediaQuery.withClampedTextScaling(
+                  minScaleFactor: 0.9,
+                  maxScaleFactor: 1.2,
+                  // Completion may be logged from Today, the calendar, a detail
+                  // screen or a sheet. Keeping this above the router gives all
+                  // of them the same reward without duplicating UI glue in four
+                  // interaction paths.
+                  //
+                  // The tour sits under the celebration rather than over it:
+                  // the tour's last step opens the add sheet and ends itself, so
+                  // the only way the two could overlap is a reward earned while
+                  // a scrim is up, and a reward must never be dimmed.
+                  child: CelebrationHost(
+                    child: TourHost(
+                      // The router is not reachable from this builder's own
+                      // context — it lives below the app — so the one action the
+                      // tour can take is handed in from out here.
+                      onAddHabit: () => _router.push(Routes.newHabit),
+                      onToday: _onToday,
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),

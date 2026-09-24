@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'reminder_options.dart';
 import 'tide_glyph.dart';
 
 /// What "done" means for a habit, and therefore which gesture logs it.
@@ -92,6 +93,7 @@ class Habit {
     this.days = const {1, 2, 3, 4, 5, 6, 7},
     this.reminderEnabled = false,
     this.reminderTime = const TimeOfDay(hour: 8, minute: 0),
+    this.reminderOptions = const ReminderOptions(),
     this.freezeAllowance = 2,
     this.freezesRemaining = 2,
     this.pauses = const [],
@@ -117,6 +119,10 @@ class Habit {
 
   final bool reminderEnabled;
   final TimeOfDay reminderTime;
+
+  /// How the reminder arrives: its heads-up, full screen or gentle, the tone
+  /// and the snooze. Read only while [reminderEnabled].
+  final ReminderOptions reminderOptions;
 
   /// How many freezes this habit is allowed, and how many are left. A freeze
   /// skips a day without breaking the loop.
@@ -194,6 +200,7 @@ class Habit {
     Set<int>? days,
     bool? reminderEnabled,
     TimeOfDay? reminderTime,
+    ReminderOptions? reminderOptions,
     int? freezeAllowance,
     int? freezesRemaining,
     List<PauseSpan>? pauses,
@@ -211,6 +218,7 @@ class Habit {
       days: days ?? this.days,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       reminderTime: reminderTime ?? this.reminderTime,
+      reminderOptions: reminderOptions ?? this.reminderOptions,
       freezeAllowance: freezeAllowance ?? this.freezeAllowance,
       freezesRemaining: freezesRemaining ?? this.freezesRemaining,
       pauses: pauses ?? this.pauses,

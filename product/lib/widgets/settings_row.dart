@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../theme/tide_colors.dart';
-import '../../../theme/tide_elevation.dart';
-import '../../../theme/tide_motion.dart';
-import '../../../theme/tide_typography.dart';
+import '../theme/tide_colors.dart';
+import '../theme/tide_elevation.dart';
+import '../theme/tide_motion.dart';
+import '../theme/tide_typography.dart';
 
 /// A row in a settings group.
 ///

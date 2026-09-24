@@ -1,10 +1,15 @@
 package com.example.tide
 
+import android.content.Intent
+import com.example.tide.reminders.ReminderBridge
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    /** Habit and to-do reminders. See reminders/ReminderBridge.kt. */
+    private var reminders: ReminderBridge? = null
+
     /**
      * A home-screen widget tap sets Intent.data to a `tide://widget/...`
      * URI so the home_widget plugin's own channel can read it (see
@@ -51,5 +56,30 @@ class MainActivity : FlutterActivity() {
 
         // Milestone cards out to WhatsApp, Instagram and the rest. See CardShare.kt.
         CardShare(this).register(flutterEngine.dartExecutor.binaryMessenger)
+
+        reminders = ReminderBridge(this).also {
+            it.register(flutterEngine.dartExecutor.binaryMessenger)
+        }
+    }
+
+    /** A reminder tapped while the app is already open. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        reminders?.onNewIntent(intent)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        reminders?.onPermissionResult(requestCode)
+    }
+
+    override fun onDestroy() {
+        reminders?.dispose()
+        reminders = null
+        super.onDestroy()
     }
 }

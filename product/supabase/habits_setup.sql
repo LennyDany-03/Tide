@@ -45,6 +45,13 @@ create table if not exists public.habits (
                              and weekdays <@ '{1,2,3,4,5,6,7}'::smallint[]),
   reminder_enabled  boolean not null default false,
   reminder_time     time not null default '08:00',
+  -- How the reminder arrives, beyond on/off and the time:
+  -- { "lead": 10, "style": "call", "tone": "lowTide", "snooze": 10,
+  --   "vibrate": true, "dnd": false }. The app fills in anything missing, so
+  -- an empty object is a valid row — it is what every habit from before this
+  -- column reads as.
+  reminder_options  jsonb not null default '{}'::jsonb
+                      check (jsonb_typeof(reminder_options) = 'object'),
   freeze_allowance  smallint not null default 2
                       check (freeze_allowance between 0 and 7),
   freezes_remaining smallint not null default 2
@@ -72,6 +79,9 @@ create table if not exists public.habits (
 alter table public.habits
   add column if not exists pauses jsonb not null default '[]'::jsonb
     check (jsonb_typeof(pauses) = 'array');
+alter table public.habits
+  add column if not exists reminder_options jsonb not null default '{}'::jsonb
+    check (jsonb_typeof(reminder_options) = 'object');
 
 create index if not exists habits_user_created_idx
   on public.habits (user_id, created_at);

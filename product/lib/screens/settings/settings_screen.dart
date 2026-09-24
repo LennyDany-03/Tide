@@ -4,12 +4,17 @@ import 'package:go_router/go_router.dart';
 import '../../config/app_constants.dart';
 import '../../config/app_routes.dart';
 import '../../services/auth/auth_service.dart';
+import '../../services/reminders/reminder_platform.dart';
+import '../../services/reminders/reminder_scope.dart';
+import '../../services/reminders/reminder_store.dart';
 import '../../services/tide_scope.dart';
 import '../../services/updates/update_scope.dart';
 import '../../services/updates/update_store.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/hold_to_fill.dart';
+import '../../widgets/settings_group.dart';
+import '../../widgets/settings_row.dart';
 import '../../widgets/stagger_list.dart';
 import '../../widgets/tide_mark.dart';
 import '../../widgets/tide_switch.dart';
@@ -17,8 +22,6 @@ import '../../widgets/tide_tab_bar.dart';
 import '../update/update_dialog.dart';
 import 'widgets/account_card.dart';
 import 'widgets/delete_account_dialog.dart';
-import 'widgets/settings_group.dart';
-import 'widgets/settings_row.dart';
 
 /// Account, notifications, app.
 ///
@@ -61,6 +64,20 @@ class SettingsScreen extends StatelessWidget {
     if (account.hasGoogle && account.hasPassword) return 'Google and email';
     if (account.hasGoogle) return 'Google';
     return 'Email and password';
+  }
+
+  /// What the reminders row says: off, something the phone is refusing, or
+  /// how a habit reminder arrives.
+  static String _reminderLine(ReminderStore reminders) {
+    final settings = reminders.settings;
+    if (!settings.enabled) return 'Off';
+    final missing = reminders.missing;
+    if (missing.isNotEmpty) {
+      return '${missing.first.title} ${missing.first == ReminderPermission.notifications ? 'are' : 'is'} off · tap to fix';
+    }
+    final style = settings.habitDefaults.style.habitLabel();
+    final quiet = settings.quietHours ? ' · quiet ${settings.quietLabel}' : '';
+    return '$style by default$quiet';
   }
 
   /// What the updates row says. A found release is named rather than
@@ -108,26 +125,11 @@ class SettingsScreen extends StatelessWidget {
               title: 'Notifications',
               rows: [
                 SettingsRow(
-                  label: 'Daily reminders',
-                  subtitle: 'One nudge per habit, at its own time',
+                  label: 'Reminders',
+                  subtitle: _reminderLine(ReminderScope.of(context)),
                   icon: Icons.notifications_none_rounded,
-                  trailing: TideSwitch(
-                    value: store.dailyReminders,
-                    onChanged: (value) =>
-                        store.setPreference(dailyReminders: value),
-                  ),
-                ),
-                SettingsRow(
-                  label: 'Quiet hours',
-                  subtitle: store.quietHours
-                      ? '22:00 – 07:00'
-                      : 'Nothing arrives overnight',
-                  icon: Icons.bedtime_outlined,
-                  trailing: TideSwitch(
-                    value: store.quietHours,
-                    onChanged: (value) =>
-                        store.setPreference(quietHours: value),
-                  ),
+                  showChevron: true,
+                  onTap: () => context.push(Routes.reminders),
                 ),
                 SettingsRow(
                   label: 'Weekly recap',

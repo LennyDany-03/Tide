@@ -12,11 +12,13 @@ import '../screens/home/home_screen.dart';
 import '../screens/home_widgets/home_widgets_screen.dart';
 import '../screens/insights/insights_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
+import '../screens/reminders/reminders_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/shell/tide_shell.dart';
 import '../screens/splash/splash_screen.dart';
 import '../screens/task_archive/task_archive_screen.dart';
 import '../screens/task_editor/task_editor_screen.dart';
+import '../screens/tide_call/call_deck.dart';
 import '../screens/tasks/tasks_screen.dart';
 import '../screens/verify_email/verify_email_screen.dart';
 import '../screens/welcome/welcome_screen.dart';
@@ -44,6 +46,11 @@ abstract final class Routes {
   static const newHabit = '/habit/new';
   static const appearance = '/appearance';
   static const homeWidgets = '/settings/widgets';
+  static const reminders = '/settings/reminders';
+
+  /// A call answered inside the app: a reminder tapped on iOS, or a preview
+  /// from Settings → Reminders. Opened with a `CallRequest` as its extra.
+  static const call = '/call';
   static const widgetSetupPath = '/widget-setup';
 
   static String habit(String id) => '/today/habit/$id';
@@ -281,6 +288,25 @@ abstract final class AppRoutes {
           parentNavigatorKey: _rootKey,
           pageBuilder: (context, state) =>
               _page(state, const HomeWidgetsScreen()),
+        ),
+
+        GoRoute(
+          path: Routes.reminders,
+          parentNavigatorKey: _rootKey,
+          pageBuilder: (context, state) =>
+              _page(state, const RemindersScreen()),
+        ),
+
+        // A call inside the app. It covers everything, tab bar included, and
+        // arrives out of the dark the way the lock-screen call does. Without
+        // a request there is nothing to ring, and it goes back to Today.
+        GoRoute(
+          path: Routes.call,
+          parentNavigatorKey: _rootKey,
+          redirect: (context, state) =>
+              state.extra is CallRequest ? null : Routes.today,
+          pageBuilder: (context, state) =>
+              _fade(state, InAppCallPage(request: state.extra! as CallRequest)),
         ),
 
         // The habit picker a Streak or Heatmap widget opens. Reached only

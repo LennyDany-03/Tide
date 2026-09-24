@@ -163,6 +163,73 @@ abstract final class TideGradients {
     stops: [0, 0.62, 1],
   );
 
+  // --- Reminders --------------------------------------------------------
+
+  /// The ground of a Tide Call: night at the top, deepening toward the
+  /// palette's deep end at the floor, where the water is. Top to bottom, the
+  /// same light as everywhere else; the ember is what lets Midnight read as
+  /// navy going to sea-blue rather than as black.
+  static LinearGradient get callDepth {
+    final light = TideColors.palette.isLight;
+    return LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        TideColors.trench,
+        TideColors.deepWater,
+        Color.lerp(TideColors.deepWater, TideColors.ember, light ? 0.08 : 0.3)!,
+      ],
+      stops: const [0, 0.5, 1],
+    );
+  }
+
+  /// One layer of the call's water, far ([depth] 0) to near (2). Each is
+  /// lantern at a low alpha, so three stacked read as depth and text over
+  /// them keeps its contrast. Far lighter on a light palette, where the
+  /// accent is ink and the same alphas turned the page to slate.
+  static Color callWaterLayer(int depth) {
+    final light = TideColors.palette.isLight;
+    const dark = [0.10, 0.14, 0.2];
+    const pale = [0.04, 0.06, 0.08];
+    return TideColors.lantern.withValues(
+      alpha: (light ? pale : dark)[depth.clamp(0, 2)],
+    );
+  }
+
+  /// Under one layer's surface: lit at the waterline, thinning with depth.
+  static LinearGradient callWater(Color surface) => LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      surface,
+      surface.withValues(alpha: surface.a * 0.4),
+    ],
+  );
+
+  /// The Lighthouse's night: flat dark sky over a sea one step lighter, so
+  /// the horizon is a change of ground rather than a drawn line.
+  static LinearGradient get lighthouseNight => LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [TideColors.trench, TideColors.deepWater, TideColors.deepWater],
+    stops: const [0, 0.55, 1],
+  );
+
+  /// The beam, measured from the lamp: bright where it leaves the glass,
+  /// gone by the far side of the screen. [radius] is in the shader's own
+  /// terms, relative to the rect it is created for.
+  static RadialGradient beam({double strength = 1}) {
+    final alpha = TideColors.palette.isLight ? 0.16 : 0.3;
+    return RadialGradient(
+      colors: [
+        TideColors.lantern.withValues(alpha: alpha * strength),
+        TideColors.lantern.withValues(alpha: alpha * 0.34 * strength),
+        TideColors.lantern.withValues(alpha: 0),
+      ],
+      stops: const [0, 0.45, 1],
+    );
+  }
+
   // --- Fire -------------------------------------------------------------
 
   /// The streak flame's fill: pale and hot on the side the app's one light

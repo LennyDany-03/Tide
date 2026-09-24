@@ -21,6 +21,7 @@ import 'widgets/habit_log_sheet.dart';
 import 'widgets/hero_stat_card.dart';
 import 'widgets/paused_shelf.dart';
 import 'widgets/home_header.dart';
+import 'widgets/reminder_banner.dart';
 import 'widgets/reordering_habit_list.dart';
 import 'widgets/wave_refresh_indicator.dart';
 
@@ -223,6 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
+              const SliverToBoxAdapter(child: ReminderBanner()),
               if (habits.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,

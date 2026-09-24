@@ -41,14 +41,6 @@ abstract final class AppConstants {
 
   // --- To-do ------------------------------------------------------------
 
-  /// What a notification's snooze action puts the reminder off by.
-  static const int taskSnoozeMinutes = 10;
-
-  /// How many upcoming task reminders are handed to the OS at once. iOS
-  /// keeps 64 per app and drops the rest silently; the margin leaves room
-  /// for snoozes already counting down.
-  static const int maxScheduledTaskReminders = 60;
-
   /// How often an open app syncs tasks with nothing else prompting it.
   static const int taskSyncIntervalMinutes = 15;
 
@@ -57,6 +49,45 @@ abstract final class AppConstants {
 
   /// Longest months a custom repeat may run between occurrences.
   static const int maxCustomRepeatMonths = 24;
+
+  // --- Reminders ----------------------------------------------------------
+
+  /// How long before a habit or task a heads-up can arrive, in minutes. Zero
+  /// is "no heads-up": the reminder arrives on the minute and nothing before.
+  static const List<int> reminderLeadChoices = [0, 5, 10, 15];
+
+  /// What a snooze can put a reminder off by, in minutes.
+  static const List<int> reminderSnoozeChoices = [5, 10, 15];
+
+  /// Snoozes one reminder may take. The one after that is refused and the
+  /// reminder goes out as missed — a fourth "later" is a no.
+  static const int maxReminderSnoozes = 3;
+
+  /// How long a full-screen call rings before it gives up and leaves a
+  /// missed-reminder notification behind.
+  static const int reminderRingMinutes = 2;
+
+  /// Seconds for a ringing call's volume to swell from a murmur to full.
+  static const int reminderSwellSeconds = 10;
+
+  /// How many days ahead reminders are handed to the phone. The plan is
+  /// rebuilt on every change and every launch, so this only matters to
+  /// somebody who stops opening the app — a week of reminders keeps going
+  /// without them.
+  static const int reminderHorizonDays = 8;
+
+  /// The most reminders a single group (habits, or to-dos) keeps on the
+  /// phone at once, soonest first.
+  static const int maxPlannedReminders = 160;
+
+  /// A reminder that reaches the phone this late — it was off, or asleep in
+  /// a way no alarm could wake — is delivered quietly as missed, rather than
+  /// ringing for something that has already gone by.
+  static const int reminderStaleMinutes = 10;
+
+  /// The test button in Settings → Reminders: the heads-up after this many
+  /// seconds, and the call the same again after it.
+  static const int reminderTestDelaySeconds = 10;
 
   static const List<String> weekdayInitials = [
     'M',

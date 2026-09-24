@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
 import '../../services/models/habit.dart';
+import '../../services/models/reminder_options.dart';
 import '../../services/models/tide_glyph.dart';
-import '../../services/streak_calculator.dart';
+import '../../services/reminders/reminder_platform.dart';
+import '../../services/reminders/reminder_scope.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
@@ -18,13 +20,14 @@ import '../../widgets/ripple_burst.dart';
 import '../../widgets/segmented_pill.dart';
 import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_button.dart';
+import '../../widgets/tide_dial.dart';
 import '../../widgets/tide_dialog.dart';
 import 'widgets/day_selector.dart';
 import 'widgets/freeze_stepper.dart';
 import 'widgets/icon_picker.dart';
 import 'widgets/live_habit_preview.dart';
 import 'widgets/name_field.dart';
-import 'widgets/reminder_row.dart';
+import 'widgets/reminder_section.dart';
 import 'widgets/target_fields.dart';
 
 /// Create or edit a habit.
@@ -65,6 +68,11 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
 
   bool _reminderEnabled = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 8, minute: 0);
+
+  /// A new habit starts from the defaults in Settings → Reminders.
+  late ReminderOptions _reminderOptions =
+      ReminderScope.maybeRead(context)?.settings.habitDefaults ??
+      const ReminderOptions();
   int _freezes = AppConstants.defaultFreezeAllowance;
 
   TideButtonPhase _phase = TideButtonPhase.idle;
@@ -107,6 +115,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
       _days = Set<int>.from(habit.days);
       _reminderEnabled = habit.reminderEnabled;
       _reminderTime = habit.reminderTime;
+      _reminderOptions = habit.reminderOptions;
       _freezes = habit.freezeAllowance;
     }
 
@@ -158,32 +167,22 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _reminderTime,
-      builder: (context, child) => Theme(
-        data: Theme.of(context),
-        child: child ?? const SizedBox.shrink(),
-      ),
-    );
-    if (picked != null) _edit(() => _reminderTime = picked);
+    FocusScope.of(context).unfocus();
+    final picked = await showTideDial(context, initial: _reminderTime);
+    if (picked != null && mounted) _edit(() => _reminderTime = picked);
   }
 
-  String get _reminderPreview {
-    // A habit that does not exist yet has no streak, and the preview must
-    // not invent one — the whole point of showing the copy up front is that
-    // it is the copy the user will actually receive.
-    final streak = _existing == null
-        ? 0
-        : StreakCalculator.currentStreak(_existing!);
-    final draft = Habit(
-      id: 'preview',
-      name: _name.text,
-      glyph: _glyph,
-      type: _type,
-      createdAt: DateTime.now(),
-    );
-    return draft.reminderPreview(streak);
+  /// A reminder is only worth saving if it can arrive. The first habit saved
+  /// with one asks for notifications — at the moment it is obviously needed,
+  /// rather than at launch — and never blocks the save on the answer.
+  void _askForNotifications() {
+    final reminders = ReminderScope.maybeRead(context);
+    if (reminders == null || !_reminderEnabled) return;
+    if (reminders.permission(ReminderPermission.notifications) !=
+        PermissionState.denied) {
+      return;
+    }
+    unawaited(reminders.request(ReminderPermission.notifications));
   }
 
   /// Pulses every field that is missing, and brings the first of them into
@@ -233,6 +232,7 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
           days: _days,
           reminderEnabled: _reminderEnabled,
           reminderTime: _reminderTime,
+          reminderOptions: _reminderOptions,
           freezeAllowance: _freezes,
           freezesRemaining: _freezes,
         ),
@@ -249,12 +249,14 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
           days: _days,
           reminderEnabled: _reminderEnabled,
           reminderTime: _reminderTime,
+          reminderOptions: _reminderOptions,
           freezeAllowance: _freezes,
           freezesRemaining: _freezes,
           createdAt: DateTime.now(),
         ),
       );
     }
+    _askForNotifications();
 
     setState(() {
       _phase = TideButtonPhase.done;
@@ -459,12 +461,25 @@ class _AddEditHabitScreenState extends State<AddEditHabitScreen> {
           ),
           const SizedBox(height: 20),
 
-          ReminderRow(
-            enabled: _reminderEnabled,
-            time: _reminderTime,
-            preview: _reminderPreview,
-            onToggled: (value) => _edit(() => _reminderEnabled = value),
-            onTimeTapped: _pickTime,
+          Builder(
+            builder: (context) {
+              final reminders = ReminderScope.maybeOf(context);
+              return ReminderSection(
+                enabled: _reminderEnabled,
+                time: _reminderTime,
+                options: _reminderOptions,
+                days: _days,
+                name: _name.text,
+                fullScreenCalls: reminders?.platform.fullScreenCalls ?? true,
+                onPreviewTone:
+                    reminders != null && reminders.platform.canPreviewTones
+                    ? reminders.previewTone
+                    : null,
+                onToggled: (value) => _edit(() => _reminderEnabled = value),
+                onTimeTapped: _pickTime,
+                onOptions: (options) => _edit(() => _reminderOptions = options),
+              );
+            },
           ),
           const SizedBox(height: 12),
 

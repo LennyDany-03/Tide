@@ -104,18 +104,7 @@ class SupabaseHabitRepository implements HabitRepository {
   @override
   List<Habit> cached(String? accountId) {
     if (accountId == null) return const [];
-    final source = _prefs.getString(_cacheKey(accountId));
-    if (source == null) return const [];
-    try {
-      final rows = jsonDecode(source);
-      if (rows is! List) return const [];
-      return [
-        for (final row in rows)
-          if (row is Map) HabitRows.parseHabit(Map<String, dynamic>.from(row)),
-      ].nonNulls.toList();
-    } on FormatException {
-      return const [];
-    }
+    return HabitRows.decodeCache(_prefs.getString(_cacheKey(accountId)));
   }
 
   @override
@@ -486,7 +475,7 @@ class SupabaseHabitRepository implements HabitRepository {
     );
   }
 
-  static String _cacheKey(String accountId) => 'tide.habits.$accountId';
+  static String _cacheKey(String accountId) => HabitRows.cacheKey(accountId);
 
   static String _outboxKey(String accountId) => 'tide.habit_outbox.$accountId';
 

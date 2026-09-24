@@ -39,4 +39,36 @@
     <string name="widget_quick_add_description">One tap into a new habit.</string>
     <string name="widget_heatmap_description">Months of one habit, day by day. Tap to choose which.</string>
     <string name="widget_recap_description">Your rate, last week to beat, and your best run.</string>
+
+    <!-- Reminders. The sentences a reminder says are written in Dart
+         (lib/config/reminder_copy.dart) and arrive with each reminder; these
+         are only the names of buttons and channels. -->
+    <string name="reminder_on_it">I\'m on it</string>
+    <string name="reminder_done_already">Done already</string>
+    <string name="reminder_done">Done</string>
+    <string name="reminder_skip_today">Skip today</string>
+    <string name="reminder_snooze">Snooze %d min</string>
+    <string name="reminder_tomorrow">Tomorrow</string>
+    <plurals name="reminder_and_more">
+        <item quantity="one">%1$s and 1 more</item>
+        <item quantity="other">%1$s and %2$d more</item>
+    </plurals>
+    <string name="channel_group_habits">Habits</string>
+    <string name="channel_group_tasks">To-dos</string>
+    <string name="channel_habit_heads_up">Habit heads-up</string>
+    <string name="channel_habit_heads_up_about">The Rising Tide: a few minutes before a habit</string>
+    <string name="channel_habit_alarm">Habit alarm</string>
+    <string name="channel_habit_alarm_about">The Tide Call: full screen at a habit\'s time</string>
+    <string name="channel_habit_gentle">Habit reminders</string>
+    <string name="channel_habit_gentle_about">A habit\'s reminder, as a notification</string>
+    <string name="channel_task_heads_up">To-do heads-up</string>
+    <string name="channel_task_heads_up_about">The Beacon: a few minutes before a to-do</string>
+    <string name="channel_task_alarm">To-do alarm</string>
+    <string name="channel_task_alarm_about">The Lighthouse: full screen at a to-do\'s time</string>
+    <string name="channel_task_gentle">To-do reminders</string>
+    <string name="channel_task_gentle_about">Reminders you set on to-do items</string>
+    <string name="channel_quiet">Quiet reminders</string>
+    <string name="channel_quiet_about">Reminders in quiet hours or Do Not Disturb, without a sound</string>
+    <string name="channel_missed">Missed reminders</string>
+    <string name="channel_missed_about">Reminders that rang out unanswered</string>
 </resources>

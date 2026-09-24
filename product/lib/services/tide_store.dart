@@ -158,8 +158,6 @@ class TideStore extends ChangeNotifier {
   /// standard palette.
   TidePalette palette = TidePalettes.standard;
 
-  bool dailyReminders = true;
-  bool quietHours = false;
   bool weeklyRecap = false;
   bool haptics = true;
 
@@ -329,12 +327,21 @@ class TideStore extends ChangeNotifier {
   /// Logs [amount] against [habitId] for [date], replacing whatever was
   /// there. Passing null logs the habit's full target.
   ///
+  /// [celebrate] is off for a log made somewhere nobody was watching — a
+  /// reminder answered on the lock screen, applied when the app next runs.
+  /// The reward belongs to the moment it happened, and that has passed.
+  ///
   /// Nothing (zero or less) is an unlog, not a log of zero. A count stepped
   /// back from 1 to 0 in the log sheet used to leave a `0` entry behind,
   /// which is a day with a row in it — something logged — that holds none
   /// of the habit. Every reader then had to agree that a zero row means
   /// empty; now there is only one way for a day to be empty.
-  void log(String habitId, {num? amount, DateTime? date}) {
+  void log(
+    String habitId, {
+    num? amount,
+    DateTime? date,
+    bool celebrate = true,
+  }) {
     if (amount != null && amount <= 0) {
       unlog(habitId, date: date);
       return;
@@ -351,7 +358,7 @@ class TideStore extends ChangeNotifier {
     });
     _saveEntry(habitId, day);
 
-    _raiseCue(habitId, day: day, wasComplete: wasComplete);
+    if (celebrate) _raiseCue(habitId, day: day, wasComplete: wasComplete);
   }
 
   /// Raises a celebration cue if this log is the one that finished the
@@ -399,8 +406,9 @@ class TideStore extends ChangeNotifier {
   }
 
   /// Spends one freeze token so a missed day does not break the loop.
-  /// Returns false when the habit has no freezes left.
-  bool freeze(String habitId, {DateTime? date}) {
+  /// Returns false when the habit has no freezes left. [celebrate] as for
+  /// [log].
+  bool freeze(String habitId, {DateTime? date, bool celebrate = true}) {
     final habit = habitById(habitId);
     if (habit == null || habit.freezesRemaining <= 0) return false;
     final day = DateUtils.dateOnly(date ?? DateTime.now());
@@ -414,6 +422,7 @@ class TideStore extends ChangeNotifier {
     });
     _saveHabit(habitId);
     _saveEntry(habitId, day);
+    if (!celebrate) return true;
     _pendingHabitCue = CelebrationCue(
       habitId: habit.id,
       habitName: habit.name,
@@ -892,14 +901,9 @@ class TideStore extends ChangeNotifier {
 
   // --- Settings -----------------------------------------------------------
 
-  void setPreference({
-    bool? dailyReminders,
-    bool? quietHours,
-    bool? weeklyRecap,
-    bool? haptics,
-  }) {
-    this.dailyReminders = dailyReminders ?? this.dailyReminders;
-    this.quietHours = quietHours ?? this.quietHours;
+  /// Reminder switches — on or off, quiet hours — live in the reminder
+  /// store, which keeps them on the device; these are the rest.
+  void setPreference({bool? weeklyRecap, bool? haptics}) {
     this.weeklyRecap = weeklyRecap ?? this.weeklyRecap;
     this.haptics = haptics ?? this.haptics;
     notifyListeners();

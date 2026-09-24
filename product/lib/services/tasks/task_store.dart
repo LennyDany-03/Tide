@@ -463,7 +463,7 @@ class TaskStore extends ChangeNotifier {
     _reminderDebounce?.cancel();
     _reminderDebounce = Timer(const Duration(milliseconds: 300), () {
       if (_accountId == null) return;
-      unawaited(reminders.schedule(_visible.toList(), snooze: true));
+      unawaited(reminders.schedule(_visible.toList()));
     });
   }
 

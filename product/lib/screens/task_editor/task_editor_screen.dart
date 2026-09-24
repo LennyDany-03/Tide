@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../config/app_constants.dart';
 import '../../config/task_copy.dart';
+import '../../services/models/reminder_options.dart';
+import '../../services/reminders/reminder_scope.dart';
 import '../../services/tasks/task.dart';
 import '../../services/tasks/task_scope.dart';
 import '../../services/tasks/task_store.dart' show TaskCompletion;
@@ -366,11 +367,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                       ),
                     ],
                   ),
-                  if (_reminders.isNotEmpty)
-                    _Footnote(
-                      'Snooze ${AppConstants.taskSnoozeMinutes} minutes from '
-                      'the notification.',
-                    ),
+                  if (_reminders.isNotEmpty) _Footnote(_reminderNote(context)),
                   const SizedBox(height: 22),
 
                   _GroupLabel(
@@ -921,6 +918,23 @@ class _InputRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// How this to-do's reminders will arrive. To-dos follow the defaults in
+/// Settings → Reminders rather than carrying their own, so the editor says
+/// what those are instead of offering controls it does not have.
+String _reminderNote(BuildContext context) {
+  final defaults =
+      ReminderScope.maybeOf(context)?.settings.taskDefaults ??
+      ReminderOptions.taskDefaults;
+  final arrives = defaults.style == AlarmStyle.call
+      ? 'Rings as the Lighthouse'
+      : 'Arrives as a notification';
+  final lead = defaults.leadMinutes > 0
+      ? ', with a heads-up ${defaults.leadMinutes} min before'
+      : '';
+  return '$arrives$lead. Snooze ${defaults.snoozeMinutes} min. '
+      'Change it in Settings → Reminders.';
 }
 
 class _Footnote extends StatelessWidget {

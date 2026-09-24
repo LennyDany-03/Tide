@@ -35,6 +35,45 @@ class HabitGlyph extends StatelessWidget {
   /// Makes an icon-font glyph read at the same size as a painted one.
   static const double _iconScale = 1.12;
 
+  /// Draws [glyph] straight onto [canvas], filling [size] — for pictures made
+  /// outside the widget tree, like the badge Android's notifications carry.
+  /// Both families, at the same optical size [HabitGlyph] gives them.
+  static void paintOn(
+    Canvas canvas,
+    Size size,
+    TideGlyph glyph, {
+    required Color color,
+    double strokeWidth = 1.6,
+  }) {
+    final icon = glyph.icon;
+    if (icon == null) {
+      _GlyphPainter(
+        glyph: glyph,
+        color: color,
+        strokeWidth: strokeWidth,
+      ).paint(canvas, size);
+      return;
+    }
+    final text = TextPainter(
+      textDirection: TextDirection.ltr,
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+          fontSize: size.shortestSide * _iconScale,
+          color: color,
+          height: 1,
+        ),
+      ),
+    )..layout();
+    text.paint(
+      canvas,
+      Offset((size.width - text.width) / 2, (size.height - text.height) / 2),
+    );
+    text.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final tint = color ?? TideColors.lantern;

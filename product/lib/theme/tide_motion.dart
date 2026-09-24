@@ -303,6 +303,52 @@ abstract final class TideMotion {
   /// seen complete rather than only ever in motion.
   static const Duration codeAcceptedHold = Duration(milliseconds: 650);
 
+  // --- Reminders --------------------------------------------------------
+
+  /// A call arriving: the screen comes up out of black while the water rises
+  /// to where it rests.
+  static const Duration callEntry = Duration(milliseconds: 800);
+  static const Curve callEntryCurve = Curves.easeOut;
+
+  /// One bob of the habit orb, up and back. The phone's vibration pulses on
+  /// the same period (`TideCallService.kt`), so the buzz in the hand and the
+  /// orb on the screen keep one rhythm rather than two.
+  static const Duration callBob = Duration(seconds: 3);
+
+  /// One cycle of the call's water. Slow: this is a tide coming in, and a
+  /// quick chop reads as alarm, which is the one thing it must not.
+  static const Duration callSwell = Duration(seconds: 7);
+
+  /// The water surging to the top when a habit is ridden in.
+  static const Duration callSurge = Duration(milliseconds: 500);
+  static const Curve callSurgeCurve = Curves.easeOutCubic;
+
+  /// The water draining away on a snooze.
+  static const Duration callDrain = Duration(milliseconds: 400);
+  static const Curve callDrainCurve = Curves.easeInCubic;
+
+  /// How long an answered call stays up, saying what happened, before it
+  /// closes — long enough to read "Streak: 24 days", no longer.
+  static const Duration callFarewell = Duration(milliseconds: 1500);
+
+  /// How far up the screen the ride must be carried to count, as a fraction
+  /// of the way from resting water to the top. Past this the water is
+  /// visibly winning, and letting go finishes it.
+  static const double rideThreshold = 0.6;
+
+  /// One pass of the lighthouse beam across the screen and round behind the
+  /// tower. Real lights turn in about this long; any faster reads as a siren.
+  static const Duration beamSweep = Duration(milliseconds: 6400);
+
+  /// The beam swinging onto the slip and holding there once it is docked.
+  static const Duration beamLock = Duration(milliseconds: 650);
+  static const Curve beamLockCurve = Curves.easeOutCubic;
+
+  /// How far the dock slider's buoy must travel to dock, as a fraction of
+  /// its track. Further than a card swipe on purpose: this one is answered
+  /// half-awake, and should not go off on a brush.
+  static const double dockThreshold = 0.86;
+
   // --- Account deleted --------------------------------------------------
 
   /// The farewell after an account is deleted: the ring closing, the tick
