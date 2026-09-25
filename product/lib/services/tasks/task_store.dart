@@ -295,6 +295,37 @@ class TaskStore extends ChangeNotifier {
     return TaskCompletion(before: task, spawnedId: next?.id);
   }
 
+  /// Ticks one of a task's steps, or unticks it — from the list, without
+  /// opening the task.
+  ///
+  /// Ticking the last open step finishes the task: the steps are what it is
+  /// made of, so once they are all done there is nothing left to finish.
+  /// That returns the completion, with the step still open in its `before`,
+  /// so Undo takes the tick back along with the completion — otherwise it
+  /// would return a task with every step done and nothing left to finish it
+  /// with. Unticking a step on a finished task reopens it, as [update] does.
+  TaskCompletion? toggleStep(String taskId, String stepId) {
+    final task = byId(taskId);
+    if (task == null || task.isDeleted) return null;
+    final index = task.subtasks.indexWhere((s) => s.id == stepId);
+    if (index < 0) return null;
+    final ticking = !task.subtasks[index].isCompleted;
+    final edited = task.copyWith(
+      subtasks: [
+        for (final s in task.subtasks)
+          s.id == stepId ? s.copyWith(isCompleted: ticking) : s,
+      ],
+    );
+    update(edited);
+    if (!ticking || task.isCompleted || edited.subtasksLeft > 0) return null;
+    final completion = toggleComplete(taskId);
+    if (completion == null) return null;
+    return TaskCompletion(
+      before: completion.before.copyWith(subtasks: task.subtasks),
+      spawnedId: completion.spawnedId,
+    );
+  }
+
   /// Takes back a completion from its snackbar: the task returns as it was
   /// and the occurrence it made goes, provided nobody has touched it since.
   void undoCompletion(TaskCompletion completion) {

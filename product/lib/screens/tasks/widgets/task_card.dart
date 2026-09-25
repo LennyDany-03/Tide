@@ -31,7 +31,14 @@ import '../../../widgets/swipe_reveal.dart';
 /// **A task with steps still open cannot be swiped complete.** The right
 /// side shows a checklist and how many steps are left instead of a tick, and
 /// past the threshold the card springs back rather than leaving; [onBlocked]
-/// says why. The task finishes when its last step is ticked in the editor.
+/// says why. The task finishes when its last step is ticked.
+///
+/// **Its steps are on the card**, given [onStep], and tick where they are:
+/// the list is where a task is worked through, and opening each one to tick
+/// a line off would put the steps a screen away from the rule they enforce.
+/// Ticking the last open step sends the card off the way a right swipe does
+/// before [onStep] finishes the task, so a task completed by its steps
+/// leaves the list the same way as one completed by hand.
 ///
 /// Tapping opens the task. Screen readers get "Complete" and "Delete" as
 /// custom actions, because a gesture is not an accessible control.
@@ -43,6 +50,7 @@ class TaskCard extends StatefulWidget {
     required this.onDelete,
     required this.onOpen,
     this.onBlocked,
+    this.onStep,
     this.onMenu,
     this.showTags = true,
     this.overdueInHeading = false,
@@ -58,6 +66,10 @@ class TaskCard extends StatefulWidget {
 
   /// A right swipe on a task whose steps are not all done.
   final VoidCallback? onBlocked;
+
+  /// A step ticked or unticked on the card. Null leaves the steps off the
+  /// card — the archive, where a task is only restored or deleted.
+  final void Function(Subtask step)? onStep;
 
   /// A long press anywhere on the card: the menu of what it can do. Long
   /// press and the horizontal drag settle in the gesture arena on their own
@@ -92,6 +104,10 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
   double _width = 0;
   bool _armed = false;
   bool _leaving = false;
+
+  /// The last step, ticked on the card and drawn ticked while the card
+  /// leaves, before the store has been told.
+  String? _finishing;
 
   /// Steps still open, so the right swipe is a refusal. Not on the archive,
   /// where the right swipe restores rather than completes.
@@ -152,6 +168,13 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
   }
 
   Future<void> _commit(bool right) async {
+    if (!await _leave(right)) return;
+    right ? widget.onComplete() : widget.onDelete();
+  }
+
+  /// Sends the card off the way it was pushed and closes the gap behind it.
+  /// False if the card went away meanwhile.
+  Future<bool> _leave(bool right) async {
     _leaving = true;
     HapticFeedback.mediumImpact();
     await _slide(
@@ -159,10 +182,33 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
       TideMotion.swipeSettle,
       Curves.easeOutCubic,
     );
-    if (!mounted) return;
+    if (!mounted) return false;
     await _collapse.reverse();
-    if (!mounted) return;
-    right ? widget.onComplete() : widget.onDelete();
+    return mounted;
+  }
+
+  /// A step ticked on the card. Any but the last is simply ticked; the last
+  /// finishes the task, so the card leaves first, as it would for a swipe.
+  Future<void> _tickStep(Subtask step) async {
+    if (_leaving) return;
+    final task = widget.task;
+    final last =
+        !step.isCompleted && !task.isCompleted && task.subtasksLeft == 1;
+    if (!last) {
+      widget.onStep?.call(step);
+      return;
+    }
+    setState(() => _finishing = step.id);
+    if (!await _leave(true)) return;
+    widget.onStep?.call(step);
+    // Normally the list drops the card on its next build and this is never
+    // seen. If the task did not finish after all, the card comes back.
+    setState(() {
+      _leaving = false;
+      _finishing = null;
+      _drag = 0;
+    });
+    _collapse.value = 1;
   }
 
   Future<void> _slide(double to, Duration duration, Curve curve) {
@@ -231,6 +277,8 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                           task: widget.task,
                           showTags: widget.showTags,
                           overdueInHeading: widget.overdueInHeading,
+                          finishing: _finishing,
+                          onStep: widget.onStep == null ? null : _tickStep,
                         ),
                       ),
                     ),
@@ -283,11 +331,19 @@ class _Face extends StatelessWidget {
     required this.task,
     required this.showTags,
     required this.overdueInHeading,
+    this.finishing,
+    this.onStep,
   });
 
   final Task task;
   final bool showTags;
   final bool overdueInHeading;
+  final String? finishing;
+  final void Function(Subtask step)? onStep;
+
+  /// Steps shown on the card before the rest are left to the task itself. A
+  /// long checklist would turn one card into a page.
+  static const int _shownSteps = 4;
 
   @override
   Widget build(BuildContext context) {
@@ -370,6 +426,24 @@ class _Face extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
+                if (onStep != null && !done && task.subtasks.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  for (final step in task.subtasks.take(_shownSteps))
+                    _StepLine(
+                      step: step,
+                      ticked: step.isCompleted || step.id == finishing,
+                      onTap: () => onStep!(step),
+                    ),
+                  if (task.subtasks.length > _shownSteps)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 28, top: 2),
+                      child: Text(
+                        '+${task.subtasks.length - _shownSteps} more in the '
+                        'task',
+                        style: TideType.labelMuted.copyWith(fontSize: 12),
+                      ),
+                    ),
+                ],
                 if (meta.isNotEmpty) ...[
                   const SizedBox(height: 7),
                   Wrap(spacing: 6, runSpacing: 6, children: meta),
@@ -378,6 +452,80 @@ class _Face extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One step on the card, and the target for ticking it — the whole line, not
+/// just its circle. Unlike the task's own mark, this one is a button: a step
+/// has no swipe of its own.
+class _StepLine extends StatelessWidget {
+  const _StepLine({
+    required this.step,
+    required this.ticked,
+    required this.onTap,
+  });
+
+  final Subtask step;
+  final bool ticked;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      checked: ticked,
+      label: step.title,
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: PressScale(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: TideMotion.tabSwitch,
+                  curve: TideMotion.tabCurve,
+                  width: 18,
+                  height: 18,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: TideColors.lantern.withValues(alpha: ticked ? 1 : 0),
+                    border: Border.all(
+                      color: ticked
+                          ? TideColors.lantern
+                          : TideColors.bone.withValues(alpha: 0.28),
+                      width: 1.4,
+                    ),
+                  ),
+                  child: ticked
+                      ? Icon(
+                          Icons.check_rounded,
+                          size: 12,
+                          color: TideColors.onLantern,
+                        )
+                      : null,
+                ),
+                Expanded(
+                  child: Text(
+                    step.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TideType.label.copyWith(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w400,
+                      color: ticked ? TideColors.silt : TideColors.bone,
+                      decoration: ticked ? TextDecoration.lineThrough : null,
+                      decorationColor: TideColors.silt,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

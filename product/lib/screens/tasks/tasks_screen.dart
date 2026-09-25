@@ -122,6 +122,20 @@ class _TasksScreenState extends State<TasksScreen> {
     );
   }
 
+  /// A step ticked on a card. The last one finishes the task, and says so,
+  /// with an Undo that takes the tick back too.
+  void _step(Task task, Subtask step) {
+    final store = TaskScope.read(context);
+    final completion = store.toggleStep(task.id, step.id);
+    if (completion == null) return;
+    _snack(
+      completion.spawnedId != null
+          ? 'Last step done. The next one is on your list.'
+          : 'Last step done. Task complete.',
+      undo: () => store.undoCompletion(completion),
+    );
+  }
+
   void _delete(Task task) {
     final store = TaskScope.read(context);
     store.dismissSwipeHint();
@@ -357,6 +371,7 @@ class _TasksScreenState extends State<TasksScreen> {
                           overdueInHeading: byDue && entry.key == 'Overdue',
                           onComplete: () => _complete(task),
                           onBlocked: () => _blocked(task),
+                          onStep: (step) => _step(task, step),
                           onDelete: () => _delete(task),
                           onOpen: () => _open(task),
                           onMenu: () => _menu(task),

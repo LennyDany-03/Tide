@@ -203,6 +203,45 @@ void main() {
     await outlastSnackbar(tester);
   });
 
+  testWidgets('steps tick on the card, and the last one completes the task', (
+    tester,
+  ) async {
+    await openTasks(tester);
+    await quickAdd(tester, 'Move house');
+    await outlastSnackbar(tester);
+    final store = TaskScope.read(tester.element(find.byType(TideTabBar)));
+    store.update(
+      store.open.single.copyWith(
+        subtasks: const [
+          Subtask(id: 'a', title: 'Pack'),
+          Subtask(id: 'b', title: 'Book a van'),
+        ],
+      ),
+    );
+    await settle(tester);
+
+    await tester.tap(find.text('Pack'));
+    await settle(tester);
+    expect(store.open.single.subtasksDone, 1);
+    expect(store.open.single.isCompleted, isFalse, reason: 'a step is open');
+    expect(find.text('Move house'), findsOneWidget);
+
+    await tester.tap(find.text('Book a van'));
+    await settle(tester, 900);
+    await settle(tester);
+    expect(store.open, isEmpty);
+    expect(store.completed.single.title, 'Move house');
+    expect(find.text('Last step done. Task complete.'), findsOneWidget);
+
+    await tester.tap(find.text('Undo'));
+    await settle(tester);
+    final back = store.open.single;
+    expect(back.isCompleted, isFalse);
+    expect(back.subtasksLeft, 1, reason: 'Undo takes the last tick back too');
+    expect(find.text('Move house'), findsOneWidget);
+    await outlastSnackbar(tester);
+  });
+
   testWidgets('the new-task drawer takes a whole task in one go', (
     tester,
   ) async {

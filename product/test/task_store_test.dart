@@ -412,5 +412,46 @@ void main() {
       expect(tasks.byId(task.id)!.isCompleted, isFalse);
       expect(tasks.byId(task.id)!.completedAt, isNull);
     });
+
+    test('ticking a step that is not the last only ticks it', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [false, false]);
+
+      expect(tasks.toggleStep(task.id, 's0'), isNull);
+      final after = tasks.byId(task.id)!;
+      expect(after.subtasksDone, 1);
+      expect(after.isCompleted, isFalse);
+    });
+
+    test('ticking the last step completes the task', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, false]);
+
+      expect(tasks.toggleStep(task.id, 's1'), isNotNull);
+      final after = tasks.byId(task.id)!;
+      expect(after.isCompleted, isTrue);
+      expect(after.subtasksLeft, 0);
+    });
+
+    test('undo after the last step takes the tick back as well', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, false]);
+      final completion = tasks.toggleStep(task.id, 's1')!;
+
+      tasks.undoCompletion(completion);
+
+      final back = tasks.byId(task.id)!;
+      expect(back.isCompleted, isFalse);
+      expect(back.subtasks.map((s) => s.isCompleted), [true, false]);
+    });
+
+    test('unticking a step from the list reopens a finished task', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, true]);
+      tasks.toggleComplete(task.id);
+
+      expect(tasks.toggleStep(task.id, 's0'), isNull);
+      expect(tasks.byId(task.id)!.isCompleted, isFalse);
+    });
   });
 }
