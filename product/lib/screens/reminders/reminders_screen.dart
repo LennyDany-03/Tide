@@ -1,16 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../config/app_constants.dart';
-import '../../config/app_routes.dart';
 import '../../config/reminder_copy.dart';
-import '../../services/reminders/reminder_plan.dart';
 import '../../services/reminders/reminder_scope.dart';
 import '../../services/reminders/reminder_settings.dart';
 import '../../theme/tide_colors.dart';
-import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/reminder_options_editor.dart';
@@ -20,15 +14,14 @@ import '../../widgets/stagger_list.dart';
 import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_dial.dart';
 import '../../widgets/tide_switch.dart';
-import '../tide_call/call_deck.dart';
 import 'widgets/permission_row.dart';
 
 /// Settings → Reminders: how Tide reaches you, on this phone.
 ///
-/// Four things, in the order somebody arrives looking for them: whether
+/// Three things, in the order somebody arrives looking for them: whether
 /// anything rings at all and when it must keep quiet; whether the phone is
-/// letting it ring, with a way to fix each thing it is refusing; how habits
-/// and to-dos arrive; and a way to try it without waiting for tomorrow.
+/// letting it ring, with a way to fix each thing it is refusing; and how
+/// habits and to-dos arrive.
 ///
 /// Every switch here is kept on this device, not the account — see
 /// [ReminderSettings] for why.
@@ -48,35 +41,6 @@ class RemindersScreen extends StatelessWidget {
       start
           ? settings.copyWith(quietStart: picked)
           : settings.copyWith(quietEnd: picked),
-    );
-  }
-
-  Future<void> _test(BuildContext context, ReminderGroup group) async {
-    final reminders = ReminderScope.read(context);
-    final messenger = ScaffoldMessenger.of(context);
-    if (group == ReminderGroup.habits) {
-      await reminders.testHabit();
-    } else {
-      await reminders.testTask();
-    }
-    messenger.showSnackBar(
-      SnackBar(
-        duration: TideMotion.snackHold,
-        persist: false,
-        content: Text(
-          'On its way: the heads-up in '
-          '${AppConstants.reminderTestDelaySeconds} s, then the call. '
-          'Lock the phone to see it there.',
-          style: TideType.label,
-        ),
-      ),
-    );
-  }
-
-  void _preview(BuildContext context, ReminderGroup group) {
-    final call = ReminderScope.read(context).previewCall(group);
-    unawaited(
-      context.push(Routes.call, extra: CallRequest([call], preview: true)),
     );
   }
 
@@ -232,47 +196,6 @@ class RemindersScreen extends StatelessWidget {
                             settings.copyWith(taskDefaults: options),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  SettingsGroup(
-                    title: 'Try it',
-                    rows: [
-                      if (phone) ...[
-                        SettingsRow(
-                          label: 'Test a habit reminder',
-                          subtitle:
-                              'The Rising Tide heads-up in '
-                              '${AppConstants.reminderTestDelaySeconds} s, '
-                              'then the Tide Call',
-                          icon: Icons.waves_rounded,
-                          onTap: () => _test(context, ReminderGroup.habits),
-                        ),
-                        SettingsRow(
-                          label: 'Test a to-do reminder',
-                          subtitle:
-                              'The Beacon heads-up in '
-                              '${AppConstants.reminderTestDelaySeconds} s, '
-                              'then the Lighthouse',
-                          icon: Icons.flare_rounded,
-                          onTap: () => _test(context, ReminderGroup.tasks),
-                        ),
-                      ],
-                      SettingsRow(
-                        label: 'See the Tide Call',
-                        subtitle:
-                            'Right here, now. Answering it changes '
-                            'nothing',
-                        icon: Icons.visibility_outlined,
-                        showChevron: true,
-                        onTap: () => _preview(context, ReminderGroup.habits),
-                      ),
-                      SettingsRow(
-                        label: 'See the Lighthouse',
-                        subtitle: 'The same, for a to-do',
-                        icon: Icons.visibility_outlined,
-                        showChevron: true,
-                        onTap: () => _preview(context, ReminderGroup.tasks),
                       ),
                     ],
                   ),

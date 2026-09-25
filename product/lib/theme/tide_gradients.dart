@@ -37,7 +37,15 @@ abstract final class TideGradients {
   /// rather than light in water. Front-loading the falloff leaves almost no
   /// alpha to terminate at the rim, so the bloom has no findable edge.
   static const List<double> _bloomStops = [0, 0.12, 0.26, 0.42, 0.6, 0.8, 1];
-  static const List<double> _bloomFalloff = [1, 0.86, 0.66, 0.44, 0.24, 0.09, 0];
+  static const List<double> _bloomFalloff = [
+    1,
+    0.86,
+    0.66,
+    0.44,
+    0.24,
+    0.09,
+    0,
+  ];
 
   static RadialGradient bloom({
     required Color color,
@@ -206,29 +214,146 @@ abstract final class TideGradients {
     ],
   );
 
-  /// The Lighthouse's night: flat dark sky over a sea one step lighter, so
-  /// the horizon is a change of ground rather than a drawn line.
-  static LinearGradient get lighthouseNight => LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [TideColors.trench, TideColors.deepWater, TideColors.deepWater],
-    stops: const [0, 0.55, 1],
-  );
-
-  /// The beam, measured from the lamp: bright where it leaves the glass,
-  /// gone by the far side of the screen. [radius] is in the shader's own
-  /// terms, relative to the rect it is created for.
-  static RadialGradient beam({double strength = 1}) {
-    final alpha = TideColors.palette.isLight ? 0.16 : 0.3;
-    return RadialGradient(
+  /// The Lighthouse's sky, from the top of the screen down to the horizon:
+  /// night overhead, lifting to a faint haze of the lamp's own light where
+  /// the air sits on the water. The haze is what puts the horizon at a
+  /// distance; without it the sky and sea are two flat panels.
+  static LinearGradient get lighthouseSky {
+    final light = TideColors.palette.isLight;
+    return LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
       colors: [
-        TideColors.lantern.withValues(alpha: alpha * strength),
-        TideColors.lantern.withValues(alpha: alpha * 0.34 * strength),
-        TideColors.lantern.withValues(alpha: 0),
+        TideColors.trench,
+        TideColors.deepWater,
+        Color.lerp(
+          TideColors.deepWater,
+          TideColors.lantern,
+          light ? 0.035 : 0.075,
+        )!,
       ],
-      stops: const [0, 0.45, 1],
+      stops: const [0, 0.62, 1],
     );
   }
+
+  /// The sea under it: a step darker than the haze at the horizon, so the
+  /// line reads without being drawn hard, and darker still toward the
+  /// controls that float on it.
+  static LinearGradient get lighthouseSea => LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      Color.lerp(TideColors.deepWater, TideColors.shelf, 0.55)!,
+      TideColors.trench,
+    ],
+    stops: const [0, 0.7],
+  );
+
+  /// The tower, lit on the side the app's one light comes from and falling
+  /// away into the night on the other.
+  static LinearGradient get lighthouseTower => LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color.lerp(TideColors.trench, TideColors.shoal, 0.7)!,
+      TideColors.trench,
+    ],
+    stops: const [0, 0.75],
+  );
+
+  /// The beam, across its width: nothing at its edges, a hot core down the
+  /// middle, falling away smoothly either side — a sweep round the lamp, so
+  /// the edge is as soft a screen away as it is at the glass. [angle] is
+  /// where it points and [spread] its half-width, both in radians; create
+  /// the shader over a rect centred on where the beam starts.
+  ///
+  /// On a light palette the accent is ink, and a beam of ink is a shadow,
+  /// so it is kept to a faint shade there.
+  static SweepGradient beam({
+    required double angle,
+    required double spread,
+    double strength = 1,
+  }) {
+    final alpha = (TideColors.palette.isLight ? 0.1 : 0.4) * strength;
+    const shape = [0.0, 0.1, 0.3, 0.58, 1.0, 0.58, 0.3, 0.1, 0.0];
+    return SweepGradient(
+      endAngle: spread * 2,
+      colors: [
+        for (final share in shape)
+          TideColors.lantern.withValues(alpha: alpha * share),
+      ],
+      stops: const [0, 0.16, 0.3, 0.42, 0.5, 0.58, 0.7, 0.84, 1],
+      transform: GradientRotation(angle - spread),
+    );
+  }
+
+  /// The beam along its length: whole at the glass, thinning to nothing by
+  /// the far side of the screen. A mask — only its alpha counts — laid over
+  /// [beam] with `BlendMode.dstIn`, since a gradient cannot vary both round
+  /// a point and away from it.
+  static RadialGradient get beamReach => RadialGradient(
+    colors: [
+      Colors.white,
+      Colors.white.withValues(alpha: 0.46),
+      Colors.white.withValues(alpha: 0.14),
+      Colors.white.withValues(alpha: 0),
+    ],
+    stops: const [0, 0.26, 0.6, 1],
+  );
+
+  /// The glow round the lamp's glass at [glow] 0..1. Faint on a light
+  /// palette, where a bloom of ink is a smudge rather than a light.
+  static RadialGradient lampBloom(double glow) => bloom(
+    color: TideColors.lantern,
+    alpha: (TideColors.palette.isLight ? 0.18 : 0.55) * glow,
+    center: Alignment.center,
+    radius: 0.5,
+  );
+
+  /// The flash as the lamp turns to face you: a thin streak through the
+  /// glass, the way an eye or a lens catches a point of light at night.
+  static LinearGradient lampStreak(double alpha) => LinearGradient(
+    colors: [
+      TideColors.flare.withValues(alpha: 0),
+      TideColors.flare.withValues(alpha: alpha),
+      TideColors.flare.withValues(alpha: 0),
+    ],
+  );
+
+  /// The beam passing across the to-do's slip: a soft band of the lamp's
+  /// light at [at] (0 the top-left corner, 1 the bottom-right), as bright as
+  /// [strength]. Top-left to bottom-right, the way the beam falls on it from
+  /// a lamp below and to the left.
+  static LinearGradient slipSheen({
+    required double at,
+    required double strength,
+  }) {
+    final alpha = (TideColors.palette.isLight ? 0.07 : 0.14) * strength;
+    const half = 0.28;
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        TideColors.lantern.withValues(alpha: 0),
+        TideColors.lantern.withValues(alpha: alpha),
+        TideColors.lantern.withValues(alpha: 0),
+      ],
+      stops: [
+        (at - half).clamp(0.0, 1.0),
+        at.clamp(0.0, 1.0),
+        (at + half).clamp(0.0, 1.0),
+      ],
+    );
+  }
+
+  /// "Slide to dock", with a gleam running through it toward the dock:
+  /// muted ink either side of a band of full ink at phase [t] in 0..1. Used
+  /// through a `ShaderMask`, so the words keep their own shape.
+  static LinearGradient dockShimmer(double t) => LinearGradient(
+    colors: [TideColors.silt, TideColors.bone, TideColors.silt],
+    stops: const [0.38, 0.5, 0.62],
+    transform: _Slide(-0.75 + 1.5 * t),
+  );
 
   // --- Fire -------------------------------------------------------------
 
@@ -288,4 +413,17 @@ abstract final class TideGradients {
     ],
     stops: const [0, 0.06, 0.94, 1],
   );
+}
+
+/// Slides a gradient sideways by [fraction] of the box it fills — how
+/// [TideGradients.dockShimmer] moves its gleam without rewriting its stops,
+/// which have to stay in order and inside 0..1.
+class _Slide extends GradientTransform {
+  const _Slide(this.fraction);
+
+  final double fraction;
+
+  @override
+  Matrix4 transform(Rect bounds, {TextDirection? textDirection}) =>
+      Matrix4.translationValues(bounds.width * fraction, 0, 0);
 }

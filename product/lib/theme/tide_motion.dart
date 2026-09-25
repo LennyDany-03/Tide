@@ -344,10 +344,34 @@ abstract final class TideMotion {
   static const Duration beamLock = Duration(milliseconds: 650);
   static const Curve beamLockCurve = Curves.easeOutCubic;
 
-  /// How far the dock slider's buoy must travel to dock, as a fraction of
+  /// How far the dock slider's knob must travel to dock, as a fraction of
   /// its track. Further than a card swipe on purpose: this one is answered
   /// half-awake, and should not go off on a brush.
   static const double dockThreshold = 0.86;
+
+  /// One run of the gleam through "Slide to dock", toward the dock. Slow
+  /// enough to read as light moving over the words, not as the words
+  /// flashing.
+  static const Duration dockShimmer = Duration(milliseconds: 2800);
+
+  /// The Lighthouse's pieces coming up out of the night over [callEntry],
+  /// each a beat behind the last — the clock, the slip, then the controls —
+  /// so the eye lands on the time, then the to-do, then what to do about it.
+  static const Curve lighthouseClockIn = Interval(
+    0.1,
+    0.7,
+    curve: Curves.easeOutCubic,
+  );
+  static const Curve lighthouseSlipIn = Interval(
+    0.2,
+    0.85,
+    curve: Curves.easeOutCubic,
+  );
+  static const Curve lighthouseControlsIn = Interval(
+    0.38,
+    1,
+    curve: Curves.easeOutCubic,
+  );
 
   // --- Account deleted --------------------------------------------------
 

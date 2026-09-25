@@ -8,7 +8,7 @@ phone has to allow, and how to test it — including on a locked phone.
 | | Habit | To-do |
 |---|---|---|
 | **Heads-up**, minutes before (None / 5 / 10 / 15) | **Rising Tide** — a custom notification: the habit's mark, a live countdown, water rising along the card as the minutes run, the streak. *I'm on it · Done already · Skip today* | **Beacon** — the same bones, a different picture: a lamp and a beam swinging down to the horizon, the to-do's steps as lit segments. *I'm on it · Done already · Tomorrow* |
-| **At the time, full screen** | **Tide Call** — over the lock screen. Swipe up to ride the wave in (done), swipe the orb left to snooze, hold the orb to spend a freeze (skip today). Several habits at once ring as one call with stacked orbs and *Done all*. | **Lighthouse** — a night sea and a lighthouse whose beam sweeps the sky and catches the to-do's slip. Slide the buoy to dock it (done); steps can be ticked on the slip, and it will not dock with steps open. *Snooze · Tomorrow* |
+| **At the time, full screen** | **Tide Call** — over the lock screen. Swipe up to ride the wave in (done), swipe the orb left to snooze, hold the orb to spend a freeze (skip today). Several habits at once ring as one call with stacked orbs and *Done all*. | **Lighthouse** — stars over a night sea and a lighthouse on a headland whose beam sweeps the sky and crosses the to-do's card. Slide the lit knob to the dock (done); steps can be ticked on the card, and it will not dock with steps open. *Snooze · Tomorrow* |
 | **At the time, gentle** | A notification with *Done · Snooze · Skip today* | A notification with *Done · Snooze · Tomorrow* |
 | **Unanswered** | After 2 minutes the call stops and leaves *"The tide went out on Gym — still time today."* | *"The beam passed Post the parcel — it is still on your list."* |
 
@@ -18,10 +18,7 @@ silently and drop heads-ups. Do Not Disturb is respected unless a habit (or
 the to-do defaults) allows ringing through it.
 
 Settings → Reminders holds the global switch, quiet hours, the defaults for
-new habits and for every to-do, the permission list with a Fix button for each,
-**Test** (the heads-up in 10 s, then the call 10 s later) and **See the Tide
-Call / See the Lighthouse** (the call inside the app; answering it changes
-nothing).
+new habits and for every to-do, the permission list with a Fix button for each.
 
 ## Where the code is
 
@@ -94,21 +91,21 @@ To finish on iOS, in Xcode:
 
 1. Settings → Reminders → *What this phone allows*: everything ticked
    (notifications, exact alarms, full-screen alerts).
-2. Tap **Test a habit reminder**, then press the power button straight away.
-3. At 10 s the Rising Tide heads-up lights the lock screen with its
-   countdown. At 20 s the screen turns on and the Tide Call comes up over the
+2. Give a habit a reminder a few minutes ahead, with a heads-up, then press
+   the power button.
+3. The Rising Tide heads-up lights the lock screen with its countdown. At the
+   reminder's time the screen turns on and the Tide Call comes up over the
    lock screen, ringing on the **alarm** volume (turn it up), swelling over ten
    seconds, vibrating twice per orb bob.
 4. Swipe up and let go past the line: the water surges, the streak counts up,
    the call closes and the phone is still locked. **Open Tide** asks for the
-   unlock first. A test changes nothing in the app.
+   unlock first. The habit is logged for today, as it would be from the app.
 5. Leave one ringing for two minutes to see it give up into the missed
-   notification. A test can be snoozed but does not come back; to see the
-   snooze limit, set a real habit's reminder a few minutes ahead and snooze it
-   three times — the fourth is refused and it goes out as missed.
+   notification. To see the snooze limit, snooze a call three times — the
+   fourth is refused and it goes out as missed.
 6. With the phone unlocked and in use, the call arrives as a heads-up instead
    of taking the screen; tapping it opens the full call.
-7. **Test a to-do reminder** does the same with the Beacon and the Lighthouse.
+7. A to-do with a reminder does the same with the Beacon and the Lighthouse.
 
 With `adb`:
 
