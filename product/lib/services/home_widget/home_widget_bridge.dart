@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
+import '../app_window.dart';
 import '../models/habit.dart';
 import '../tasks/task.dart';
 import 'widget_payload.dart';
@@ -58,7 +59,21 @@ class HomeWidgetBridge {
   /// — before this bridge has heard of it — can already draw its lock or its
   /// signed-out state instead of a setup prompt it could not honour.
   static const _keySignedIn = 'tide_signed_in';
-  static const _keyIsPro = 'tide_is_pro';
+
+  /// The active palette's id, read by `WidgetTheme.kt` to pick the widget
+  /// layouts and drawables generated for it.
+  static const _keyPalette = 'tide_palette';
+
+  /// Every provider, for a change that repaints all of them.
+  static const _allProviders = [
+    _todayProvider,
+    _dashboardProvider,
+    _recapProvider,
+    _tasksProvider,
+    'QuickAddWidgetProvider',
+    'SingleHabitStreakWidgetProvider',
+    'HabitHeatmapWidgetProvider',
+  ];
 
   static String _streakKey(int id) => 'single_habit_streak_$id';
   static String _heatmapKey(int id) => 'habit_heatmap_$id';
@@ -79,10 +94,10 @@ class HomeWidgetBridge {
   void scheduleHabitSync({
     required bool signedIn,
     required List<Habit> habits,
-    required bool isPro,
     required Map<int, String> widgetHabits,
+    required bool weeklyRecap,
   }) {
-    _pendingHabits = _HabitState(signedIn, habits, isPro, widgetHabits);
+    _pendingHabits = _HabitState(signedIn, habits, widgetHabits, weeklyRecap);
     _habitsTimer ??= Timer(_delay, () {
       _habitsTimer = null;
       final next = _pendingHabits;
@@ -97,13 +112,13 @@ class HomeWidgetBridge {
   Future<void> syncHabitsNow({
     required bool signedIn,
     required List<Habit> habits,
-    required bool isPro,
     required Map<int, String> widgetHabits,
+    required bool weeklyRecap,
   }) {
     _habitsTimer?.cancel();
     _habitsTimer = null;
     _pendingHabits = null;
-    return _writeHabits(_HabitState(signedIn, habits, isPro, widgetHabits));
+    return _writeHabits(_HabitState(signedIn, habits, widgetHabits, weeklyRecap));
   }
 
   void scheduleTaskSync({required bool signedIn, required List<Task> tasks}) {
@@ -116,29 +131,10 @@ class HomeWidgetBridge {
     });
   }
 
-  /// Whether a placed widget of [kind] is past what the plan allows: a free
-  /// account gets the first Streak and the first Heatmap; every later copy
-  /// is Pro. Mirrors `WidgetUi.instanceLocked` on the native side.
-  static Future<bool> instanceLocked(
-    HabitWidgetKind kind,
-    int widgetId, {
-    required bool isPro,
-  }) async {
-    if (isPro) return false;
-    try {
-      final ids = (await _installed())[kind.provider] ?? const [];
-      return ids.isNotEmpty && ids.first != widgetId;
-    } catch (error) {
-      debugPrint('Could not list widgets: $error');
-      return false;
-    }
-  }
-
   Future<void> _writeHabits(_HabitState state) async {
     try {
       final installed = await _installed();
       await HomeWidget.saveWidgetData<bool>(_keySignedIn, state.signedIn);
-      await HomeWidget.saveWidgetData<bool>(_keyIsPro, state.isPro);
 
       final out = jsonEncode(WidgetPayload.signedOut());
       await HomeWidget.saveWidgetData<String>(
@@ -148,17 +144,13 @@ class HomeWidgetBridge {
       await HomeWidget.saveWidgetData<String>(
         _keyDashboard,
         state.signedIn
-            ? jsonEncode(
-                WidgetPayload.habitDashboard(state.habits, isPro: state.isPro),
-              )
+            ? jsonEncode(WidgetPayload.habitDashboard(state.habits))
             : out,
       );
       await HomeWidget.saveWidgetData<String>(
         _keyRecap,
-        state.signedIn
-            ? jsonEncode(
-                WidgetPayload.weeklyRecap(state.habits, isPro: state.isPro),
-              )
+        state.signedIn && state.weeklyRecap
+            ? jsonEncode(WidgetPayload.weeklyRecap(state.habits))
             : out,
       );
 
@@ -206,6 +198,23 @@ class HomeWidgetBridge {
     }
   }
 
+  /// Puts the home screen in the palette the app is drawn in: every widget
+  /// is redrawn in it, and the launcher icon is swapped for its own.
+  ///
+  /// Not debounced: a palette change is one deliberate tap, and the widgets
+  /// should have changed by the time the home screen is next seen.
+  Future<void> setPalette(String id) async {
+    unawaited(AppWindow.setLauncherIcon(id));
+    try {
+      await HomeWidget.saveWidgetData<String>(_keyPalette, id);
+      for (final provider in _allProviders) {
+        await HomeWidget.updateWidget(androidName: provider);
+      }
+    } catch (error) {
+      debugPrint('Widget palette sync failed: $error');
+    }
+  }
+
   /// Placed widget ids by provider class, oldest first. The launcher reports
   /// the class as `.SomethingProvider`; only the part after the last dot is
   /// kept.
@@ -230,12 +239,12 @@ class HomeWidgetBridge {
 }
 
 class _HabitState {
-  _HabitState(this.signedIn, this.habits, this.isPro, this.widgetHabits);
+  _HabitState(this.signedIn, this.habits, this.widgetHabits, this.weeklyRecap);
 
   final bool signedIn;
   final List<Habit> habits;
-  final bool isPro;
   final Map<int, String> widgetHabits;
+  final bool weeklyRecap;
 
   Habit? habitFor(int widgetId) {
     final habitId = widgetHabits[widgetId];

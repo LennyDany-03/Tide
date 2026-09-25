@@ -18,19 +18,11 @@ class MonthGrid extends StatelessWidget {
     required this.month,
     required this.habits,
     required this.onDayTapped,
-    this.horizon,
   });
 
   final DateTime month;
   final List<Habit> habits;
   final ValueChanged<DateTime> onDayTapped;
-
-  /// The earliest day this plan may look at, or null on Pro.
-  ///
-  /// The pager stops at the month the horizon falls in, but that month still
-  /// draws the days before it — so without this, the first half of it would
-  /// show real figures the plan is not supposed to be reading.
-  final DateTime? horizon;
 
   @override
   Widget build(BuildContext context) {
@@ -82,19 +74,17 @@ class MonthGrid extends StatelessWidget {
     required DateTime today,
   }) {
     final future = date.isAfter(today);
-    final beyond = horizon != null && date.isBefore(horizon!);
     final summary = StreakCalculator.daySummary(habits, date);
 
     return DayCell(
       key: ValueKey('${date.year}-${date.month}-${date.day}'),
       day: date.day,
-      ratio: future || beyond ? 0 : summary.ratio,
+      ratio: future ? 0 : summary.ratio,
       // Staggered across the grid, so the month ripples in reading order.
       delay: TideMotion.cellStep * index,
       outsideMonth: date.month != month.month,
       isToday: DateUtils.isSameDay(date, today),
       isFuture: future,
-      beyondReach: beyond,
       onTap: () => onDayTapped(date),
     );
   }

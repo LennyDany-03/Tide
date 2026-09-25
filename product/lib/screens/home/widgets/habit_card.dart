@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../../services/haptics.dart';
 import '../../../services/models/habit.dart';
 import '../../../services/models/tide_glyph.dart';
 import '../../../theme/tide_colors.dart';
@@ -117,21 +117,34 @@ class HabitCard extends StatefulWidget {
 /// draws.
 enum _Mark { open, counting, done, frozen }
 
-class _HabitCardState extends State<HabitCard>
-    with SingleTickerProviderStateMixin {
+class _HabitCardState extends State<HabitCard> with TickerProviderStateMixin {
   // Built eagerly in initState rather than lazily: a row disposed without
   // ever being dragged would otherwise construct its controller inside
   // dispose(), which is too late to look up a TickerMode.
   late final AnimationController _settle;
 
+  /// The card coming back into its slot after a committed swipe carried it
+  /// off. 1 at rest.
+  late final AnimationController _return;
+
   double _drag = 0;
-  double _phase = 0;
   double _cardWidth = 0;
+
+  /// Past the commit point, so letting go now would act. Tracked so the
+  /// haptic tick fires once on the way over, not on every frame after.
+  bool _armed = false;
+
+  /// A committed swipe is carrying the card off; the hand is ignored until
+  /// it is back.
+  bool _leaving = false;
 
   /// Logged to target today — earned, as opposed to held.
   bool get _completed => widget.habit.isCompleteOn(DateTime.now());
 
   bool get _frozen => widget.habit.isFrozenOn(DateTime.now());
+
+  /// Some of a count is in today, but not all of it.
+  bool get _started => !_completed && widget.habit.amountOn(DateTime.now()) > 0;
 
   /// The day is settled either way, which is what the card's colouring and
   /// its second line care about.
@@ -150,37 +163,50 @@ class _HabitCardState extends State<HabitCard>
   @override
   void initState() {
     super.initState();
-    _settle = AnimationController(
+    _settle = AnimationController(vsync: this);
+    _return = AnimationController(
       vsync: this,
-      duration: TideMotion.swipeCancel,
+      duration: TideMotion.swipeSettle,
+      value: 1,
     );
   }
 
   @override
   void dispose() {
     _settle.dispose();
+    _return.dispose();
     super.dispose();
   }
 
   // --- Swipe ------------------------------------------------------------
+  //
+  // The to-do card's swipe, carried over whole: the card follows the finger
+  // across the full width of the row, one haptic tick marks the commit
+  // point, and a committed swipe carries the card off the way it was
+  // pushed. The habit card used to stop dead at 62% of its width, act
+  // mid-slide and snap home from wherever it was, so the one gesture on
+  // Today gave no sign of when it would act and no sense that it had.
 
   void _onDragUpdate(DragUpdateDetails details) {
+    if (_leaving) return;
+    _settle.stop();
     setState(() {
-      _drag += details.delta.dx;
-      // Resistance past the commit point, so the row never slides right off
-      // the screen and the threshold stays findable by feel.
-      final limit = _cardWidth * 0.62;
       // A measured habit is completed in its count drawer, not by a
       // binary check gesture. Do not even reveal the gold check side for
       // it: showing an action that will spring back is misleading.
-      final max = widget.habit.type == HabitType.binary ? limit : 0.0;
-      _drag = _drag.clamp(-limit, max);
-      _phase += details.delta.dx * 0.03;
+      final max = _counted ? 0.0 : _cardWidth;
+      _drag = (_drag + details.delta.dx).clamp(-_cardWidth, max);
     });
+    final armed =
+        _cardWidth > 0 && _drag.abs() / _cardWidth >= TideMotion.swipeThreshold;
+    if (armed != _armed) {
+      _armed = armed;
+      if (armed) TideHaptics.selectionClick();
+    }
   }
 
   void _onDragEnd(DragEndDetails details) {
-    final fraction = _cardWidth == 0 ? 0.0 : _drag.abs() / _cardWidth;
+    if (_leaving) return;
 
     // Distance used to decide this on its own, and distance on its own
     // cannot tell a habit being logged from a page being thrown at the tab
@@ -196,72 +222,72 @@ class _HabitCardState extends State<HabitCard>
     final flung =
         details.velocity.pixelsPerSecond.dx.abs() >=
         TideMotion.swipeFlingVelocity;
+    final armed = _armed;
+    _armed = false;
 
-    if (fraction >= TideMotion.swipeThreshold && !flung) {
-      if (_drag > 0 && widget.habit.type == HabitType.binary) {
-        _commitLog();
-      } else if (_drag < 0) {
-        // Three readings of one side, in order of what the day already is.
-        // A frozen day gives its token back; a finished day is taken back;
-        // an open day is protected.
-        if (_frozen) {
-          _commitUnfreeze();
-        } else if (_completed) {
-          _commitUndo();
-        } else {
-          _commitFreeze();
-        }
-      } else {
-        _animateDragHome(TideMotion.swipeCancel, TideMotion.swipeCancelCurve);
-      }
+    if (!armed || flung) {
+      _slide(0, TideMotion.swipeCancel, TideMotion.swipeCancelCurve);
       return;
     }
-    _animateDragHome(TideMotion.swipeCancel, TideMotion.swipeCancelCurve);
+
+    if (_drag > 0) {
+      _commit(right: true, action: widget.onComplete);
+      return;
+    }
+
+    // Three readings of the left side, in order of what the day already
+    // is. A frozen day gives its token back; a day with anything logged —
+    // finished, or a count part way — is taken back; an open day is
+    // protected.
+    //
+    // A part-way count used to fall through to the freeze. Logging one
+    // glass of fifteen and swiping it back spent a freeze token and left the
+    // glass in: the opposite of both things the hand asked for.
+    if (_frozen) {
+      _commit(right: false, action: widget.onUnfreeze, gentle: true);
+    } else if (_completed || _started) {
+      _commit(right: false, action: widget.onUndo, gentle: true);
+    } else {
+      _commit(right: false, action: widget.onFreeze);
+    }
   }
 
-  /// Binary habits deliberately keep their quick check-off gesture. Counted
-  /// habits never call this path: their exact amount belongs in the drawer.
-  void _commitLog() {
-    HapticFeedback.mediumImpact();
-    _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
-    widget.onComplete();
-  }
-
-  void _commitFreeze() {
-    HapticFeedback.mediumImpact();
-    _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
-    widget.onFreeze();
-  }
-
-  void _commitUnfreeze() {
-    HapticFeedback.selectionClick();
-    _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
-    widget.onUnfreeze();
-  }
-
-  /// The lighter selection tick rather than the medium impact the commits
-  /// use: taking something back should not feel like landing it.
-  void _commitUndo() {
-    HapticFeedback.selectionClick();
-    _animateDragHome(TideMotion.swipeSettle, Curves.easeOutCubic);
-    widget.onUndo();
-  }
-
-  void _animateDragHome(Duration duration, Curve curve) {
-    final from = _drag;
-    _settle
-      ..reset()
-      ..duration = duration;
-
-    final animation = _settle.drive(
-      Tween<double>(begin: from, end: 0).chain(CurveTween(curve: curve)),
+  /// Carries the card off the side it was pushed, acts, then brings it back
+  /// into its slot with the new state already on it.
+  ///
+  /// [gentle] takes the lighter selection tick rather than the medium
+  /// impact: taking something back should not feel like landing it.
+  Future<void> _commit({
+    required bool right,
+    required VoidCallback action,
+    bool gentle = false,
+  }) async {
+    _leaving = true;
+    gentle ? TideHaptics.selectionClick() : TideHaptics.mediumImpact();
+    await _slide(
+      right ? _cardWidth : -_cardWidth,
+      TideMotion.swipeSettle,
+      Curves.easeOutCubic,
     );
+    if (!mounted) return;
+    action();
+    setState(() => _drag = 0);
+    await _return.forward(from: 0);
+    if (mounted) _leaving = false;
+  }
 
-    void tick() => setState(() => _drag = animation.value);
-    animation.addListener(tick);
-    _settle.forward().whenComplete(() {
-      animation.removeListener(tick);
-      if (mounted) setState(() => _drag = 0);
+  Future<void> _slide(double to, Duration duration, Curve curve) {
+    final travel = Tween<double>(
+      begin: _drag,
+      end: to,
+    ).chain(CurveTween(curve: curve));
+    void tick() => setState(() => _drag = travel.transform(_settle.value));
+    _settle
+      ..stop()
+      ..duration = duration
+      ..addListener(tick);
+    return _settle.forward(from: 0).whenComplete(() {
+      _settle.removeListener(tick);
     });
   }
 
@@ -331,17 +357,33 @@ class _HabitCardState extends State<HabitCard>
                   child: SwipeLogBackground(
                     offset: _drag,
                     width: _cardWidth,
-                    phase: _phase,
                     radius: HabitCard.radius,
                     freezeAvailable: widget.habit.freezesRemaining > 0,
-                    freezeOnRight: false,
                     unfreezing: _frozen,
-                    undoing: _completed,
+                    undoing: _completed || _started,
+                    partial: _started,
                   ),
                 ),
                 Transform.translate(
                   offset: Offset(_drag, 0),
-                  child: _body(),
+                  // Settling back into the slot it left, already showing
+                  // what the swipe did. The task card closes the gap behind
+                  // itself instead, but a habit stays on the list.
+                  child: FadeTransition(
+                    opacity: CurvedAnimation(
+                      parent: _return,
+                      curve: TideMotion.tabCurve,
+                    ),
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.96, end: 1).animate(
+                        CurvedAnimation(
+                          parent: _return,
+                          curve: TideMotion.overshoot,
+                        ),
+                      ),
+                      child: _body(),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -562,11 +604,7 @@ class _StatusMark extends StatelessWidget {
           shape: BoxShape.circle,
           color: TideColors.lantern,
         ),
-        child: Icon(
-          Icons.check_rounded,
-          size: 18,
-          color: TideColors.onLantern,
-        ),
+        child: Icon(Icons.check_rounded, size: 18, color: TideColors.onLantern),
       ),
       _Mark.frozen => DecoratedBox(
         decoration: BoxDecoration(
@@ -574,11 +612,7 @@ class _StatusMark extends StatelessWidget {
           color: TideColors.frost.withValues(alpha: 0.10),
           border: Border.all(color: TideColors.frost.withValues(alpha: 0.35)),
         ),
-        child: Icon(
-          Icons.ac_unit_rounded,
-          size: 14,
-          color: TideColors.frost,
-        ),
+        child: Icon(Icons.ac_unit_rounded, size: 14, color: TideColors.frost),
       ),
       _Mark.counting => TideRing(
         progress: progress,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../services/haptics.dart';
 import '../theme/tide_colors.dart';
 import '../theme/tide_motion.dart';
 
@@ -30,7 +30,7 @@ class TideSwitch extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
-        HapticFeedback.selectionClick();
+        TideHaptics.selectionClick();
         onChanged(!value);
       },
       child: TweenAnimationBuilder<double>(

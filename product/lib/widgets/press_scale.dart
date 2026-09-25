@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../services/haptics.dart';
 import '../theme/tide_motion.dart';
 
 /// The global press-feedback rule, in one widget.
@@ -73,12 +73,12 @@ class _PressScaleState extends State<PressScale>
   }
 
   void _handleTap() {
-    if (widget.haptic) HapticFeedback.selectionClick();
+    if (widget.haptic) TideHaptics.selectionClick();
     widget.onTap?.call();
   }
 
   void _handleLongPress() {
-    if (widget.haptic) HapticFeedback.mediumImpact();
+    if (widget.haptic) TideHaptics.mediumImpact();
     widget.onLongPress?.call();
   }
 

@@ -1,13 +1,17 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
-import 'package:tide/services/billing/demo_billing_service.dart';
 import 'package:tide/screens/settings/settings_screen.dart';
+import 'package:tide/services/device_flags.dart';
+import 'package:tide/services/tide_store.dart';
 import 'package:tide/theme/tide_colors.dart';
 import 'package:tide/theme/tide_palette.dart';
 import 'package:tide/widgets/tide_tab_bar.dart';
+
+import 'support/flow.dart';
 
 /// WCAG contrast ratio between two opaque colours.
 double contrast(Color a, Color b) {
@@ -79,12 +83,7 @@ void main() {
     addTearDown(tester.view.reset);
     addTearDown(() => TideColors.use(TidePalettes.standard));
 
-    // Signed in as somebody who has paid. Midnight is the only palette on the
-    // free plan, so a free account tapping Paper opens the paywall instead of
-    // repainting the app — and this test is about the repaint.
-    await tester.pumpWidget(
-      TideApp(startOnboarded: true, billing: DemoBillingService.pro()),
-    );
+    await tester.pumpWidget(const TideApp(startOnboarded: true));
     // Fixed pumps rather than pumpAndSettle: several screens carry
     // deliberate ambient loops that never settle by design.
     await tester.pump(const Duration(milliseconds: 900));
@@ -116,5 +115,91 @@ void main() {
 
     expect(TideColors.palette, same(TidePalettes.paper));
     expect(TideColors.deepWater, TidePalettes.paper.deepWater);
+  });
+
+  test('a chosen palette is remembered for the next launch', () {
+    final flags = DeviceFlags.memory();
+    addTearDown(() => TideColors.use(TidePalettes.standard));
+
+    TideStore(flags: flags).setPalette(TidePalettes.blossom);
+    expect(flags.paletteId, TidePalettes.blossom.id);
+
+    // A fresh store over the same flags is the next launch.
+    expect(TideStore(flags: flags).palette, same(TidePalettes.blossom));
+  });
+
+  testWidgets('the app opens in the palette this device saved', (
+    tester,
+  ) async {
+    addTearDown(() => TideColors.use(TidePalettes.standard));
+
+    await tester.pumpWidget(
+      TideApp(
+        flags: DeviceFlags.memory(
+          onboardingSeen: true,
+          paletteId: TidePalettes.paper.id,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 900));
+
+    expect(TideColors.palette, same(TidePalettes.paper));
+  });
+
+  testWidgets('onboarding asks for a palette and applies it', (tester) async {
+    addTearDown(() => TideColors.use(TidePalettes.standard));
+    final flags = DeviceFlags.memory();
+
+    await tester.pumpWidget(TideApp(flags: flags));
+    await settle(tester, 900);
+
+    await tester.tap(find.text('Show me how'));
+    await settle(tester);
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(find.text('Next'));
+      await settle(tester);
+    }
+
+    expect(find.text('Choose the light Tide is drawn in'), findsOneWidget);
+    await tester.tap(find.text('Ink'));
+    await settle(tester);
+
+    expect(TideColors.palette, same(TidePalettes.ink));
+    expect(flags.paletteId, TidePalettes.ink.id);
+  });
+
+  // The home screen can't read TideColors, so each palette is baked into
+  // Android resources by tool/widget_palettes_test.dart and
+  // tool/brand_assets_test.dart. This catches a palette added or retuned
+  // without rerunning them.
+  test('every palette reaches the Android widgets and launcher icon', () {
+    const res = 'android/app/src/main/res';
+    final colours = File('$res/values/widget_palettes.xml').readAsStringSync();
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    final switcher = File(
+      'android/app/src/main/kotlin/com/example/tide/LauncherIcon.kt',
+    ).readAsStringSync();
+    String hex(Color c) =>
+        c.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase();
+
+    for (final palette in TidePalettes.all) {
+      expect(switcher, contains('"${palette.id}" to'), reason: palette.name);
+      if (identical(palette, TidePalettes.midnight)) continue;
+      expect(
+        colours,
+        contains(
+          '<color name="tide_${palette.id}_lantern">#${hex(palette.lantern)}',
+        ),
+        reason: '${palette.name}: rerun tool/widget_palettes_test.dart',
+      );
+      expect(
+        File('$res/mipmap-anydpi-v26/ic_launcher_${palette.id}.xml').existsSync(),
+        isTrue,
+        reason: '${palette.name}: rerun tool/brand_assets_test.dart',
+      );
+      expect(manifest, contains('@mipmap/ic_launcher_${palette.id}"'));
+    }
   });
 }

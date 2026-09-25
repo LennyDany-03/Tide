@@ -2,8 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
 import 'package:tide/services/models/habit.dart';
 import 'package:tide/services/models/tide_glyph.dart';
-import 'package:tide/config/plan_catalog.dart';
-import 'package:tide/services/billing/demo_billing_service.dart';
 import 'package:tide/services/tide_store.dart';
 
 void main() {
@@ -103,30 +101,22 @@ void main() {
     expect(after.isFrozenOn(DateTime.now()), isTrue);
   });
 
-  test('the free habit limit gates the paywall', () async {
-    final billing = DemoBillingService();
-    final store = TideStore(billing: billing);
-    expect(store.canAddHabit, isTrue, reason: '4 of 5 used');
+  test('nothing caps how many habits an account keeps', () {
+    final store = TideStore();
+    final before = store.activeHabitCount;
 
-    store.addHabit(
-      Habit(
-        id: store.newHabitId(),
-        name: 'Fifth',
-        glyph: TideGlyph.dot,
-        type: HabitType.binary,
-        createdAt: DateTime.now(),
-      ),
-    );
-    expect(store.canAddHabit, isFalse, reason: 'limit reached');
+    for (var i = 0; i < 8; i++) {
+      store.addHabit(
+        Habit(
+          id: store.newHabitId(),
+          name: 'Extra $i',
+          glyph: TideGlyph.dot,
+          type: HabitType.binary,
+          createdAt: DateTime.now(),
+        ),
+      );
+    }
 
-    // Through the billing service, because that is the only way anything in
-    // the app becomes Pro — there is no setter for it on the store.
-    billing.grant(PlanCatalog.monthly);
-    // The plan reaches the store through the same stream a webhook's
-    // broadcast would, so it lands on the next microtask rather than inside
-    // the call that granted it.
-    await Future<void>.delayed(Duration.zero);
-    expect(store.entitlement.isPro, isTrue);
-    expect(store.canAddHabit, isTrue, reason: 'Pro lifts the ceiling');
+    expect(store.activeHabitCount, before + 8);
   });
 }

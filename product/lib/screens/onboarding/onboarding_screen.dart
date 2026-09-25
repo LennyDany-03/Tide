@@ -12,6 +12,8 @@ import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_button.dart';
 import '../../widgets/tide_line_gauge.dart';
 import 'widgets/explainer_step.dart';
+import 'widgets/palette_step.dart';
+import 'widgets/permission_step.dart';
 import 'widgets/ready_step.dart';
 import 'widgets/welcome_step.dart';
 
@@ -23,11 +25,21 @@ import 'widgets/welcome_step.dart';
 /// is available inside the product in a screen the user has not yet been
 /// given a reason to want. Configuration is not onboarding, it is homework.
 ///
-/// So it explains instead. Five pages: what Tide is, then the three things
+/// So it explains instead. Seven pages: what Tide is, then the three things
 /// it does — log, hold, read — each *performed* on a loop rather than
-/// described, then the hand-off. The one thing it writes is that it has been
-/// seen, kept on the device so no later launch shows it again; the real
-/// output of the flow is a user who knows what the swipe does.
+/// described, then the one question worth asking up front (which palette,
+/// because it is the first thing every later launch shows), then what
+/// reminders need from the phone, then the hand-off. It writes two things of
+/// its own, both kept on the device: the palette, and that it has been seen
+/// so no later launch shows it again; the real output of the flow is a user
+/// who knows what the swipe does.
+///
+/// The permission page is the one exception to "no homework", and it is
+/// built to feel like none: one thing at a time, each with a reason, "not
+/// now" always a full answer, and the footer reads "Skip for now" until
+/// every card has had one. A reminder that cannot reach the lock screen is a
+/// reminder that does not work, and this is the one moment the phone can be
+/// asked without interrupting anything.
 ///
 /// Two affordances the wizard did not need and this does. **Back**, because
 /// an explanation you can only move forward through is a slideshow you are
@@ -55,7 +67,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   int _step = 0;
 
-  static const int _stepCount = 5;
+  static const int _stepCount = 7;
+  static const int _permissionStep = 5;
+
+  /// Every permission card has an answer. Until then the footer skips.
+  final ValueNotifier<bool> _permissionsDone = ValueNotifier<bool>(false);
 
   /// The label on the primary button.
   ///
@@ -68,6 +84,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   String get _primaryLabel {
     if (_step == 0) return 'Show me how';
     if (_step == _stepCount - 1) return 'Get started';
+    if (_step == _permissionStep && !_permissionsDone.value) {
+      return 'Skip for now';
+    }
     return 'Next';
   }
 
@@ -75,6 +94,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   void dispose() {
     _pages.dispose();
     _morph.dispose();
+    _permissionsDone.dispose();
     super.dispose();
   }
 
@@ -185,7 +205,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       morph: _morph,
                       child: Column(
                         children: [
-                          TideButton(label: _primaryLabel, onPressed: _next),
+                          ValueListenableBuilder<bool>(
+                            valueListenable: _permissionsDone,
+                            builder: (context, _, _) => TideButton(
+                              label: _primaryLabel,
+                              // A quieter button while it only skips, so the
+                              // card's Allow is the one bright thing.
+                              variant:
+                                  _step == _permissionStep &&
+                                      !_permissionsDone.value
+                                  ? TideButtonVariant.secondary
+                                  : TideButtonVariant.primary,
+                              onPressed: _next,
+                            ),
+                          ),
                           const SizedBox(height: 12),
                           SwipeHint(visible: _step == 0),
                         ],
@@ -248,6 +281,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           'building is the pattern, not the number.',
       demo: HistoryLoopDemo(),
     ),
+    4 => const PaletteStep(),
+    _permissionStep => PermissionStep(done: _permissionsDone),
     _ => AnimatedBuilder(
       animation: _morph,
       builder: (context, _) => ReadyStep(morph: _morph.value),

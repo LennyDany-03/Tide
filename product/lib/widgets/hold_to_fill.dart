@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../services/haptics.dart';
 import '../theme/tide_colors.dart';
 import '../theme/tide_elevation.dart';
 import '../theme/tide_motion.dart';
@@ -106,7 +106,7 @@ class _HoldToFillState extends State<HoldToFill>
         !_committed &&
         _controller.value >= 1) {
       _committed = true;
-      HapticFeedback.heavyImpact();
+      TideHaptics.heavyImpact();
       widget.onCommit?.call(1);
     }
   }
@@ -115,7 +115,7 @@ class _HoldToFillState extends State<HoldToFill>
     if (!widget.enabled) return;
     _committed = false;
     setState(() => _holding = true);
-    HapticFeedback.selectionClick();
+    TideHaptics.selectionClick();
     _controller.forward();
   }
 
@@ -132,7 +132,7 @@ class _HoldToFillState extends State<HoldToFill>
 
     if (widget.commitOnRelease &&
         reached > widget.startProgress + widget.minCommit) {
-      HapticFeedback.mediumImpact();
+      TideHaptics.mediumImpact();
       widget.onCommit?.call(reached);
       return;
     }
@@ -270,7 +270,7 @@ class _HoldToStepState extends State<HoldToStep>
   void _onLap(AnimationStatus status) {
     if (status != AnimationStatus.completed || !_holding || _banked) return;
     setState(() => _banked = true);
-    HapticFeedback.mediumImpact();
+    TideHaptics.mediumImpact();
     widget.onStep();
   }
 
@@ -282,7 +282,7 @@ class _HoldToStepState extends State<HoldToStep>
     });
     // Acknowledges the press without logging anything. The press is not the
     // commit any more; it is the start of one.
-    HapticFeedback.selectionClick();
+    TideHaptics.selectionClick();
     _lap.forward(from: 0);
   }
 

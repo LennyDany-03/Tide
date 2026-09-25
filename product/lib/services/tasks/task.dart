@@ -136,6 +136,10 @@ class Task {
 
   int get subtasksDone => subtasks.where((s) => s.isCompleted).length;
 
+  /// Steps still open. A task with any left cannot be completed: it finishes
+  /// when its last step does, not before.
+  int get subtasksLeft => subtasks.length - subtasksDone;
+
   bool isOverdue(DateTime now) {
     final due = dueDate;
     return !isCompleted && due != null && due.isBefore(DateUtils.dateOnly(now));

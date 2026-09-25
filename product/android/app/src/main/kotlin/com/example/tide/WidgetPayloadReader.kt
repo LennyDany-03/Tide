@@ -42,7 +42,6 @@ object WidgetPayloadReader {
 
     data class DashboardPayload(
         val signedIn: Boolean,
-        val isPro: Boolean,
         val best: Int,
         val rows: List<DashboardRow>,
     )
@@ -82,7 +81,6 @@ object WidgetPayloadReader {
 
     data class RecapPayload(
         val signedIn: Boolean,
-        val isPro: Boolean,
         val weekPercent: Int,
         val lastWeekPercent: Int,
         val bestStreak: Int,
@@ -116,13 +114,11 @@ object WidgetPayloadReader {
 
     fun habitDashboard(widgetData: SharedPreferences): DashboardPayload? {
         val json = json(widgetData, KEY_HABIT_DASHBOARD) ?: return null
-        val isPro = json.optBoolean("isPro", false)
         if (!json.optBoolean("signedIn", false)) {
-            return DashboardPayload(signedIn = false, isPro = isPro, best = 0, rows = emptyList())
+            return DashboardPayload(signedIn = false, best = 0, rows = emptyList())
         }
         return DashboardPayload(
             signedIn = true,
-            isPro = isPro,
             best = json.optInt("best", 0),
             rows = json.optJSONArray("rows").rows { row ->
                 DashboardRow(
@@ -183,11 +179,9 @@ object WidgetPayloadReader {
 
     fun weeklyRecap(widgetData: SharedPreferences): RecapPayload? {
         val json = json(widgetData, KEY_WEEKLY_RECAP) ?: return null
-        val isPro = json.optBoolean("isPro", false)
         if (!json.optBoolean("signedIn", false)) {
             return RecapPayload(
                 signedIn = false,
-                isPro = isPro,
                 weekPercent = 0,
                 lastWeekPercent = 0,
                 bestStreak = 0,
@@ -198,7 +192,6 @@ object WidgetPayloadReader {
         }
         return RecapPayload(
             signedIn = true,
-            isPro = isPro,
             weekPercent = json.optInt("weekPercent", 0),
             lastWeekPercent = json.optInt("lastWeekPercent", 0),
             bestStreak = json.optInt("bestStreak", 0),

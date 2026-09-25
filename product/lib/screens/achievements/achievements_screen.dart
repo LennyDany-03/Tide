@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../config/pro_features.dart';
 import '../../services/models/milestone.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
-import '../../theme/tide_elevation.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/habit_glyph.dart';
 import '../../widgets/press_scale.dart';
-import '../../widgets/pro_lock.dart';
 import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_surface.dart';
 import 'widgets/milestone_route.dart';
@@ -34,29 +31,21 @@ class AchievementsScreen extends StatefulWidget {
 }
 
 class _AchievementsScreenState extends State<AchievementsScreen> {
-  /// The one door to the share card, so the gate is asked once rather than
-  /// at each of the two places a milestone can be tapped.
+  /// The one door to the share card, from either place a milestone can be
+  /// tapped.
   ///
-  /// The milestones themselves are free — every badge is earned, shown and
-  /// celebrated on any plan. What Pro buys is turning one into an image to
-  /// send, which is the part that costs nothing to withhold and takes nothing
-  /// away from the habit.
+  /// A streak badge's card carries the best run behind it; a clean-days
+  /// badge is about freezes, not length, so it carries none.
   void _share(BuildContext context, Milestone milestone) {
     final store = TideScope.read(context);
-    if (store.locked(ProFeature.shareCards)) {
-      askForPro(context, ProFeature.shareCards);
-      return;
-    }
     showShareCard(
       context,
       milestone: milestone,
-      streak: store.allTimeBestStreak,
       accountName: store.accountName,
+      bestRun: milestone.kind == MilestoneKind.streak
+          ? store.allTimeBestStreak
+          : null,
     );
-  }
-
-  void _simulate() {
-    TideScope.read(context).simulateNextUnlock();
   }
 
   @override
@@ -89,7 +78,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
           ListView(
             padding: EdgeInsets.fromLTRB(
               20,
-              MediaQuery.paddingOf(context).top + 16,
+              MediaQuery.viewPaddingOf(context).top + 16,
               20,
               40 + MediaQuery.paddingOf(context).bottom,
             ),
@@ -146,31 +135,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                     clean: store.cleanStreak,
                     onTap: () => _share(context, status.milestone),
                   ),
-                const SizedBox(height: 20),
               ],
-
-              // A demo affordance, kept deliberately: the unlock moment is
-              // the best animation in the app and would otherwise be
-              // unreachable without waiting sixty days for it.
-              PressScale(
-                onTap: _simulate,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  // Outlined and quiet. It is a demo control sitting under
-                  // the route, and a filled accent block would make the
-                  // least important thing on the screen the loudest.
-                  decoration: BoxDecoration(
-                    borderRadius: TideElevation.radius12,
-                    border: Border.all(color: TideColors.hairline),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Simulate next unlock',
-                      style: TideType.button.copyWith(color: TideColors.silt),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
           const Positioned(top: 0, left: 0, right: 0, child: TideTopScrim()),

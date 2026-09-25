@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/app_routes.dart';
-import '../../config/pro_features.dart';
 import '../../services/app_window.dart';
 import '../../services/home_widget/home_widget_bridge.dart';
 import '../../services/models/habit.dart';
@@ -14,7 +13,6 @@ import '../../theme/tide_colors.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/habit_glyph.dart';
 import '../../widgets/press_scale.dart';
-import '../../widgets/pro_lock.dart';
 import '../../widgets/tide_backdrop.dart';
 import '../../widgets/tide_button.dart';
 import '../../widgets/tide_flame.dart';
@@ -42,27 +40,7 @@ class WidgetSetupScreen extends StatefulWidget {
 }
 
 class _WidgetSetupScreenState extends State<WidgetSetupScreen> {
-  bool? _locked;
   String? _saving;
-
-  @override
-  void initState() {
-    super.initState();
-    final store = TideScope.read(context);
-    unawaited(
-      HomeWidgetBridge.instanceLocked(
-        widget.kind,
-        widget.widgetId,
-        isPro: store.isPro,
-      ).then((locked) {
-        if (mounted) setState(() => _locked = locked);
-      }),
-    );
-  }
-
-  ProFeature get _feature => widget.kind == HabitWidgetKind.heatmap
-      ? ProFeature.habitHeatmapWidget
-      : ProFeature.widgetInstances;
 
   String get _widgetName =>
       widget.kind == HabitWidgetKind.heatmap ? 'Heatmap' : 'Streak';
@@ -87,7 +65,7 @@ class _WidgetSetupScreenState extends State<WidgetSetupScreen> {
     final store = TideScope.of(context);
     final habits = [...store.habits, ...store.pausedHabits];
     final current = store.widgetHabitId(widget.widgetId);
-    final top = MediaQuery.paddingOf(context).top;
+    final top = MediaQuery.viewPaddingOf(context).top;
     final bottom = MediaQuery.paddingOf(context).bottom;
 
     return PopScope(
@@ -128,9 +106,7 @@ class _WidgetSetupScreenState extends State<WidgetSetupScreen> {
                   style: TideType.labelMuted,
                 ),
                 const SizedBox(height: 24),
-                if (_locked == true)
-                  _Locked(feature: _feature)
-                else if (habits.isEmpty)
+                if (habits.isEmpty)
                   _NoHabits(
                     onAdd: () {
                       context.go(Routes.today);
@@ -143,7 +119,7 @@ class _WidgetSetupScreenState extends State<WidgetSetupScreen> {
                       habit: habit,
                       selected: habit.id == current,
                       saving: _saving == habit.id,
-                      enabled: _locked != true && _saving == null,
+                      enabled: _saving == null,
                       onTap: () => _choose(habit),
                     ),
                     const SizedBox(height: 10),
@@ -242,34 +218,6 @@ class _HabitChoice extends StatelessWidget {
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Locked extends StatelessWidget {
-  const _Locked({required this.feature});
-
-  final ProFeature feature;
-
-  @override
-  Widget build(BuildContext context) {
-    return TideSurface(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const ProBadge(),
-          const SizedBox(height: 12),
-          Text(ProFeatures.of(feature).label, style: TideType.heading),
-          const SizedBox(height: 6),
-          ProHint(feature: feature),
-          const SizedBox(height: 18),
-          TideButton(
-            label: 'Upgrade to Pro',
-            onPressed: () => askForPro(context, feature),
-          ),
-        ],
       ),
     );
   }

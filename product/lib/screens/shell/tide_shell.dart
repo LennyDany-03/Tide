@@ -88,6 +88,19 @@ class TideShell extends StatelessWidget {
       // it — there is nothing for a blur to sample otherwise. Scrolling
       // screens buy that space back with `TideTabBar.reservedHeight`.
       extendBody: true,
+      // The keyboard slides over the tabs rather than squeezing them.
+      //
+      // Resizing was what made the To-do field lag as the keyboard rose:
+      // every frame of the keyboard's slide shrank the body, and the body is
+      // all five branches at once — they stay mounted, and a transparent
+      // branch is still laid out — so Today's charts, History's grids and
+      // the rest re-laid themselves out sixty times a second for a text
+      // field on one tab, while the frosted tab bar rode up on top of the
+      // keyboard re-blurring as it went. Nothing on a tab root needs the
+      // room: the quick-add field is at the top of its list, and pushed
+      // screens with fields at the bottom (the editors) are on the root
+      // navigator with scaffolds of their own.
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           const Positioned.fill(child: TideBackdrop()),
@@ -251,6 +264,11 @@ class _BranchStackState extends State<_BranchStack>
   void didUpdateWidget(_BranchStack old) {
     super.didUpdateWidget(old);
     if (old.currentIndex == widget.currentIndex) return;
+
+    // The branch left behind stays mounted, and so does whatever field in
+    // it had focus — so the To-do tab's quick-add kept the keyboard up over
+    // Today. Nothing on the arriving tab asked for it; let it go.
+    FocusManager.instance.primaryFocus?.unfocus();
 
     if (widget.currentIndex == _handedOver) {
       // Our own swipe landing. The offset was re-based onto this branch the

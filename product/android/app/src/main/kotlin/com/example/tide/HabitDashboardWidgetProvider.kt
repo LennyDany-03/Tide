@@ -15,34 +15,26 @@ class HabitDashboardWidgetProvider : TideHomeWidgetProvider() {
         val payload = WidgetPayloadReader.habitDashboard(widgetData)
 
         appWidgetIds.forEach { widgetId ->
-            if (payload?.isPro != true) {
-                appWidgetManager.updateAppWidget(
-                    widgetId,
-                    LockedWidgetViews.build(
-                        context,
-                        R.string.widget_dashboard_title,
-                        WidgetUi.upgradeUri().toString(),
-                    ),
-                )
-                return@forEach
-            }
-
-            val views = RemoteViews(context.packageName, R.layout.widget_habit_dashboard)
-            val alight = payload.rows.count { it.streak > 0 }
+            val views = RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_habit_dashboard))
+            val alight = payload?.rows?.count { it.streak > 0 } ?: 0
 
             views.setTextViewText(
                 R.id.dashboard_meta,
                 when {
-                    !payload.signedIn || payload.rows.isEmpty() -> ""
+                    payload?.signedIn != true || payload.rows.isEmpty() -> ""
                     alight == 0 -> context.getString(R.string.widget_no_streaks)
                     else -> context.getString(R.string.widget_on_streak, alight)
                 },
             )
-            views.setTextViewText(R.id.dashboard_best, payload.best.toString())
+            views.setTextViewText(R.id.dashboard_best, (payload?.best ?: 0).toString())
             views.setTextViewText(
                 R.id.dashboard_empty_state,
                 context.getString(
-                    if (payload.signedIn) R.string.widget_no_habits else R.string.widget_open_tide,
+                    if (payload?.signedIn == true) {
+                        R.string.widget_no_habits
+                    } else {
+                        R.string.widget_open_tide
+                    },
                 ),
             )
 

@@ -46,7 +46,7 @@ class TideButton extends StatelessWidget {
   final bool expand;
   final Widget? icon;
 
-  /// The paywall CTA passes its glow here.
+  /// A caller that wants the button to glow passes the shadows here.
   final List<BoxShadow>? shadows;
 
   final bool enabled;

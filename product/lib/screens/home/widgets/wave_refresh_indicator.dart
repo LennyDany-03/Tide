@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../../services/haptics.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../widgets/tide_wave.dart';
@@ -93,7 +93,7 @@ class _WaveRefreshIndicatorState extends State<WaveRefreshIndicator>
   Future<void> _run() async {
     setState(() => _refreshing = true);
     _setCresting(true);
-    HapticFeedback.mediumImpact();
+    TideHaptics.mediumImpact();
     await widget.onRefresh();
     if (!mounted) return;
     setState(() => _refreshing = false);

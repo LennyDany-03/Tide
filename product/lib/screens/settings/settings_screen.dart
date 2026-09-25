@@ -3,16 +3,18 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
 import '../../config/app_routes.dart';
-import '../../config/pro_features.dart';
 import '../../services/auth/auth_service.dart';
+import '../../services/reminders/reminder_platform.dart';
+import '../../services/reminders/reminder_scope.dart';
+import '../../services/reminders/reminder_store.dart';
 import '../../services/tide_scope.dart';
-import '../../services/tide_store.dart';
 import '../../services/updates/update_scope.dart';
 import '../../services/updates/update_store.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/hold_to_fill.dart';
-import '../../widgets/pro_lock.dart';
+import '../../widgets/settings_group.dart';
+import '../../widgets/settings_row.dart';
 import '../../widgets/stagger_list.dart';
 import '../../widgets/tide_mark.dart';
 import '../../widgets/tide_switch.dart';
@@ -20,8 +22,6 @@ import '../../widgets/tide_tab_bar.dart';
 import '../update/update_dialog.dart';
 import 'widgets/account_card.dart';
 import 'widgets/delete_account_dialog.dart';
-import 'widgets/settings_group.dart';
-import 'widgets/settings_row.dart';
 
 /// Account, notifications, app.
 ///
@@ -66,18 +66,18 @@ class SettingsScreen extends StatelessWidget {
     return 'Email and password';
   }
 
-  /// What Settings says about the plan in one line — the date on Pro,
-  /// the ceiling on free.
-  static String _planLine(TideStore store) {
-    final plan = store.entitlement;
-    if (!plan.isPro) {
-      return store.entitlement.lapsed
-          ? 'Your plan has ended'
-          : '${store.activeHabitCount} of ${AppConstants.freeHabitLimit} '
-                'habits on the free plan';
+  /// What the reminders row says: off, something the phone is refusing, or
+  /// how a habit reminder arrives.
+  static String _reminderLine(ReminderStore reminders) {
+    final settings = reminders.settings;
+    if (!settings.enabled) return 'Off';
+    final missing = reminders.missing;
+    if (missing.isNotEmpty) {
+      return '${missing.first.title} ${missing.first == ReminderPermission.notifications ? 'are' : 'is'} off · tap to fix';
     }
-    final days = plan.daysRemaining;
-    return '$days ${days == 1 ? 'day' : 'days'} left';
+    final style = settings.habitDefaults.style.habitLabel();
+    final quiet = settings.quietHours ? ' · quiet ${settings.quietLabel}' : '';
+    return '$style by default$quiet';
   }
 
   /// What the updates row says. A found release is named rather than
@@ -118,60 +118,29 @@ class SettingsScreen extends StatelessWidget {
               name: store.accountName,
               email: store.accountEmail,
               avatarUrl: store.account?.avatarUrl,
-              entitlement: store.entitlement,
               habitCount: store.activeHabitCount,
-              onUpgrade: () => context.push(Routes.upgrade),
             ),
 
             SettingsGroup(
               title: 'Notifications',
               rows: [
                 SettingsRow(
-                  label: 'Daily reminders',
-                  subtitle: 'One nudge per habit, at its own time',
+                  label: 'Reminders',
+                  subtitle: _reminderLine(ReminderScope.of(context)),
                   icon: Icons.notifications_none_rounded,
-                  trailing: TideSwitch(
-                    value: store.dailyReminders,
-                    onChanged: (value) =>
-                        store.setPreference(dailyReminders: value),
-                  ),
+                  showChevron: true,
+                  onTap: () => context.push(Routes.reminders),
                 ),
                 SettingsRow(
-                  label: 'Quiet hours',
-                  subtitle: store.quietHours
-                      ? '22:00 – 07:00'
-                      : 'Nothing arrives overnight',
-                  icon: Icons.bedtime_outlined,
+                  label: 'Weekly recap',
+                  subtitle: 'Sunday evening, the week in one line',
+                  icon: Icons.summarize_outlined,
                   trailing: TideSwitch(
-                    value: store.quietHours,
+                    value: store.weeklyRecap,
                     onChanged: (value) =>
-                        store.setPreference(quietHours: value),
+                        store.setPreference(weeklyRecap: value),
                   ),
                 ),
-                // The one Pro row in Notifications. It keeps its shape — a
-                // row with something on the right — rather than vanishing on
-                // the free plan: a setting nobody can see is a setting nobody
-                // knows they could have. The badge takes the switch's place
-                // and the whole row opens the paywall.
-                if (store.locked(ProFeature.weeklyRecap))
-                  SettingsRow(
-                    label: 'Weekly recap',
-                    subtitle: ProFeatures.of(ProFeature.weeklyRecap).blurb,
-                    icon: Icons.summarize_outlined,
-                    trailing: const ProBadge(compact: true),
-                    onTap: () => askForPro(context, ProFeature.weeklyRecap),
-                  )
-                else
-                  SettingsRow(
-                    label: 'Weekly recap',
-                    subtitle: 'Sunday evening, the week in one line',
-                    icon: Icons.summarize_outlined,
-                    trailing: TideSwitch(
-                      value: store.weeklyRecap,
-                      onChanged: (value) =>
-                          store.setPreference(weeklyRecap: value),
-                    ),
-                  ),
               ],
             ),
 
@@ -193,13 +162,6 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.palette_outlined,
                   showChevron: true,
                   onTap: () => context.push(Routes.appearance),
-                ),
-                SettingsRow(
-                  label: 'Home screen widgets',
-                  subtitle: 'Habits and to-dos, right on the home screen',
-                  icon: Icons.widgets_outlined,
-                  showChevron: true,
-                  onTap: () => context.push(Routes.homeWidgets),
                 ),
                 if (updates != null)
                   SettingsRow(
@@ -227,22 +189,6 @@ class SettingsScreen extends StatelessWidget {
                   label: 'Signed in with',
                   subtitle: _waysIn(store.account),
                   icon: Icons.verified_user_outlined,
-                ),
-                // The plan, reachable from the one screen people look for it
-                // on. It is still not a sales row: on Pro it says what is
-                // held and when it ends, and on free it says the ceiling —
-                // the *pitch* only ever happens where the ceiling is actually
-                // in somebody's way.
-                SettingsRow(
-                  label: 'Plan and receipts',
-                  subtitle: _planLine(store),
-                  icon: Icons.workspace_premium_outlined,
-                  showChevron: true,
-                  // Billing, not the paywall. Somebody arriving here from
-                  // Settings is checking on what they have, not shopping —
-                  // the pitch belongs where the ceiling is actually in the
-                  // way, which is where the paywall is raised from.
-                  onTap: () => context.push(Routes.billing),
                 ),
                 Padding(
                   padding: const EdgeInsets.all(14),

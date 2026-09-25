@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The only directory CardShareProvider shares with other apps: the cache
+     CardShare.directory() renders milestone cards into. -->
+<paths>
+    <cache-path name="share" path="share/" />
+</paths>

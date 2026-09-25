@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart' show DateUtils;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tide/config/app_constants.dart';
 import 'package:tide/services/auth/demo_auth_service.dart';
-import 'package:tide/services/billing/demo_billing_service.dart';
 import 'package:tide/services/device_flags.dart';
 import 'package:tide/services/tasks/task.dart';
 import 'package:tide/services/tasks/task_local.dart';
@@ -67,10 +65,9 @@ class FakeTaskRemote implements TaskRemote {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  TideStore tide({bool pro = false}) => TideStore(
+  TideStore tide() => TideStore(
     auth: DemoAuthService(signedIn: true),
     flags: DeviceFlags.memory(onboardingSeen: true),
-    billing: pro ? DemoBillingService.pro() : DemoBillingService(),
   );
 
   late FakeTaskRemote remote;
@@ -292,72 +289,11 @@ void main() {
     });
   });
 
-  group('the free plan', () {
-    Task base(TaskStore tasks) =>
-        tasks.byId(tasks.add(title: 'Gear service').id)!;
-
-    test('cannot add a custom repeat, a second reminder, tags or archive', () {
-      final tasks = store(tide());
-      final t = base(tasks);
-      final soon = DateTime.now().add(const Duration(days: 1));
-
-      tasks.update(
-        t.copyWith(
-          recurrence: TaskRecurrence.custom,
-          customRecurrenceMonths: 6,
-          reminders: [soon, soon.add(const Duration(hours: 1))],
-          tags: ['gear'],
-        ),
-      );
-      final saved = tasks.byId(t.id)!;
-      expect(saved.recurrence, TaskRecurrence.none);
-      expect(saved.reminders, hasLength(AppConstants.freeTaskReminders));
-      expect(saved.tags, isEmpty);
-
-      tasks.toggleComplete(t.id);
-      expect(tasks.archiveCompleted(), isFalse);
-      expect(tasks.archived, isEmpty);
-      expect(tasks.setTagFilter('gear'), isFalse);
-    });
-
-    test('basic repeats and one reminder are free', () {
-      final tasks = store(tide());
-      final t = base(tasks);
-      final soon = DateTime.now().add(const Duration(days: 1));
-      tasks.update(
-        t.copyWith(recurrence: TaskRecurrence.monthly, reminders: [soon]),
-      );
-
-      final saved = tasks.byId(t.id)!;
-      expect(saved.recurrence, TaskRecurrence.monthly);
-      expect(saved.reminders, [soon]);
-    });
-
-    test('keeps what a lapsed plan set up, without letting it grow', () {
-      final tasks = store(tide());
-      final soon = DateTime.now().add(const Duration(days: 1));
-      final before = base(tasks).copyWith(
-        recurrence: TaskRecurrence.custom,
-        customRecurrenceMonths: 12,
-        reminders: [soon, soon.add(const Duration(hours: 1))],
-        tags: ['gear', 'boat'],
-      );
-      final edited = before.copyWith(
-        title: 'Gear service, renamed',
-        reminders: [...before.reminders, soon.add(const Duration(hours: 2))],
-        tags: ['gear', 'new'],
-      );
-
-      final allowed = tasks.withinPlan(edited, before);
-      expect(allowed.recurrence, TaskRecurrence.custom);
-      expect(allowed.reminders, hasLength(2));
-      expect(allowed.tags, ['gear']);
-    });
-  });
-
-  group('Pro', () {
+  group('everything the list can do', () {
+    // These were all Pro once. Tide is free, so this group is the proof that
+    // no ceiling came back with a later edit.
     test('custom repeats, several reminders, tags and the archive', () {
-      final tasks = store(tide(pro: true));
+      final tasks = store(tide());
       final t = tasks.byId(tasks.add(title: 'Storm prep').id)!;
       final soon = DateTime.now().add(const Duration(days: 1));
 
@@ -415,6 +351,107 @@ void main() {
       tasks.dismissSwipeHint();
       expect(tasks.swipeHintSeen, isTrue);
       expect(local.swipeHintSeen, isTrue);
+    });
+  });
+
+  /// A task is made of its steps, so it finishes with the last one and not
+  /// before it.
+  group('steps', () {
+    Task withSteps(TaskStore tasks, List<bool> ticked) {
+      final a = tasks.add(title: 'Move house');
+      tasks.update(
+        tasks
+            .byId(a.id)!
+            .copyWith(
+              subtasks: [
+                for (var i = 0; i < ticked.length; i++)
+                  Subtask(id: 's$i', title: 'Step $i', isCompleted: ticked[i]),
+              ],
+            ),
+      );
+      return tasks.byId(a.id)!;
+    }
+
+    test('a task with a step still open cannot be completed', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, false]);
+      expect(task.subtasksLeft, 1);
+
+      expect(tasks.toggleComplete(task.id), isNull);
+      expect(tasks.byId(task.id)!.isCompleted, isFalse);
+      expect(
+        tasks.byId(task.id)!.subtasks.last.isCompleted,
+        isFalse,
+        reason: 'completing used to tick every step on the way past',
+      );
+    });
+
+    test('once every step is ticked it completes', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, true]);
+
+      expect(tasks.toggleComplete(task.id), isNotNull);
+      expect(tasks.byId(task.id)!.isCompleted, isTrue);
+    });
+
+    test('unticking a step on a finished task reopens it', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, true]);
+      tasks.toggleComplete(task.id);
+
+      final done = tasks.byId(task.id)!;
+      tasks.update(
+        done.copyWith(
+          subtasks: [
+            done.subtasks.first,
+            done.subtasks.last.copyWith(isCompleted: false),
+          ],
+        ),
+      );
+
+      expect(tasks.byId(task.id)!.isCompleted, isFalse);
+      expect(tasks.byId(task.id)!.completedAt, isNull);
+    });
+
+    test('ticking a step that is not the last only ticks it', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [false, false]);
+
+      expect(tasks.toggleStep(task.id, 's0'), isNull);
+      final after = tasks.byId(task.id)!;
+      expect(after.subtasksDone, 1);
+      expect(after.isCompleted, isFalse);
+    });
+
+    test('ticking the last step completes the task', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, false]);
+
+      expect(tasks.toggleStep(task.id, 's1'), isNotNull);
+      final after = tasks.byId(task.id)!;
+      expect(after.isCompleted, isTrue);
+      expect(after.subtasksLeft, 0);
+    });
+
+    test('undo after the last step takes the tick back as well', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, false]);
+      final completion = tasks.toggleStep(task.id, 's1')!;
+
+      tasks.undoCompletion(completion);
+
+      final back = tasks.byId(task.id)!;
+      expect(back.isCompleted, isFalse);
+      expect(back.subtasks.map((s) => s.isCompleted), [true, false]);
+    });
+
+    test('unticking a step from the list reopens a finished task', () {
+      final tasks = store(tide());
+      final task = withSteps(tasks, [true, true]);
+      tasks.toggleComplete(task.id);
+
+      expect(tasks.toggleStep(task.id, 's0'), isNull);
+      expect(tasks.byId(task.id)!.isCompleted, isFalse);
     });
   });
 }

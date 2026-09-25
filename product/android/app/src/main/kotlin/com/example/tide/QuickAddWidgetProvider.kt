@@ -29,7 +29,7 @@ class QuickAddWidgetProvider : AppWidgetProvider() {
         )
         appWidgetIds.forEach { widgetId ->
             val wide = WidgetUi.size(context, appWidgetManager, widgetId, 70, 70).widthDp >= LABEL_MIN_WIDTH_DP
-            val views = RemoteViews(context.packageName, R.layout.widget_quick_add).apply {
+            val views = RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_quick_add)).apply {
                 setViewVisibility(R.id.quick_add_label, if (wide) View.VISIBLE else View.GONE)
                 setOnClickPendingIntent(R.id.quick_add_container, pendingIntent)
             }

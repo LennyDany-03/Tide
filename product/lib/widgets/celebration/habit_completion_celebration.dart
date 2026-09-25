@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../config/celebration_copy.dart';
+import '../../services/haptics.dart';
 import '../../services/models/celebration_cue.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
@@ -46,7 +46,7 @@ class _HabitCompletionCelebrationState extends State<HabitCompletionCelebration>
   @override
   void initState() {
     super.initState();
-    HapticFeedback.mediumImpact();
+    TideHaptics.mediumImpact();
     // RippleBurst starts when its trigger changes, after its bounds exist.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() => _rippleTick++);

@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../../services/haptics.dart';
 import '../../../services/models/milestone.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_typography.dart';
@@ -56,7 +56,7 @@ class _UnlockCelebrationState extends State<UnlockCelebration>
   @override
   void initState() {
     super.initState();
-    HapticFeedback.heavyImpact();
+    TideHaptics.heavyImpact();
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) widget.onDismiss();
     });

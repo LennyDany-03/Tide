@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../config/pro_features.dart';
 import '../../../services/tasks/task_scope.dart';
 import '../../../services/tasks/task_store.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
-import '../../../widgets/pro_lock.dart';
 import '../../../widgets/press_scale.dart';
 import '../../../widgets/segmented_pill.dart';
 
@@ -47,7 +45,6 @@ class _OptionsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = TaskScope.of(context);
-    final tagsLocked = store.locked(ProFeature.taskTags);
     final tags = store.tags;
 
     return Container(
@@ -75,33 +72,9 @@ class _OptionsSheet extends StatelessWidget {
             onChanged: (i) => store.setSort(TaskSort.values[i]),
           ),
           const SizedBox(height: 22),
-          Row(
-            children: [
-              Text('Filter by tag', style: TideType.sectionHeader),
-              if (tagsLocked) ...[
-                const SizedBox(width: 8),
-                const ProBadge(compact: true),
-              ],
-            ],
-          ),
+          Text('Filter by tag', style: TideType.sectionHeader),
           const SizedBox(height: 10),
-          if (tagsLocked)
-            PressScale(
-              onTap: () {
-                Navigator.of(context).pop();
-                askForPro(context, ProFeature.taskTags);
-              },
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: TideColors.shelf,
-                  borderRadius: TideElevation.radius12,
-                  border: Border.all(color: TideColors.hairline),
-                ),
-                child: const ProHint(feature: ProFeature.taskTags),
-              ),
-            )
-          else if (tags.isEmpty)
+          if (tags.isEmpty)
             Text(
               'Add tags to a task from its details, then filter by them here.',
               style: TideType.labelMuted,

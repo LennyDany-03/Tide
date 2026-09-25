@@ -7,6 +7,7 @@ import '../../services/models/habit.dart';
 import '../../services/streak_calculator.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
+import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/gauge_number.dart';
@@ -20,6 +21,7 @@ import 'widgets/habit_log_sheet.dart';
 import 'widgets/hero_stat_card.dart';
 import 'widgets/paused_shelf.dart';
 import 'widgets/home_header.dart';
+import 'widgets/reminder_banner.dart';
 import 'widgets/reordering_habit_list.dart';
 import 'widgets/wave_refresh_indicator.dart';
 
@@ -124,6 +126,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          persist: false,
+          duration: TideMotion.snackHold,
           content: Text(
             streak > 0
                 ? '${habit.name} paused. Your $streak day streak is held.'
@@ -220,6 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
+              const SliverToBoxAdapter(child: ReminderBanner()),
               if (habits.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -297,11 +302,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: TourAnchor(
                       stop: TourStop.add,
                       child: AddHabitTile(
-                        atLimit: !store.canAddHabit,
-                        used: store.isPro ? null : store.activeHabitCount,
-                        onTap: () => context.push(
-                          store.canAddHabit ? Routes.newHabit : Routes.upgrade,
-                        ),
+                        onTap: () => context.push(Routes.newHabit),
                       ),
                     ),
                   ),

@@ -136,7 +136,7 @@ class _MilestoneRouteState extends State<MilestoneRoute>
   @override
   void didUpdateWidget(MilestoneRoute old) {
     super.didUpdateWidget(old);
-    // A simulated unlock moves the destination while the screen is up. The
+    // A new best streak moves the destination while the screen is up. The
     // lantern re-runs the leg rather than teleporting.
     //
     // Keyed off the streak rather than off the status list: the store hands

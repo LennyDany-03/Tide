@@ -5,9 +5,9 @@ import '../theme/tide_motion.dart';
 /// List entrance: fade in and rise 8px, each item 60ms behind the one
 /// above it.
 ///
-/// Home's habit list, the paywall's feature rows and Insights' callouts all
-/// use this, which is why arriving on any of those screens feels like the
-/// same content settling rather than three different reveals.
+/// Home's habit list, Settings' groups and Insights' callouts all use this,
+/// which is why arriving on any of those screens feels like the same content
+/// settling rather than three different reveals.
 class StaggerIn extends StatefulWidget {
   const StaggerIn({
     super.key,

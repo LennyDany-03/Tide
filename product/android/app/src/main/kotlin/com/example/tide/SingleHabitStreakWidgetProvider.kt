@@ -14,27 +14,9 @@ class SingleHabitStreakWidgetProvider : TideHomeWidgetProvider() {
         widgetData: SharedPreferences,
     ) {
         appWidgetIds.forEach { widgetId ->
-            if (WidgetUi.instanceLocked(
-                    context,
-                    SingleHabitStreakWidgetProvider::class.java,
-                    widgetId,
-                    WidgetUi.isPro(widgetData),
-                )
-            ) {
-                appWidgetManager.updateAppWidget(
-                    widgetId,
-                    LockedWidgetViews.build(
-                        context,
-                        R.string.widget_streak_title,
-                        WidgetUi.upgradeUri().toString(),
-                    ),
-                )
-                return@forEach
-            }
-
             val payload = WidgetPayloadReader.singleHabitStreak(widgetData, widgetId)
             val configured = payload?.configured == true
-            val views = RemoteViews(context.packageName, R.layout.widget_single_habit_streak)
+            val views = RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_single_habit_streak))
 
             views.setViewVisibility(R.id.streak_content, if (configured) View.VISIBLE else View.GONE)
             views.setViewVisibility(R.id.streak_unconfigured, if (configured) View.GONE else View.VISIBLE)
@@ -44,7 +26,7 @@ class SingleHabitStreakWidgetProvider : TideHomeWidgetProvider() {
             )
 
             if (configured) {
-                views.setImageViewResource(R.id.streak_flame, WidgetUi.flame(payload.streak))
+                views.setImageViewResource(R.id.streak_flame, WidgetUi.flame(context, payload.streak))
                 views.setTextViewText(R.id.streak_number, payload.streak.toString())
                 views.setTextViewText(R.id.streak_name, payload.name)
                 WidgetUi.click(

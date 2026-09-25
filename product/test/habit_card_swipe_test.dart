@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/main.dart';
 import 'package:tide/screens/home/widgets/habit_card.dart';
+import 'package:tide/services/models/habit.dart';
 import 'package:tide/services/tide_scope.dart';
 import 'package:tide/theme/tide_colors.dart';
 import 'package:tide/widgets/swipe_log_background.dart';
@@ -37,9 +38,7 @@ void main() {
   /// off the card: the card shows the same muted title for a habit that is
   /// frozen as for one that is logged.
   bool loggedToday(WidgetTester tester, String name) {
-    final store = TideScope.read(
-      tester.element(find.byType(HabitCard).first),
-    );
+    final store = TideScope.read(tester.element(find.byType(HabitCard).first));
     return store.habits
         .firstWhere((habit) => habit.name == name)
         .isCompleteOn(DateTime.now());
@@ -74,7 +73,12 @@ void main() {
       await tester.pump(step);
     }
     await gesture.up(timeStamp: elapsed);
-    await tester.pump(const Duration(milliseconds: 600));
+    // In frames, not one long pump: a committed swipe carries the card off
+    // before it acts, and a single pump is a single frame — the carry would
+    // never get past its first.
+    for (var i = 0; i < 15; i++) {
+      await tester.pump(step);
+    }
   }
 
   /// The clip wrapping one card's stack.
@@ -152,9 +156,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
   });
 
-  testWidgets('a card keeps all four corners while it slides', (
-    tester,
-  ) async {
+  testWidgets('a card keeps all four corners while it slides', (tester) async {
     await openHome(tester);
 
     TideSurface body() => tester.widget<TideSurface>(
@@ -209,7 +211,8 @@ void main() {
       expect(
         loggedToday(tester, openHabit),
         isFalse,
-        reason: 'a gesture quick enough to have been a page swipe must '
+        reason:
+            'a gesture quick enough to have been a page swipe must '
             'spring back rather than guess',
       );
     });
@@ -225,7 +228,8 @@ void main() {
       expect(
         loggedToday(tester, openHabit),
         isTrue,
-        reason: 'the guard is on speed, not on distance — an aimed swipe '
+        reason:
+            'the guard is on speed, not on distance — an aimed swipe '
             'that slows into the threshold is exactly the gesture that '
             'should commit',
       );
@@ -273,12 +277,36 @@ void main() {
       expect(
         background.undoing,
         isTrue,
-        reason: 'frost means frozen and coral means destroyed; taking back '
+        reason:
+            'frost means frozen and coral means destroyed; taking back '
             'a log today is neither, so it gets neutral ink',
       );
 
       await gesture.up();
       await tester.pump(const Duration(milliseconds: 600));
     });
+  });
+
+  /// A count part way to its target is something logged, so the trailing
+  /// side takes it back. It used to read the day as open and freeze it —
+  /// spending a token and leaving the count in.
+  testWidgets('swiping back a part-way count clears it, not freezes it', (
+    tester,
+  ) async {
+    await openHome(tester);
+    Habit water() => TideScope.read(
+      tester.element(find.byType(HabitCard).first),
+    ).habits.firstWhere((habit) => habit.name == 'Morning water');
+
+    final today = DateTime.now();
+    expect(water().amountOn(today), greaterThan(0));
+    expect(water().isCompleteOn(today), isFalse);
+    final tokens = water().freezesRemaining;
+
+    await dragSlowly(tester, 'Morning water', -200);
+
+    expect(water().amountOn(today), 0);
+    expect(water().isFrozenOn(today), isFalse);
+    expect(water().freezesRemaining, tokens);
   });
 }

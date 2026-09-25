@@ -9,19 +9,16 @@ import '../screens/auth/auth_screen.dart';
 import '../screens/calendar/calendar_screen.dart';
 import '../screens/habit_detail/habit_detail_screen.dart';
 import '../screens/home/home_screen.dart';
-import '../screens/home_widgets/home_widgets_screen.dart';
 import '../screens/insights/insights_screen.dart';
-import '../screens/billing/billing_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
-import '../screens/pro_pass/pro_pass_screen.dart';
-import '../screens/pro_welcome/pro_welcome_screen.dart';
+import '../screens/reminders/reminders_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/shell/tide_shell.dart';
 import '../screens/splash/splash_screen.dart';
 import '../screens/task_archive/task_archive_screen.dart';
 import '../screens/task_editor/task_editor_screen.dart';
+import '../screens/tide_call/call_deck.dart';
 import '../screens/tasks/tasks_screen.dart';
-import '../screens/upgrade/upgrade_sheet.dart';
 import '../screens/verify_email/verify_email_screen.dart';
 import '../screens/welcome/welcome_screen.dart';
 import '../screens/widget_setup/widget_setup_screen.dart';
@@ -46,12 +43,12 @@ abstract final class Routes {
   static const settings = '/settings';
   static const milestones = '/milestones';
   static const newHabit = '/habit/new';
-  static const upgrade = '/upgrade';
   static const appearance = '/appearance';
-  static const proWelcome = '/pro/welcome';
-  static const proPass = '/pro/pass';
-  static const billing = '/billing';
-  static const homeWidgets = '/settings/widgets';
+  static const reminders = '/settings/reminders';
+
+  /// A call answered inside the app: a reminder tapped on iOS. Opened with a
+  /// `CallRequest` as its extra.
+  static const call = '/call';
   static const widgetSetupPath = '/widget-setup';
 
   static String habit(String id) => '/today/habit/$id';
@@ -282,48 +279,23 @@ abstract final class AppRoutes {
           ),
         ),
 
-        // The paywall stays a sheet. It genuinely is contextual — it
-        // interrupts an action and hands it back — and it is on screen for
-        // a few seconds, not a few minutes.
         GoRoute(
-          path: Routes.upgrade,
-          parentNavigatorKey: _rootKey,
-          pageBuilder: (context, state) => _sheet(state, const UpgradeSheet()),
-        ),
-
-        // What happens after a payment, and the pass it hands over.
-        //
-        // The welcome is opaque and full-screen: it is the one moment the app
-        // has the person's whole attention on purpose, and compositing a
-        // dimmed Settings behind a four-second sequence would cost frames on
-        // the screen least able to spare them.
-        GoRoute(
-          path: Routes.proWelcome,
+          path: Routes.reminders,
           parentNavigatorKey: _rootKey,
           pageBuilder: (context, state) =>
-              _fade(state, const ProWelcomeScreen()),
-        ),
-        GoRoute(
-          path: Routes.proPass,
-          parentNavigatorKey: _rootKey,
-          pageBuilder: (context, state) => _page(state, const ProPassScreen()),
+              _page(state, const RemindersScreen()),
         ),
 
-        // Plan and receipts. A full page rather than a sheet — it is somewhere
-        // you go and read, and it can be as long as the history is.
+        // A call inside the app. It covers everything, tab bar included, and
+        // arrives out of the dark the way the lock-screen call does. Without
+        // a request there is nothing to ring, and it goes back to Today.
         GoRoute(
-          path: Routes.billing,
+          path: Routes.call,
           parentNavigatorKey: _rootKey,
-          pageBuilder: (context, state) => _page(state, const BillingScreen()),
-        ),
-
-        // The widget gallery. A full page for the same reason billing is —
-        // somewhere you go and look, not a contextual sheet.
-        GoRoute(
-          path: Routes.homeWidgets,
-          parentNavigatorKey: _rootKey,
+          redirect: (context, state) =>
+              state.extra is CallRequest ? null : Routes.today,
           pageBuilder: (context, state) =>
-              _page(state, const HomeWidgetsScreen()),
+              _fade(state, InAppCallPage(request: state.extra! as CallRequest)),
         ),
 
         // The habit picker a Streak or Heatmap widget opens. Reached only

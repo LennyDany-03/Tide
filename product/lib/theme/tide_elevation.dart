@@ -56,6 +56,21 @@ abstract final class TideElevation {
     ...floating,
   ];
 
+  /// Light the tab pool throws onto the glass around it. Glow only — the
+  /// pool sits inside the bar, and [floating]'s drop shadow under it would
+  /// darken the label it sits over. On a light palette the accent is ink,
+  /// and ink cannot glow — it would be a smudge — so it all but goes.
+  static List<BoxShadow> get tabGlow => [
+    BoxShadow(
+      color: TideColors.lantern.withValues(
+        alpha: TideColors.palette.isLight ? 0.08 : 0.26,
+      ),
+      blurRadius: 14,
+      spreadRadius: -3,
+      offset: const Offset(0, 2),
+    ),
+  ];
+
   // --- Inner highlight --------------------------------------------------
 
   /// Flutter has no inset shadow, so `TideSurface` draws this as a one-pixel

@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
-import 'package:flutter/services.dart';
 
 import '../../../config/task_copy.dart';
+import '../../../services/haptics.dart';
 import '../../../services/tasks/task.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_motion.dart';
 import '../../../theme/tide_typography.dart';
 import '../../../widgets/press_scale.dart';
+import '../../../widgets/swipe_reveal.dart';
 
 /// One task, and the gesture surface for finishing it.
 ///
@@ -27,6 +28,18 @@ import '../../../widgets/press_scale.dart';
 /// Past the threshold the card leaves the way it was pushed and the gap
 /// closes behind it; short of it, it springs back.
 ///
+/// **A task with steps still open cannot be swiped complete.** The right
+/// side shows a checklist and how many steps are left instead of a tick, and
+/// past the threshold the card springs back rather than leaving; [onBlocked]
+/// says why. The task finishes when its last step is ticked.
+///
+/// **Its steps are on the card**, given [onStep], and tick where they are:
+/// the list is where a task is worked through, and opening each one to tick
+/// a line off would put the steps a screen away from the rule they enforce.
+/// Ticking the last open step sends the card off the way a right swipe does
+/// before [onStep] finishes the task, so a task completed by its steps
+/// leaves the list the same way as one completed by hand.
+///
 /// Tapping opens the task. Screen readers get "Complete" and "Delete" as
 /// custom actions, because a gesture is not an accessible control.
 class TaskCard extends StatefulWidget {
@@ -36,7 +49,11 @@ class TaskCard extends StatefulWidget {
     required this.onComplete,
     required this.onDelete,
     required this.onOpen,
+    this.onBlocked,
+    this.onStep,
+    this.onMenu,
     this.showTags = true,
+    this.overdueInHeading = false,
     this.completeLabel,
   });
 
@@ -47,9 +64,25 @@ class TaskCard extends StatefulWidget {
   final VoidCallback onDelete;
   final VoidCallback onOpen;
 
+  /// A right swipe on a task whose steps are not all done.
+  final VoidCallback? onBlocked;
+
+  /// A step ticked or unticked on the card. Null leaves the steps off the
+  /// card — the archive, where a task is only restored or deleted.
+  final void Function(Subtask step)? onStep;
+
+  /// A long press anywhere on the card: the menu of what it can do. Long
+  /// press and the horizontal drag settle in the gesture arena on their own
+  /// — movement picks the drag, stillness picks the press.
+  final VoidCallback? onMenu;
+
   /// Off on the free plan unless the task already carries tags from a plan
   /// that has since ended — then they are still shown, never hidden.
   final bool showTags;
+
+  /// The card sits under an "Overdue" heading, so its due chip gives the
+  /// date alone rather than saying "Overdue" again on every card.
+  final bool overdueInHeading;
 
   /// What the right swipe says. Defaults to "Complete", or "Reopen" on a
   /// finished task.
@@ -72,10 +105,22 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
   bool _armed = false;
   bool _leaving = false;
 
-  static const double _threshold = 0.32;
+  /// The last step, ticked on the card and drawn ticked while the card
+  /// leaves, before the store has been told.
+  String? _finishing;
 
-  String get _rightLabel =>
-      widget.completeLabel ?? (widget.task.isCompleted ? 'Reopen' : 'Complete');
+  /// Steps still open, so the right swipe is a refusal. Not on the archive,
+  /// where the right swipe restores rather than completes.
+  bool get _blocked =>
+      widget.completeLabel == null &&
+      !widget.task.isCompleted &&
+      widget.task.subtasksLeft > 0;
+
+  String get _rightLabel {
+    if (_blocked) return '${TaskCopy.steps(widget.task.subtasksLeft)} left';
+    return widget.completeLabel ??
+        (widget.task.isCompleted ? 'Reopen' : 'Complete');
+  }
 
   @override
   void dispose() {
@@ -88,12 +133,19 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
     if (_leaving) return;
     _settle.stop();
     setState(() {
-      _drag = (_drag + details.delta.dx).clamp(-_width, _width);
+      // A refused right swipe gives, but stiffly, and not far: it should
+      // feel like a card that will not go rather than one that is going.
+      final dx = _blocked && _drag + details.delta.dx > 0
+          ? details.delta.dx * 0.5
+          : details.delta.dx;
+      final reach = _blocked ? _width * 0.45 : _width;
+      _drag = (_drag + dx).clamp(-_width, reach);
     });
-    final armed = _width > 0 && _drag.abs() / _width >= _threshold;
+    final armed =
+        _width > 0 && _drag.abs() / _width >= TideMotion.swipeThreshold;
     if (armed != _armed) {
       _armed = armed;
-      if (armed) HapticFeedback.selectionClick();
+      if (armed) TideHaptics.selectionClick();
     }
   }
 
@@ -103,7 +155,11 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
     // A page thrown at the tab bar, not a considered swipe — see
     // TideMotion.swipeFlingVelocity.
     final flung = velocity.abs() >= TideMotion.swipeFlingVelocity;
-    if (_armed && !flung) {
+    if (_armed && !flung && _drag > 0 && _blocked) {
+      TideHaptics.heavyImpact();
+      _slide(0, TideMotion.swipeCancel, TideMotion.swipeCancelCurve);
+      widget.onBlocked?.call();
+    } else if (_armed && !flung) {
       _commit(_drag > 0);
     } else {
       _slide(0, TideMotion.swipeCancel, TideMotion.swipeCancelCurve);
@@ -112,17 +168,47 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
   }
 
   Future<void> _commit(bool right) async {
+    if (!await _leave(right)) return;
+    right ? widget.onComplete() : widget.onDelete();
+  }
+
+  /// Sends the card off the way it was pushed and closes the gap behind it.
+  /// False if the card went away meanwhile.
+  Future<bool> _leave(bool right) async {
     _leaving = true;
-    HapticFeedback.mediumImpact();
+    TideHaptics.mediumImpact();
     await _slide(
       right ? _width : -_width,
       TideMotion.swipeSettle,
       Curves.easeOutCubic,
     );
-    if (!mounted) return;
+    if (!mounted) return false;
     await _collapse.reverse();
-    if (!mounted) return;
-    right ? widget.onComplete() : widget.onDelete();
+    return mounted;
+  }
+
+  /// A step ticked on the card. Any but the last is simply ticked; the last
+  /// finishes the task, so the card leaves first, as it would for a swipe.
+  Future<void> _tickStep(Subtask step) async {
+    if (_leaving) return;
+    final task = widget.task;
+    final last =
+        !step.isCompleted && !task.isCompleted && task.subtasksLeft == 1;
+    if (!last) {
+      widget.onStep?.call(step);
+      return;
+    }
+    setState(() => _finishing = step.id);
+    if (!await _leave(true)) return;
+    widget.onStep?.call(step);
+    // Normally the list drops the card on its next build and this is never
+    // seen. If the task did not finish after all, the card comes back.
+    setState(() {
+      _leaving = false;
+      _finishing = null;
+      _drag = 0;
+    });
+    _collapse.value = 1;
   }
 
   Future<void> _slide(double to, Duration duration, Curve curve) {
@@ -151,7 +237,9 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
       alignment: Alignment.topCenter,
       child: Semantics(
         customSemanticsActions: {
-          CustomSemanticsAction(label: _rightLabel): widget.onComplete,
+          CustomSemanticsAction(label: _rightLabel): _blocked
+              ? () => widget.onBlocked?.call()
+              : widget.onComplete,
           const CustomSemanticsAction(label: 'Delete'): widget.onDelete,
         },
         child: LayoutBuilder(
@@ -159,21 +247,16 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
             _width = constraints.maxWidth;
             final progress = _width == 0
                 ? 0.0
-                : (_drag.abs() / (_width * _threshold)).clamp(0.0, 1.0);
+                : (_drag.abs() / (_width * TideMotion.swipeThreshold)).clamp(
+                    0.0,
+                    1.0,
+                  );
 
             return ClipRRect(
               borderRadius: TideElevation.radius12,
               child: Stack(
                 children: [
-                  if (_drag != 0)
-                    Positioned.fill(
-                      child: _Backdrop(
-                        right: _drag > 0,
-                        progress: progress,
-                        label: _drag > 0 ? _rightLabel : 'Delete',
-                        reopen: widget.task.isCompleted,
-                      ),
-                    ),
+                  if (_drag != 0) Positioned.fill(child: _backdrop(progress)),
                   Transform.translate(
                     offset: Offset(_drag, 0),
                     child: GestureDetector(
@@ -182,11 +265,20 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                       onHorizontalDragEnd: _onEnd,
                       child: PressScale(
                         onTap: widget.onOpen,
+                        onLongPress: widget.onMenu == null
+                            ? null
+                            : () {
+                                TideHaptics.mediumImpact();
+                                widget.onMenu!();
+                              },
                         scale: 0.985,
                         haptic: false,
                         child: _Face(
                           task: widget.task,
                           showTags: widget.showTags,
+                          overdueInHeading: widget.overdueInHeading,
+                          finishing: _finishing,
+                          onStep: widget.onStep == null ? null : _tickStep,
                         ),
                       ),
                     ),
@@ -199,82 +291,59 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
       ),
     );
   }
-}
 
-/// What is uncovered under the card.
-class _Backdrop extends StatelessWidget {
-  const _Backdrop({
-    required this.right,
-    required this.progress,
-    required this.label,
-    required this.reopen,
-  });
-
-  final bool right;
-  final double progress;
-  final String label;
-  final bool reopen;
-
-  @override
-  Widget build(BuildContext context) {
-    final hue = right ? TideColors.lantern : TideColors.coral;
-    final icon = right
-        ? (reopen ? Icons.undo_rounded : Icons.check_rounded)
-        : Icons.delete_outline_rounded;
-    final armed = progress >= 1;
-
-    final mark = AnimatedContainer(
-      duration: TideMotion.press,
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: armed ? hue : hue.withValues(alpha: 0.18),
-      ),
-      child: Icon(
-        icon,
-        size: 18,
-        color: armed ? (right ? TideColors.onLantern : TideColors.shoal) : hue,
-      ),
-    );
-
-    return ColoredBox(
-      color: hue.withValues(alpha: 0.06 + 0.10 * progress),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        child: Row(
-          mainAxisAlignment: right
-              ? MainAxisAlignment.start
-              : MainAxisAlignment.end,
-          children: [
-            if (!right) ...[
-              Opacity(
-                opacity: progress,
-                child: Text(label, style: TideType.label.copyWith(color: hue)),
-              ),
-              const SizedBox(width: 10),
-            ],
-            Transform.scale(scale: 0.7 + 0.3 * progress, child: mark),
-            if (right) ...[
-              const SizedBox(width: 10),
-              Opacity(
-                opacity: progress,
-                child: Text(label, style: TideType.label.copyWith(color: hue)),
-              ),
-            ],
-          ],
-        ),
-      ),
+  /// Lantern and a tick on the left, coral and a bin on the right — or, for
+  /// a task with steps left, plain ink and a checklist: not an action, a
+  /// reason.
+  Widget _backdrop(double progress) {
+    if (_drag < 0) {
+      return SwipeReveal(
+        right: false,
+        progress: progress,
+        hue: TideColors.coral,
+        icon: Icons.delete_outline_rounded,
+        label: 'Delete',
+      );
+    }
+    if (_blocked) {
+      return SwipeReveal(
+        right: true,
+        progress: progress,
+        hue: TideColors.bone,
+        icon: Icons.checklist_rounded,
+        label: _rightLabel,
+      );
+    }
+    return SwipeReveal(
+      right: true,
+      progress: progress,
+      hue: TideColors.lantern,
+      onHue: TideColors.onLantern,
+      icon: widget.task.isCompleted ? Icons.undo_rounded : Icons.check_rounded,
+      label: _rightLabel,
     );
   }
 }
 
 /// The card itself.
 class _Face extends StatelessWidget {
-  const _Face({required this.task, required this.showTags});
+  const _Face({
+    required this.task,
+    required this.showTags,
+    required this.overdueInHeading,
+    this.finishing,
+    this.onStep,
+  });
 
   final Task task;
   final bool showTags;
+  final bool overdueInHeading;
+  final String? finishing;
+  final void Function(Subtask step)? onStep;
+
+  /// Steps shown on the card before the rest are left to the task itself. A
+  /// long checklist would turn one card into a page.
+  static const int _shownSteps = 4;
 
   @override
   Widget build(BuildContext context) {
@@ -290,7 +359,7 @@ class _Face extends StatelessWidget {
       else if (task.dueDate != null)
         _Chip(
           icon: overdue ? Icons.error_outline_rounded : Icons.event_rounded,
-          text: overdue
+          text: overdue && !overdueInHeading
               ? 'Overdue · ${TaskCopy.due(task.dueDate!, now: now)}'
               : TaskCopy.due(task.dueDate!, now: now),
           tone: overdue || dueToday ? _Tone.accent : _Tone.plain,
@@ -314,7 +383,7 @@ class _Face extends StatelessWidget {
     ];
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
       decoration: BoxDecoration(
         color: done
             ? Color.lerp(TideColors.shelf, TideColors.deepWater, 0.45)
@@ -357,14 +426,106 @@ class _Face extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
+                if (onStep != null && !done && task.subtasks.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  for (final step in task.subtasks.take(_shownSteps))
+                    _StepLine(
+                      step: step,
+                      ticked: step.isCompleted || step.id == finishing,
+                      onTap: () => onStep!(step),
+                    ),
+                  if (task.subtasks.length > _shownSteps)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 28, top: 2),
+                      child: Text(
+                        '+${task.subtasks.length - _shownSteps} more in the '
+                        'task',
+                        style: TideType.labelMuted.copyWith(fontSize: 12),
+                      ),
+                    ),
+                ],
                 if (meta.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 7),
                   Wrap(spacing: 6, runSpacing: 6, children: meta),
                 ],
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One step on the card, and the target for ticking it — the whole line, not
+/// just its circle. Unlike the task's own mark, this one is a button: a step
+/// has no swipe of its own.
+class _StepLine extends StatelessWidget {
+  const _StepLine({
+    required this.step,
+    required this.ticked,
+    required this.onTap,
+  });
+
+  final Subtask step;
+  final bool ticked;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      checked: ticked,
+      label: step.title,
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: PressScale(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: TideMotion.tabSwitch,
+                  curve: TideMotion.tabCurve,
+                  width: 18,
+                  height: 18,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: TideColors.lantern.withValues(alpha: ticked ? 1 : 0),
+                    border: Border.all(
+                      color: ticked
+                          ? TideColors.lantern
+                          : TideColors.bone.withValues(alpha: 0.28),
+                      width: 1.4,
+                    ),
+                  ),
+                  child: ticked
+                      ? Icon(
+                          Icons.check_rounded,
+                          size: 12,
+                          color: TideColors.onLantern,
+                        )
+                      : null,
+                ),
+                Expanded(
+                  child: Text(
+                    step.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TideType.label.copyWith(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w400,
+                      color: ticked ? TideColors.silt : TideColors.bone,
+                      decoration: ticked ? TextDecoration.lineThrough : null,
+                      decorationColor: TideColors.silt,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

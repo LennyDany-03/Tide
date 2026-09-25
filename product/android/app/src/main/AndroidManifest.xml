@@ -3,15 +3,41 @@
          debug and profile manifests already grant this; release did not. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- To-do reminders. Local notifications, so they fire with no network.
-         POST_NOTIFICATIONS is asked for the first time somebody sets a
-         reminder, not at launch. SCHEDULE_EXACT_ALARM is requested on Android
-         14+ and may be refused, in which case reminders fall back to inexact
-         timing rather than failing. BOOT_COMPLETED lets the plugin put the
-         reminders back after a restart. -->
+    <!-- Habit and to-do reminders (reminders/ in the Kotlin, and
+         docs/REMINDERS.md). Local, so they fire with no network.
+
+         POST_NOTIFICATIONS: asked on onboarding's permission page or when a
+         reminder is first set, never at launch.
+
+         Exact alarms: USE_EXACT_ALARM is granted at install on Android 13+,
+         which is right for an app whose reminders ring like an alarm clock
+         and is sideloaded. Google Play limits it to alarm and calendar apps;
+         a Play build would drop it and rely on SCHEDULE_EXACT_ALARM, which
+         the code already asks for and falls back from. Below 13 only
+         SCHEDULE_EXACT_ALARM exists.
+
+         USE_FULL_SCREEN_INTENT: the Tide Call over the lock screen. Android
+         14+ can refuse it; the call then arrives as a heads-up that opens it.
+
+         FOREGROUND_SERVICE, WAKE_LOCK, VIBRATE: the ringing service, which
+         plays the tone on the alarm stream and vibrates until answered.
+
+         RECEIVE_BOOT_COMPLETED: alarms are cleared by a reboot and armed
+         again from what the phone kept.
+
+         REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: the optional last card on the
+         permission page. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <!-- Syncing the to-do list when the connection comes back. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
@@ -42,9 +68,18 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- No launcher entry here: that is one of the aliases below, so
+                 the icon can follow the palette. This filter exists for
+                 `flutter run`, which launches the first activity whose filter
+                 names MAIN + LAUNCHER — without it, that was .LauncherMidnight,
+                 and the launch failed once the palette had disabled it. The
+                 data scheme keeps the home screen from listing it: a launcher
+                 asks for MAIN + LAUNCHER with no data, which this can't match,
+                 while flutter_tools only checks the action and category. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+                <data android:scheme="tide-dev-launch"/>
             </intent-filter>
 
             <!-- A home-screen widget tap opens this Activity directly
@@ -56,6 +91,67 @@
                 <action android:name="es.antonborri.home_widget.action.LAUNCH"/>
             </intent-filter>
         </activity>
+
+        <!-- The launcher icon, one alias per palette (icons from
+             tool/brand_assets_test.dart). Exactly one is enabled at a time;
+             MainActivity switches them when the app leaves the foreground
+             after the palette changes. Midnight is on by default, so a fresh
+             install shows the standard icon. -->
+        <activity-alias
+            android:name=".LauncherMidnight"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherDeepWater"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_deep_water"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherInk"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_ink"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherBlossom"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_blossom"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherPaper"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_paper"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
 
         <!-- Today's Habits and Habit Dashboard home-screen widgets. See
              lib/services/home_widget/ for what writes their data, and
@@ -139,25 +235,56 @@
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
 
-        <!-- flutter_local_notifications: delivers scheduled task reminders,
-             and reschedules them after a reboot or an app update. -->
+        <!-- Reminders: the alarms firing, notification buttons, and every
+             event that clears alarms (a reboot, an update, a clock or time-
+             zone change) so they can be armed again. Not exported: only the
+             system and Tide itself send to it. Android reminders no longer
+             go through flutter_local_notifications, whose receivers were
+             here; the app cancels what an earlier build scheduled through it
+             once, on first launch (AndroidReminderPlatform.create). -->
         <receiver
-            android:exported="false"
-            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
-        <receiver
-            android:exported="false"
-            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            android:name=".reminders.ReminderReceiver"
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
                 <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED"/>
+                <action android:name="android.intent.action.TIME_SET"/>
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED"/>
             </intent-filter>
         </receiver>
-        <!-- The snooze button on a reminder, handled with the app closed. -->
-        <receiver
+
+        <!-- Rings a call: the tone swelling on the alarm stream, the
+             vibration, and the notification that carries the full-screen
+             intent. A short service: it gives up into a missed-reminder
+             notification after two minutes, well inside Android 14's limit
+             for the type. -->
+        <service
+            android:name=".reminders.TideCallService"
             android:exported="false"
-            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"/>
+            android:foregroundServiceType="shortService"/>
+
+        <!-- The Tide Call and the Lighthouse over the lock screen. Its own
+             task, kept out of recents, and its own Flutter engine on the
+             tideCallMain entry point, so nothing behind the call is
+             reachable without unlocking. -->
+        <activity
+            android:name=".reminders.TideCallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity="com.example.tide.call"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme"/>
+        </activity>
 
         <!-- Shares a downloaded update APK with the system installer. Only
              the update cache is exposed (res/xml/update_paths.xml). -->
@@ -169,6 +296,18 @@
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/update_paths"/>
+        </provider>
+
+        <!-- Shares a rendered milestone card with the app it is sent to.
+             Only the card cache is exposed (res/xml/share_paths.xml). -->
+        <provider
+            android:name=".CardShareProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_paths"/>
         </provider>
 
         <!-- Don't delete the meta-data below.
@@ -187,19 +326,16 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-
-        <!-- UPI apps, for Tide Pro's checkout.
-
-             Android 11 hid the installed-app list behind package visibility,
-             and Razorpay's checkout builds its UPI list by asking which apps
-             answer `upi://pay`. Without this declaration that question comes
-             back empty on Android 11 and later: the sheet shows a card form
-             and no UPI apps at all, on the market where UPI is how most
-             people pay. It queries an intent rather than naming packages, so
-             a UPI app released next year appears without a release here. -->
+        <!-- The milestone share sheet only offers an app that is installed,
+             and from Android 11 an app cannot see another without asking
+             here (CardShare.kt). The intent entry is for finding
+             Instagram's story composer among its share targets. -->
+        <package android:name="com.whatsapp"/>
+        <package android:name="com.whatsapp.w4b"/>
+        <package android:name="com.instagram.android"/>
         <intent>
-            <action android:name="android.intent.action.VIEW"/>
-            <data android:scheme="upi"/>
+            <action android:name="android.intent.action.SEND"/>
+            <data android:mimeType="image/png"/>
         </intent>
     </queries>
 </manifest>

@@ -6,10 +6,14 @@
     <color name="tide_ground">#FF05080B</color>
 
     <!-- Home-screen widgets render outside the Flutter engine, so they can't
-         read TideColors at runtime — these are copied verbatim from
-         TidePalettes.midnight (lib/theme/tide_palette.dart) and always draw
-         in Midnight, whatever palette is active in the app. Palette-matched
-         widgets are a known follow-up, not solved here. -->
+         read TideColors at runtime. These are Midnight's widget colours, and
+         the layouts and drawables that use them are Midnight's. Every other
+         palette gets generated copies (values/widget_palettes.xml and the
+         *_<palette id> layouts and drawables), written from
+         lib/theme/tide_palette.dart by `flutter test
+         tool/widget_palettes_test.dart`; WidgetTheme.kt picks the copy for
+         the palette the app last reported. Edit a widget here, then rerun
+         the tool. -->
     <color name="tide_shelf">#FF0C1217</color>
     <color name="tide_shoal">#FF17272D</color>
     <color name="tide_bone">#FFE8F1F6</color>
@@ -43,4 +47,8 @@
     <color name="tide_cell_2">#FF1F7899</color>
     <color name="tide_cell_3">#FF30A9D6</color>
     <color name="tide_cell_4">#FF45D0FF</color>
+    <!-- The rest of this week on the recap strip, and the core of a flame
+         that has gone out. -->
+    <color name="tide_cell_future">#70121A20</color>
+    <color name="tide_flame_out_core">#FF2A3B44</color>
 </resources>

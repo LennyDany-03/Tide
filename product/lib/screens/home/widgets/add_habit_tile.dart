@@ -2,11 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../../config/app_constants.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_typography.dart';
-import '../../../widgets/gauge_number.dart';
 import '../../../widgets/press_scale.dart';
 
 /// The way to add a habit, sitting where the next habit would go.
@@ -25,32 +23,14 @@ import '../../../widgets/press_scale.dart';
 /// "something goes here", and it reads as a space rather than a thing
 /// before the label has been read.
 class AddHabitTile extends StatelessWidget {
-  const AddHabitTile({
-    super.key,
-    required this.onTap,
-    this.atLimit = false,
-    this.used,
-    this.limit = AppConstants.freeHabitLimit,
-  });
+  const AddHabitTile({super.key, required this.onTap});
 
   final VoidCallback onTap;
-
-  /// The free plan is full, so this opens the paywall instead. Said plainly
-  /// rather than by disabling the control and leaving the user to guess.
-  final bool atLimit;
-
-  /// Habits in use on the free plan, or null on Pro — where there is no
-  /// ceiling and counting toward one would be noise.
-  final int? used;
-
-  final int limit;
 
   static const double height = 62;
 
   @override
   Widget build(BuildContext context) {
-    final count = used;
-
     return PressScale(
       onTap: onTap,
       child: CustomPaint(
@@ -86,42 +66,6 @@ class AddHabitTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (atLimit)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: TideColors.lantern.withValues(alpha: 0.12),
-                      borderRadius: TideElevation.radius12,
-                    ),
-                    child: Text(
-                      'Tide Pro',
-                      style: TideType.labelMuted.copyWith(
-                        fontSize: 12,
-                        color: TideColors.lantern,
-                      ),
-                    ),
-                  )
-                else if (count != null)
-                  // How much of the free plan is used, before it runs out
-                  // rather than only at the moment it does.
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      GaugeNumber(
-                        value: count,
-                        style: TideType.gauge(13, color: TideColors.silt),
-                      ),
-                      Text(
-                        ' of $limit free',
-                        style: TideType.labelMuted.copyWith(fontSize: 12),
-                      ),
-                    ],
-                  ),
               ],
             ),
           ),

@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
-import '../../config/pro_features.dart';
 import '../../services/tasks/task.dart';
 import '../../services/tasks/task_scope.dart';
 import '../../theme/tide_colors.dart';
+import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
-import '../../widgets/pro_lock.dart';
 import '../../widgets/press_scale.dart';
-import '../../widgets/tide_button.dart';
 import '../../widgets/tide_tab_bar.dart';
 import '../tasks/widgets/task_card.dart';
 
@@ -24,7 +22,6 @@ class TaskArchiveScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = TaskScope.of(context);
-    final locked = store.locked(ProFeature.taskArchive);
     final archived = store.archived;
 
     return ListView(
@@ -54,28 +51,7 @@ class TaskArchiveScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
-        if (locked)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            child: Column(
-              children: [
-                const ProBadge(),
-                const SizedBox(height: 14),
-                Text(
-                  ProFeatures.of(ProFeature.taskArchive).blurb,
-                  style: TideType.bodyMuted,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                TideButton(
-                  label: 'See Tide Pro',
-                  expand: false,
-                  onPressed: () => askForPro(context, ProFeature.taskArchive),
-                ),
-              ],
-            ),
-          )
-        else if (archived.isEmpty)
+        if (archived.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 44),
             child: Text(
@@ -122,6 +98,8 @@ class TaskArchiveScreen extends StatelessWidget {
                 ..hideCurrentSnackBar()
                 ..showSnackBar(
                   SnackBar(
+                    persist: false,
+                    duration: TideMotion.snackHold,
                     content: Text('Task deleted.', style: TideType.label),
                     action: SnackBarAction(
                       label: 'Undo',

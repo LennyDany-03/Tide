@@ -54,11 +54,10 @@ class _SheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
     return Container(
       constraints: BoxConstraints(
         maxWidth: 520,
-        maxHeight: media.size.height * 0.85,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
       ),
       decoration: BoxDecoration(
         color: TideColors.shoal,
@@ -98,7 +97,7 @@ class _SheetFrame extends StatelessWidget {
                   12,
                   4,
                   12,
-                  14 + media.padding.bottom,
+                  14 + MediaQuery.paddingOf(context).bottom,
                 ),
                 child: child,
               ),
@@ -119,6 +118,7 @@ class TaskSheetOption extends StatelessWidget {
     required this.onTap,
     this.detail,
     this.selected = false,
+    this.destructive = false,
     this.trailing,
   });
 
@@ -126,11 +126,20 @@ class TaskSheetOption extends StatelessWidget {
   final String label;
   final String? detail;
   final bool selected;
+
+  /// Coral words and mark, for the one choice that removes something.
+  final bool destructive;
+
   final Widget? trailing;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final ink = destructive
+        ? TideColors.coral
+        : selected
+        ? TideColors.lantern
+        : TideColors.bone;
     return PressScale(
       onTap: onTap,
       scale: 0.985,
@@ -151,25 +160,16 @@ class TaskSheetOption extends StatelessWidget {
               height: 34,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: selected
-                    ? TideColors.lantern.withValues(alpha: 0.16)
+                color: selected || destructive
+                    ? ink.withValues(alpha: 0.14)
                     : TideColors.bone.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(
-                icon,
-                size: 18,
-                color: selected ? TideColors.lantern : TideColors.bone,
-              ),
+              child: Icon(icon, size: 18, color: ink),
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Text(
-                label,
-                style: TideType.label.copyWith(
-                  color: selected ? TideColors.lantern : TideColors.bone,
-                ),
-              ),
+              child: Text(label, style: TideType.label.copyWith(color: ink)),
             ),
             if (detail != null) Text(detail!, style: TideType.labelMuted),
             if (trailing != null) ...[const SizedBox(width: 8), trailing!],

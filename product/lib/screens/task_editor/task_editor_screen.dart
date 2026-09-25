@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../config/app_constants.dart';
-import '../../config/pro_features.dart';
 import '../../config/task_copy.dart';
+import '../../services/models/reminder_options.dart';
+import '../../services/reminders/reminder_scope.dart';
 import '../../services/tasks/task.dart';
 import '../../services/tasks/task_scope.dart';
+import '../../services/tasks/task_store.dart' show TaskCompletion;
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_elevation.dart';
+import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/pro_lock.dart';
 import '../../widgets/press_scale.dart';
 import '../../widgets/tide_button.dart';
 import '../tasks/widgets/due_date_sheet.dart';
@@ -108,8 +109,6 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     );
   }
 
-  bool _locked(ProFeature feature) => TaskScope.read(context).locked(feature);
-
   /// Writes the draft, once. Every way out of the screen comes through here.
   void _save() {
     if (_settled) return;
@@ -120,33 +119,77 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
 
   void _done() => context.pop();
 
-  void _complete() {
+  /// Completes the task, or reopens a finished one.
+  ///
+  /// [lastStep] is set when ticking that step is what finished the task.
+  /// Undo then takes the tick back as well — otherwise it would return a
+  /// task with every step done and nothing left to finish it with.
+  void _complete({String? lastStep}) {
     final store = TaskScope.read(context);
     final messenger = ScaffoldMessenger.of(context);
-    _save();
     final wasDone = _original!.isCompleted;
-    final completion = store.toggleComplete(widget.taskId);
+    _save();
+    // Unticking a step on a finished task already reopened it on save;
+    // toggling again would try to finish it straight back.
+    final saved = store.byId(widget.taskId);
+    final completion = saved != null && saved.isCompleted == wasDone
+        ? store.toggleComplete(widget.taskId)
+        : null;
+    final undo = completion == null
+        ? null
+        : lastStep == null
+        ? completion
+        : TaskCompletion(
+            before: completion.before.copyWith(
+              subtasks: [
+                for (final s in completion.before.subtasks)
+                  s.id == lastStep ? s.copyWith(isCompleted: false) : s,
+              ],
+            ),
+            spawnedId: completion.spawnedId,
+          );
     context.pop();
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          persist: false,
+          duration: TideMotion.snackHold,
           content: Text(
             wasDone
                 ? 'Moved back to your list.'
+                : lastStep != null
+                ? 'Last step done. Task complete.'
                 : completion?.spawnedId != null
                 ? 'Completed. The next one is on your list.'
                 : 'Completed.',
             style: TideType.label,
           ),
-          action: completion == null
+          action: undo == null
               ? null
               : SnackBarAction(
                   label: 'Undo',
-                  onPressed: () => store.undoCompletion(completion),
+                  onPressed: () => store.undoCompletion(undo),
                 ),
         ),
       );
+  }
+
+  /// Ticks a step, or unticks it. Ticking the last open step finishes the
+  /// task — the steps are what the task is made of, so once they are all
+  /// done there is nothing left to finish.
+  void _toggleStep(Subtask step) {
+    setState(() {
+      _subtasks = [
+        for (final s in _subtasks)
+          s.id == step.id ? s.copyWith(isCompleted: !s.isCompleted) : s,
+      ];
+    });
+    final finished =
+        !step.isCompleted &&
+        !_original!.isCompleted &&
+        _subtasks.every((s) => s.isCompleted);
+    if (finished) _complete(lastStep: step.id);
   }
 
   void _delete() {
@@ -160,6 +203,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
+          persist: false,
+          duration: TideMotion.snackHold,
           content: Text('Task deleted.', style: TideType.label),
           action: SnackBarAction(
             label: 'Undo',
@@ -183,9 +228,6 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       context,
       current: _recurrence,
       months: _months,
-      customLocked:
-          _locked(ProFeature.taskCustomRepeat) &&
-          _original?.recurrence != TaskRecurrence.custom,
     );
     if (choice == null || !mounted) return;
     setState(() {
@@ -194,17 +236,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     });
   }
 
-  bool get _reminderLocked =>
-      _locked(ProFeature.taskReminders) &&
-      _reminders.length >= AppConstants.freeTaskReminders &&
-      _reminders.length >= (_original?.reminders.length ?? 0);
-
   Future<void> _addReminder() async {
     FocusScope.of(context).unfocus();
-    if (_reminderLocked) {
-      askForPro(context, ProFeature.taskReminders);
-      return;
-    }
     final store = TaskScope.read(context);
     final at = await showReminderSheet(context, due: _due);
     if (at == null || !mounted) return;
@@ -255,9 +288,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       );
     }
 
-    final media = MediaQuery.of(context);
-    final bottom = media.viewInsets.bottom > 0 ? 0.0 : media.padding.bottom;
     final done = original.isCompleted;
+    final stepsLeft = _subtasks.where((s) => !s.isCompleted).length;
 
     return PopScope(
       onPopInvokedWithResult: (didPop, _) {
@@ -331,19 +363,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                             ? 'Add a reminder'
                             : 'Add another',
                         muted: true,
-                        badge: _reminderLocked,
                         onTap: _addReminder,
                       ),
                     ],
                   ),
-                  if (_reminderLocked)
-                    const _ProFootnote(ProFeature.taskReminders)
-                  else if (_reminders.isNotEmpty &&
-                      !_locked(ProFeature.taskReminders))
-                    _Footnote(
-                      'Snooze ${AppConstants.taskSnoozeMinutes} minutes from '
-                      'the notification.',
-                    ),
+                  if (_reminders.isNotEmpty) _Footnote(_reminderNote(context)),
                   const SizedBox(height: 22),
 
                   _GroupLabel(
@@ -366,28 +390,47 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                   ),
                   const SizedBox(height: 22),
 
-                  _GroupLabel('Tags', badge: _locked(ProFeature.taskTags)),
+                  const _GroupLabel('Tags'),
                   _tagsBlock(),
                 ],
               ),
             ),
             Container(
-              padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + bottom),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
               decoration: BoxDecoration(
                 color: TideColors.deepWater,
                 border: Border(top: BorderSide(color: TideColors.hairline)),
               ),
-              child: TideButton(
-                label: done ? 'Mark as not done' : 'Mark as complete',
-                variant: done
-                    ? TideButtonVariant.secondary
-                    : TideButtonVariant.primary,
-                icon: Icon(
-                  done ? Icons.undo_rounded : Icons.check_rounded,
-                  size: 19,
-                  color: done ? TideColors.bone : TideColors.onLantern,
+              // Clear of the gesture bar, which the keyboard covers when it
+              // is up. Only this reads the inset: the whole editor reading
+              // `MediaQuery.of` rebuilt on every frame of the keyboard's slide.
+              child: SafeArea(
+                top: false,
+                left: false,
+                right: false,
+                child: TideButton(
+                  label: done
+                      ? 'Mark as not done'
+                      : stepsLeft > 0
+                      ? 'Finish ${TaskCopy.steps(stepsLeft)} first'
+                      : 'Mark as complete',
+                  variant: done || stepsLeft > 0
+                      ? TideButtonVariant.secondary
+                      : TideButtonVariant.primary,
+                  icon: Icon(
+                    done
+                        ? Icons.undo_rounded
+                        : stepsLeft > 0
+                        ? Icons.checklist_rounded
+                        : Icons.check_rounded,
+                    size: 19,
+                    color: done || stepsLeft > 0
+                        ? TideColors.bone
+                        : TideColors.onLantern,
+                  ),
+                  // The task finishes with its last step, not before it.
+                  onPressed: !done && stepsLeft > 0 ? null : _complete,
                 ),
-                onPressed: _complete,
               ),
             ),
           ],
@@ -406,14 +449,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
             button: true,
             label: step.title,
             child: PressScale(
-              onTap: () => setState(() {
-                _subtasks = [
-                  for (final s in _subtasks)
-                    s.id == step.id
-                        ? s.copyWith(isCompleted: !s.isCompleted)
-                        : s,
-                ];
-              }),
+              onTap: () => _toggleStep(step),
               child: Padding(
                 padding: const EdgeInsets.all(6),
                 child: Container(
@@ -469,7 +505,6 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
   }
 
   Widget _tagsBlock() {
-    final locked = _locked(ProFeature.taskTags);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -481,7 +516,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               for (final tag in _tags)
                 TagChip(
                   label: '#$tag',
-                  selected: !locked,
+                  selected: true,
                   onTap: null,
                   onRemove: () =>
                       setState(() => _tags = [..._tags]..remove(tag)),
@@ -492,24 +527,14 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         ],
         _Group(
           children: [
-            if (locked)
-              _Row(
-                icon: Icons.sell_outlined,
-                label: 'Add a tag',
-                muted: true,
-                badge: true,
-                onTap: () => askForPro(context, ProFeature.taskTags),
-              )
-            else
-              _InputRow(
-                controller: _tagInput,
-                icon: Icons.sell_outlined,
-                hint: 'Add a tag',
-                onSubmitted: _addTag,
-              ),
+            _InputRow(
+              controller: _tagInput,
+              icon: Icons.sell_outlined,
+              hint: 'Add a tag',
+              onSubmitted: _addTag,
+            ),
           ],
         ),
-        if (locked) const _ProFootnote(ProFeature.taskTags),
       ],
     );
   }
@@ -529,7 +554,7 @@ class _Header extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         12,
-        MediaQuery.paddingOf(context).top + 8,
+        MediaQuery.viewPaddingOf(context).top + 8,
         16,
         8,
       ),
@@ -681,11 +706,10 @@ class _TitleBlock extends StatelessWidget {
 }
 
 class _GroupLabel extends StatelessWidget {
-  const _GroupLabel(this.text, {this.trailing, this.badge = false});
+  const _GroupLabel(this.text, {this.trailing});
 
   final String text;
   final String? trailing;
-  final bool badge;
 
   @override
   Widget build(BuildContext context) {
@@ -694,10 +718,6 @@ class _GroupLabel extends StatelessWidget {
       child: Row(
         children: [
           Text(text, style: TideType.sectionHeader),
-          if (badge) ...[
-            const SizedBox(width: 8),
-            const ProBadge(compact: true),
-          ],
           const Spacer(),
           if (trailing != null) Text(trailing!, style: TideType.labelMuted),
         ],
@@ -748,7 +768,6 @@ class _Row extends StatelessWidget {
     this.onClear,
     this.active = false,
     this.muted = false,
-    this.badge = false,
   });
 
   final IconData icon;
@@ -758,7 +777,6 @@ class _Row extends StatelessWidget {
   final VoidCallback? onClear;
   final bool active;
   final bool muted;
-  final bool badge;
 
   @override
   Widget build(BuildContext context) {
@@ -793,10 +811,6 @@ class _Row extends StatelessWidget {
                 ),
               ),
             ),
-            if (badge) ...[
-              const ProBadge(compact: true),
-              const SizedBox(width: 8),
-            ],
             if (value != null)
               Flexible(
                 child: Text(
@@ -906,6 +920,23 @@ class _InputRow extends StatelessWidget {
   }
 }
 
+/// How this to-do's reminders will arrive. To-dos follow the defaults in
+/// Settings → Reminders rather than carrying their own, so the editor says
+/// what those are instead of offering controls it does not have.
+String _reminderNote(BuildContext context) {
+  final defaults =
+      ReminderScope.maybeOf(context)?.settings.taskDefaults ??
+      ReminderOptions.taskDefaults;
+  final arrives = defaults.style == AlarmStyle.call
+      ? 'Rings as the Lighthouse'
+      : 'Arrives as a notification';
+  final lead = defaults.leadMinutes > 0
+      ? ', with a heads-up ${defaults.leadMinutes} min before'
+      : '';
+  return '$arrives$lead. Snooze ${defaults.snoozeMinutes} min. '
+      'Change it in Settings → Reminders.';
+}
+
 class _Footnote extends StatelessWidget {
   const _Footnote(this.text);
 
@@ -916,20 +947,6 @@ class _Footnote extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(6, 8, 6, 0),
       child: Text(text, style: TideType.labelMuted.copyWith(fontSize: 12.5)),
-    );
-  }
-}
-
-class _ProFootnote extends StatelessWidget {
-  const _ProFootnote(this.feature);
-
-  final ProFeature feature;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 8, 6, 0),
-      child: ProHint(feature: feature),
     );
   }
 }

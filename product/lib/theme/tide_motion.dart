@@ -55,9 +55,29 @@ abstract final class TideMotion {
   static const double tabSlide = 4;
   static const Curve tabCurve = Curves.easeOutCubic;
 
-  /// The sliding pill under the active tab / inside a segmented control.
+  /// The sliding pill inside a segmented control.
   static const Duration pillSlide = Duration(milliseconds: 280);
   static const Curve pillCurve = Curves.easeOutCubic;
+
+  /// The pool of water behind the selected tab, travelling to a new tab.
+  ///
+  /// Its two edges run on different clocks. The leading edge sets off at
+  /// once and lands early; the trailing edge waits a beat and catches up —
+  /// so the pool stretches in flight and gathers itself on arrival, the way
+  /// a drop runs down glass. One rigid capsule sliding across reads as a
+  /// part of the bar moving; a stretch reads as water.
+  static const Duration tabTide = Duration(milliseconds: 520);
+  static const Curve tabLead = Interval(0, 0.66, curve: Curves.easeOutCubic);
+  static const Curve tabTrail = Interval(0.1, 1, curve: Curves.easeOutQuart);
+
+  /// The furthest the pool's two edges may drift apart, in tabs. Without a
+  /// cap the stretch grows with the distance, and a jump from the last tab
+  /// to the first drew a bar across three of them: a drop has a length.
+  static const double tabStretch = 1.1;
+
+  /// The selected icon's small lift, timed to the pool arriving under it
+  /// rather than to the tap — the icon answers the water, not the finger.
+  static const Curve tabPop = Interval(0.4, 1, curve: Curves.easeOut);
 
   /// The duration dial following a thumb. Short enough that the arc never
   /// feels towed behind the finger; long enough to smooth a touch that
@@ -76,6 +96,16 @@ abstract final class TideMotion {
   static const Duration sheetOut = Duration(milliseconds: 260);
   static const Curve sheetCurve = Curves.easeOutCubic;
 
+  /// A drawer that opens with the keyboard — the new-task drawer.
+  ///
+  /// Shorter than [sheetIn] on purpose: the keyboard rises at the same time
+  /// and carries the drawer up with it, and a 380ms slide still decelerating
+  /// after the keyboard had landed read as two motions fighting — lag, to
+  /// the eye, even at a steady frame rate. Android's keyboard takes roughly
+  /// this long, so the two arrive together.
+  static const Duration drawerIn = Duration(milliseconds: 280);
+  static const Curve drawerCurve = Curves.easeOutQuart;
+
   /// The FAB morphing into a sheet header, and the onboarding ring morphing
   /// into Home's ring.
   static const Duration morph = Duration(milliseconds: 460);
@@ -84,7 +114,12 @@ abstract final class TideMotion {
   // --- Gestures ---------------------------------------------------------
 
   /// Fraction of card width a swipe must cross to commit.
-  static const double swipeThreshold = 0.4;
+  ///
+  /// Shared by habit and task cards. It was 0.4 on habits and 0.32 on
+  /// tasks, and the task swipe was the one that felt right: 0.4 of a card
+  /// is most of a thumb's comfortable reach, so a habit swipe was often a
+  /// stretch that sprang back.
+  static const double swipeThreshold = 0.32;
 
   /// The speed, in pixels per second, at which a horizontal drag stops being
   /// an action on a card and becomes a page thrown at the tab bar.
@@ -132,6 +167,15 @@ abstract final class TideMotion {
   static const Duration holdStep = Duration(milliseconds: 260);
 
   // --- Feedback ---------------------------------------------------------
+
+  /// How long a snackbar stands before it leaves by itself.
+  ///
+  /// Every snackbar passes this with `persist: false`. Since Flutter 3.29 a
+  /// snackbar that carries an action — every Undo in the app — defaults to
+  /// `persist: true` and waits for that action to be tapped, so "Task
+  /// deleted. Undo" sat over the tab bar until you undid something you
+  /// meant to do.
+  static const Duration snackHold = Duration(seconds: 4);
 
   /// A single habit's completion ripple.
   static const Duration ripple = Duration(milliseconds: 620);
@@ -259,6 +303,76 @@ abstract final class TideMotion {
   /// seen complete rather than only ever in motion.
   static const Duration codeAcceptedHold = Duration(milliseconds: 650);
 
+  // --- Reminders --------------------------------------------------------
+
+  /// A call arriving: the screen comes up out of black while the water rises
+  /// to where it rests.
+  static const Duration callEntry = Duration(milliseconds: 800);
+  static const Curve callEntryCurve = Curves.easeOut;
+
+  /// One bob of the habit orb, up and back. The phone's vibration pulses on
+  /// the same period (`TideCallService.kt`), so the buzz in the hand and the
+  /// orb on the screen keep one rhythm rather than two.
+  static const Duration callBob = Duration(seconds: 3);
+
+  /// One cycle of the call's water. Slow: this is a tide coming in, and a
+  /// quick chop reads as alarm, which is the one thing it must not.
+  static const Duration callSwell = Duration(seconds: 7);
+
+  /// The water surging to the top when a habit is ridden in.
+  static const Duration callSurge = Duration(milliseconds: 500);
+  static const Curve callSurgeCurve = Curves.easeOutCubic;
+
+  /// The water draining away on a snooze.
+  static const Duration callDrain = Duration(milliseconds: 400);
+  static const Curve callDrainCurve = Curves.easeInCubic;
+
+  /// How long an answered call stays up, saying what happened, before it
+  /// closes — long enough to read "Streak: 24 days", no longer.
+  static const Duration callFarewell = Duration(milliseconds: 1500);
+
+  /// How far up the screen the ride must be carried to count, as a fraction
+  /// of the way from resting water to the top. Past this the water is
+  /// visibly winning, and letting go finishes it.
+  static const double rideThreshold = 0.6;
+
+  /// One pass of the lighthouse beam across the screen and round behind the
+  /// tower. Real lights turn in about this long; any faster reads as a siren.
+  static const Duration beamSweep = Duration(milliseconds: 6400);
+
+  /// The beam swinging onto the slip and holding there once it is docked.
+  static const Duration beamLock = Duration(milliseconds: 650);
+  static const Curve beamLockCurve = Curves.easeOutCubic;
+
+  /// How far the dock slider's knob must travel to dock, as a fraction of
+  /// its track. Further than a card swipe on purpose: this one is answered
+  /// half-awake, and should not go off on a brush.
+  static const double dockThreshold = 0.86;
+
+  /// One run of the gleam through "Slide to dock", toward the dock. Slow
+  /// enough to read as light moving over the words, not as the words
+  /// flashing.
+  static const Duration dockShimmer = Duration(milliseconds: 2800);
+
+  /// The Lighthouse's pieces coming up out of the night over [callEntry],
+  /// each a beat behind the last — the clock, the slip, then the controls —
+  /// so the eye lands on the time, then the to-do, then what to do about it.
+  static const Curve lighthouseClockIn = Interval(
+    0.1,
+    0.7,
+    curve: Curves.easeOutCubic,
+  );
+  static const Curve lighthouseSlipIn = Interval(
+    0.2,
+    0.85,
+    curve: Curves.easeOutCubic,
+  );
+  static const Curve lighthouseControlsIn = Interval(
+    0.38,
+    1,
+    curve: Curves.easeOutCubic,
+  );
+
   // --- Account deleted --------------------------------------------------
 
   /// The farewell after an account is deleted: the ring closing, the tick
@@ -268,49 +382,4 @@ abstract final class TideMotion {
   /// moving on by itself — it is the last thing the app says to the account,
   /// and it should not leave before it has been read.
   static const Duration farewell = Duration(milliseconds: 1700);
-
-  // --- Tide Pro ---------------------------------------------------------
-
-  /// The whole welcome sequence after a payment: the crown of light, the mark,
-  /// the ticket assembling, the sheen, the features arriving, the button.
-  ///
-  /// The longest single animation in the app, and the rarest — most people see
-  /// it once. [UnlockCelebration] runs 2.3s for something that happens a
-  /// handful of times a year; this happens once and hands over an object, so
-  /// it is allowed longer. It is also the only long one that is skippable,
-  /// which is what makes the length safe: nobody is held in it.
-  static const Duration proWelcome = Duration(milliseconds: 4200);
-
-  /// Skipping it. Not instant — a sequence that snaps to its end reads as a
-  /// glitch rather than as a fast-forward.
-  static const Duration proSkip = Duration(milliseconds: 420);
-
-  /// One pass of light across the pass. Replayed on tap, never looped: a foil
-  /// that keeps glinting turns a rare object into an idle animation.
-  static const Duration proSheen = Duration(milliseconds: 900);
-  static const Curve proSheenCurve = Curves.easeInOutCubic;
-
-  /// A plan changing state on the billing card: the cancelled notice opening
-  /// under the plan, and the action below it turning from Cancel into Resume.
-  ///
-  /// **The first [planChangeLeadIn] of the forward pass is deliberately
-  /// still.** Cancelling is a hold inside a dialog, and that dialog takes
-  /// [tabSwitch] plus a frame to leave. Without the wait, every structural
-  /// beat — the note opening, the mark drawing down its edge — plays out
-  /// behind the scrim, and the screen is simply *different* when it clears
-  /// rather than having changed in front of somebody. A plan that arrives on
-  /// a realtime broadcast instead spends that lead-in doing nothing, which
-  /// costs a fifth of a second nobody is watching.
-  ///
-  /// Each beat eases inside its own window rather than being a slice of one
-  /// eased whole: an easeOutCubic sliced at 62% has spent 73% of its travel
-  /// in the first quarter of the time, which is how a 310ms opening became a
-  /// 150ms one.
-  static const Duration planChange = Duration(milliseconds: 780);
-  static const Duration planChangeLeadIn = Duration(milliseconds: 220);
-
-  /// Closing it again. Resuming is a tap on the card itself with nothing
-  /// covering it, so there is nothing to wait for and the pass runs shorter.
-  static const Duration planChangeBack = Duration(milliseconds: 420);
-  static const Curve planChangeCurve = Curves.easeOutCubic;
 }

@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../services/haptics.dart';
 import '../../../services/models/habit.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
@@ -161,7 +162,7 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
   }
 
   void _undo() {
-    HapticFeedback.selectionClick();
+    TideHaptics.selectionClick();
     setState(() {
       _minutes = 0;
       if (_typing) _closeEntry();
@@ -175,7 +176,7 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
 
   void _toggleKeypad() {
     if (_locked) return;
-    HapticFeedback.selectionClick();
+    TideHaptics.selectionClick();
     setState(() {
       if (_typing) {
         _closeEntry();
@@ -199,14 +200,14 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
     // A leading zero changes nothing, and would eat one of the four digits.
     if (entry.isEmpty && digit == '0') return;
     if (entry.length >= DurationLogSheet.maxDigits) return;
-    HapticFeedback.selectionClick();
+    TideHaptics.selectionClick();
     _applyEntry(entry + digit);
   }
 
   void _deleteDigit() {
     final entry = _entry;
     if (entry == null || entry.isEmpty) return;
-    HapticFeedback.selectionClick();
+    TideHaptics.selectionClick();
     _applyEntry(entry.substring(0, entry.length - 1));
   }
 
@@ -266,9 +267,9 @@ class _DurationLogSheetState extends State<DurationLogSheet> {
     // "I did it", and it should not cost a drag.
     final total = _changed ? _minutes : _target;
     if (total >= _target) {
-      HapticFeedback.heavyImpact();
+      TideHaptics.heavyImpact();
     } else {
-      HapticFeedback.mediumImpact();
+      TideHaptics.mediumImpact();
     }
     widget.onLog(total);
     // Setting the time is the whole job. Once it is written there is nothing
@@ -501,7 +502,7 @@ class _TimeDialState extends State<_TimeDial> {
         (minutes ~/ every != before ~/ every ||
             minutes == floor ||
             minutes == target)) {
-      HapticFeedback.selectionClick();
+      TideHaptics.selectionClick();
     }
 
     setState(() => _thumb = fraction);

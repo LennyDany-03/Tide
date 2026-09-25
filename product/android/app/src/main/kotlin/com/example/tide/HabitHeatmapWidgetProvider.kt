@@ -14,27 +14,9 @@ class HabitHeatmapWidgetProvider : TideHomeWidgetProvider() {
         widgetData: SharedPreferences,
     ) {
         appWidgetIds.forEach { widgetId ->
-            if (WidgetUi.instanceLocked(
-                    context,
-                    HabitHeatmapWidgetProvider::class.java,
-                    widgetId,
-                    WidgetUi.isPro(widgetData),
-                )
-            ) {
-                appWidgetManager.updateAppWidget(
-                    widgetId,
-                    LockedWidgetViews.build(
-                        context,
-                        R.string.widget_heatmap_title,
-                        WidgetUi.upgradeUri().toString(),
-                    ),
-                )
-                return@forEach
-            }
-
             val header = WidgetPayloadReader.heatmapHeader(widgetData, widgetId)
             val configured = header?.configured == true
-            val views = RemoteViews(context.packageName, R.layout.widget_habit_heatmap)
+            val views = RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_habit_heatmap))
 
             // A 4×1 widget has no room for the name: the grid gets it all.
             val size = WidgetUi.size(context, appWidgetManager, widgetId, 250, 140)
@@ -54,7 +36,7 @@ class HabitHeatmapWidgetProvider : TideHomeWidgetProvider() {
                 if (configured) View.VISIBLE else View.GONE,
             )
             if (configured) {
-                views.setImageViewResource(R.id.heatmap_flame, WidgetUi.flame(header.streak))
+                views.setImageViewResource(R.id.heatmap_flame, WidgetUi.flame(context, header.streak))
             }
 
             val bitmap = if (configured) {

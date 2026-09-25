@@ -3,22 +3,15 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import '../config/app_constants.dart';
 import '../config/milestone_catalog.dart';
-import '../config/plan_catalog.dart';
-import '../config/pro_features.dart';
-import '../theme/tide_colors.dart';
 import '../theme/tide_palette.dart';
 import '../theme/tide_theme.dart';
 import 'auth/auth_service.dart';
 import 'auth/demo_auth_service.dart';
-import 'billing/billing_service.dart';
-import 'billing/demo_billing_service.dart';
-import 'billing/entitlement.dart';
-import 'billing/payment_record.dart';
 import 'device_flags.dart';
 import 'habits/demo_habit_repository.dart';
 import 'habits/habit_repository.dart';
+import 'haptics.dart';
 import 'home_widget/home_widget_bridge.dart';
 import 'models/celebration_cue.dart';
 import 'models/day_summary.dart';
@@ -39,28 +32,34 @@ import 'tide_scope.dart';
 /// Who is signed in comes from [auth] and survives a restart until the
 /// person logs out; whether this device has seen onboarding, whether an
 /// account has had its tour, and whether a sign-up is waiting on its emailed
-/// code come from [flags]. Preferences and the palette are still per session.
+/// code come from [flags], as does the palette. Other preferences are still
+/// per session.
 class TideStore extends ChangeNotifier {
   TideStore({
     AuthService? auth,
     DeviceFlags? flags,
     HabitRepository? repository,
-    BillingService? billing,
     this.widgetBridge,
   }) : auth = auth ?? DemoAuthService(),
        flags = flags ?? DeviceFlags.memory(),
-       repository = repository ?? DemoHabitRepository(),
-       billing = billing ?? DemoBillingService() {
+       repository = repository ?? DemoHabitRepository() {
     final openAccount = this.auth.currentAccount?.id;
     _habits = this.repository.cached(openAccount);
-    // Read before the first frame for the same reason the habits are: an
-    // account that paid for Pro must not spend the first second of every
-    // launch being told it has five habits and one palette.
-    _entitlement = this.billing.cached(openAccount);
     _acknowledgedMilestones = _unlockedIds().toSet();
     firstRun = !this.flags.onboardingSeen;
+    final savedPalette = this.flags.paletteId;
+    if (savedPalette != null) palette = TidePalettes.byId(savedPalette);
+    // Both settings are device choices, remembered from the last time the
+    // switch was thrown. The haptics gate has to be live before a single
+    // knock fires, and the weekly recap has to know its promise before the
+    // first habit sync pushes a widget.
+    haptics = this.flags.haptics;
+    weeklyRecap = this.flags.weeklyRecap;
+    TideHaptics.enabled = haptics;
+    // Once per launch as well as on every change, so widgets placed by a
+    // build from before they followed the palette catch up without a tap.
+    unawaited(widgetBridge?.setPalette(palette.id));
     _remoteChanges = this.repository.changes.listen(_applyRemote);
-    _planChanges = this.billing.changes.listen(_applyEntitlement);
     _restore(this.auth.currentAccount);
     _accountChanges = this.auth.accountChanges.listen(
       _onAccountChanged,
@@ -77,10 +76,6 @@ class TideStore extends ChangeNotifier {
   /// Where habits are kept: Supabase in a real build, memory in tests.
   final HabitRepository repository;
 
-  /// Who says whether this account is Pro. Never this class: [billing] relays
-  /// the server's answer and nothing here can overrule it.
-  final BillingService billing;
-
   /// Pushes habits to the Android home-screen widgets. Null on every
   /// non-mobile build and in every existing test — a no-op, not a
   /// rearchitecture of how those construct a [TideStore].
@@ -88,7 +83,6 @@ class TideStore extends ChangeNotifier {
 
   late final StreamSubscription<TideAccount?> _accountChanges;
   late final StreamSubscription<HabitChange> _remoteChanges;
-  late final StreamSubscription<Entitlement> _planChanges;
 
   List<Habit> _habits = const [];
   late Set<String> _acknowledgedMilestones;
@@ -166,148 +160,25 @@ class TideStore extends ChangeNotifier {
 
   /// The palette the whole app is drawn in.
   ///
-  /// Session-only: the app opens on [TidePalettes.standard] (Midnight) every
-  /// launch.
+  /// Remembered on this device by [flags], so the app reopens in the palette
+  /// it was closed in; [TidePalettes.standard] (Midnight) until one is picked.
+  /// An id from a newer build that this one does not ship falls back to the
+  /// standard palette.
   TidePalette palette = TidePalettes.standard;
 
-  bool dailyReminders = true;
-  bool quietHours = false;
   bool weeklyRecap = false;
   bool haptics = true;
 
-  /// Added to the computed best streak by the milestones screen's
-  /// "simulate next unlock" control, so the celebration can be seen without
-  /// waiting sixty days for it.
-  int _simulatedBonus = 0;
+  // --- History window -----------------------------------------------------
 
-  // --- Tide Pro -----------------------------------------------------------
-  //
-  // `isPro` used to be a bool anybody could set, and the upgrade sheet set it
-  // after a fake 700ms wait. It is a read of the server's answer now, and
-  // there is deliberately no setter: every gate below asks the same question,
-  // so there is exactly one thing to get right and exactly one thing that can
-  // be wrong.
-
-  late Entitlement _entitlement;
-
-  /// Which plan this account is on, until when, and whether that is still
-  /// running. Drawn by Settings and the paywall.
-  Entitlement get entitlement => _entitlement;
-
-  /// The whole question, asked the same way everywhere.
+  /// Whether [date] is a day this app will draw. Days in the future are
+  /// nobody's to see.
   ///
-  /// Computed from the period against the clock rather than stored, so a plan
-  /// that ran out while the app was closed is not Pro on the next launch even
-  /// if nothing has reached the network yet.
-  bool get isPro => _entitlement.isPro;
-
-  /// Whether [feature] is out of reach on this plan.
-  ///
-  /// The one call every gate makes. A screen that wants to know whether to
-  /// draw a lock asks this; it does not ask `isPro` and decide for itself,
-  /// because that is how a paywall and an app come to disagree.
-  bool locked(ProFeature feature) => !isPro;
-
-  bool allows(ProFeature feature) => !locked(feature);
-
-  /// What a locked control says when it is tapped.
-  String lockedBlurb(ProFeature feature) => ProFeatures.of(feature).blurb;
-
-  /// The earliest day a free account may look at, or null on Pro.
-  ///
-  /// History is not deleted and it is not stopped from syncing — the days are
-  /// all there, and they all come back the moment somebody upgrades. What the
-  /// free plan gets is a window onto them.
-  DateTime? get historyHorizon {
-    if (allows(ProFeature.fullHistory)) return null;
-    return DateUtils.dateOnly(
-      DateTime.now().subtract(
-        const Duration(days: AppConstants.freeHistoryDays - 1),
-      ),
-    );
-  }
-
-  /// Whether [date] is inside the window this plan can see. Days in the future
-  /// are nobody's to see, on any plan.
-  bool canSee(DateTime date) {
-    final day = DateUtils.dateOnly(date);
-    if (day.isAfter(DateUtils.dateOnly(DateTime.now()))) return false;
-    final horizon = historyHorizon;
-    return horizon == null || !day.isBefore(horizon);
-  }
-
-  /// The most freezes a habit may be given on this plan.
-  int get freezeCeiling => allows(ProFeature.carryOverFreezes)
-      ? AppConstants.maxFreezeAllowance
-      : AppConstants.freeFreezeAllowance;
-
-  // --- Receipts -----------------------------------------------------------
-  //
-  // Read on demand, kept in memory, never written to the device. There is no
-  // FutureBuilder anywhere in this app and there is not one here: the billing
-  // screen reads [payments] and [receiptsStatus] synchronously in `build` and
-  // draws whatever is true this frame, exactly the way Today reads [habits]
-  // and [syncStatus]. The asynchrony is in the action, not in the widget tree.
-
-  List<PaymentRecord> _payments = const [];
-  ReceiptsStatus _receiptsStatus = ReceiptsStatus.unread;
-  Future<void>? _receiptsLoad;
-
-  /// The account's payment history, newest first. Empty until something has
-  /// asked for it.
-  List<PaymentRecord> get payments => _payments;
-
-  ReceiptsStatus get receiptsStatus => _receiptsStatus;
-
-  /// Reads the account's receipts. Never throws — the screen draws
-  /// [receiptsStatus] instead.
-  ///
-  /// The list is deliberately *not* cleared while a read is in flight, and not
-  /// cleared when one fails. A refresh that emptied the list would flash it
-  /// away on every pull, and a failed refresh would take away the receipts
-  /// somebody was in the middle of reading.
-  ///
-  /// Concurrent callers share the one request: the screen's first read and a
-  /// pull to refresh land together often enough to matter.
-  Future<void> refreshReceipts() {
-    final account = _account;
-    if (account == null) {
-      _forgetReceipts();
-      return Future<void>.value();
-    }
-    return _receiptsLoad ??= _readReceipts(
-      account.id,
-    ).whenComplete(() => _receiptsLoad = null);
-  }
-
-  Future<void> _readReceipts(String accountId) async {
-    _receiptsStatus = ReceiptsStatus.loading;
-    notifyListeners();
-    try {
-      final answer = await billing.snapshot();
-      // Signed out, or somebody else signed in, while it was on its way. Those
-      // receipts belong to an account that is no longer open.
-      if (_account?.id != accountId) return;
-      _payments = answer.payments;
-      _receiptsStatus = ReceiptsStatus.loaded;
-    } catch (error) {
-      debugPrint('Receipts not read: $error');
-      if (_account?.id != accountId) return;
-      _receiptsStatus = ReceiptsStatus.failed;
-    }
-    notifyListeners();
-  }
-
-  /// The receipt list belongs to whoever is signed in and to nobody else.
-  ///
-  /// Nothing is written to the device, so there is nothing to erase — but it
-  /// is dropped from memory the instant the account is, on both paths: the one
-  /// that signs somebody out and the one that swaps somebody in. Does not
-  /// notify; both callers already do.
-  void _forgetReceipts() {
-    _payments = const [];
-    _receiptsStatus = ReceiptsStatus.unread;
-  }
+  /// This used to also enforce a paid history horizon. Tide is free, so the
+  /// only rule left is the one that was never about a plan.
+  bool canSee(DateTime date) => !DateUtils.dateOnly(
+    date,
+  ).isAfter(DateUtils.dateOnly(DateTime.now()));
 
   // --- Reads ------------------------------------------------------------
 
@@ -344,10 +215,6 @@ class TideStore extends ChangeNotifier {
     }
     return null;
   }
-
-  bool get canAddHabit =>
-      allows(ProFeature.unlimitedHabits) ||
-      _habits.where((h) => !h.paused).length < AppConstants.freeHabitLimit;
 
   int get activeHabitCount => _habits.where((h) => !h.paused).length;
 
@@ -391,7 +258,7 @@ class TideStore extends ChangeNotifier {
   }
 
   int get allTimeBestStreak =>
-      StreakCalculator.bestStreakAcross(_habits) + _simulatedBonus;
+      StreakCalculator.bestStreakAcross(_habits);
 
   int get cleanStreak => StreakCalculator.cleanStreak(_habits);
 
@@ -425,14 +292,9 @@ class TideStore extends ChangeNotifier {
     final clean = cleanStreak;
 
     return MilestoneCatalog.all.map((milestone) {
-      // The Pro badge is not counted toward, so it has no partial state:
-      // the plan is running or it is not. Giving it a fraction would draw a
-      // progress bar toward a purchase, which is the one thing on this
-      // screen that must not look like something you are nearly at.
       final value = switch (milestone.kind) {
         MilestoneKind.streak => best,
         MilestoneKind.cleanDays => clean,
-        MilestoneKind.pro => isPro ? 1 : 0,
       };
       return MilestoneStatus(
         milestone: milestone,
@@ -464,19 +326,6 @@ class TideStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pushes the best streak far enough to cross the next locked threshold.
-  /// A demo affordance, kept because the unlock burst is the biggest moment
-  /// in the app and otherwise unreachable.
-  void simulateNextUnlock() {
-    final locked = milestones.where(
-      (m) => !m.unlocked && m.milestone.kind == MilestoneKind.streak,
-    );
-    if (locked.isEmpty) return;
-    final next = locked.first.milestone;
-    _simulatedBonus += next.threshold - allTimeBestStreak;
-    notifyListeners();
-  }
-
   // --- Mutations --------------------------------------------------------
   //
   // Each one changes the list, then hands [repository] the rows it touched.
@@ -485,7 +334,26 @@ class TideStore extends ChangeNotifier {
 
   /// Logs [amount] against [habitId] for [date], replacing whatever was
   /// there. Passing null logs the habit's full target.
-  void log(String habitId, {num? amount, DateTime? date}) {
+  ///
+  /// [celebrate] is off for a log made somewhere nobody was watching — a
+  /// reminder answered on the lock screen, applied when the app next runs.
+  /// The reward belongs to the moment it happened, and that has passed.
+  ///
+  /// Nothing (zero or less) is an unlog, not a log of zero. A count stepped
+  /// back from 1 to 0 in the log sheet used to leave a `0` entry behind,
+  /// which is a day with a row in it — something logged — that holds none
+  /// of the habit. Every reader then had to agree that a zero row means
+  /// empty; now there is only one way for a day to be empty.
+  void log(
+    String habitId, {
+    num? amount,
+    DateTime? date,
+    bool celebrate = true,
+  }) {
+    if (amount != null && amount <= 0) {
+      unlog(habitId, date: date);
+      return;
+    }
     final day = DateUtils.dateOnly(date ?? DateTime.now());
     final before = habitById(habitId);
     final wasComplete = before?.isCompleteOn(day) ?? false;
@@ -498,7 +366,7 @@ class TideStore extends ChangeNotifier {
     });
     _saveEntry(habitId, day);
 
-    _raiseCue(habitId, day: day, wasComplete: wasComplete);
+    if (celebrate) _raiseCue(habitId, day: day, wasComplete: wasComplete);
   }
 
   /// Raises a celebration cue if this log is the one that finished the
@@ -546,8 +414,9 @@ class TideStore extends ChangeNotifier {
   }
 
   /// Spends one freeze token so a missed day does not break the loop.
-  /// Returns false when the habit has no freezes left.
-  bool freeze(String habitId, {DateTime? date}) {
+  /// Returns false when the habit has no freezes left. [celebrate] as for
+  /// [log].
+  bool freeze(String habitId, {DateTime? date, bool celebrate = true}) {
     final habit = habitById(habitId);
     if (habit == null || habit.freezesRemaining <= 0) return false;
     final day = DateUtils.dateOnly(date ?? DateTime.now());
@@ -561,6 +430,7 @@ class TideStore extends ChangeNotifier {
     });
     _saveHabit(habitId);
     _saveEntry(habitId, day);
+    if (!celebrate) return true;
     _pendingHabitCue = CelebrationCue(
       habitId: habit.id,
       habitName: habit.name,
@@ -890,76 +760,6 @@ class TideStore extends ChangeNotifier {
   /// moves the app on, and nothing on screen is drawn from this.
   void acknowledgeDeletion() => _deletedEmail = null;
 
-  // --- Buying Pro ---------------------------------------------------------
-
-  /// Buys [plan]. Resolves once the server has confirmed the payment and the
-  /// gates have opened.
-  ///
-  /// Throws [BillingFailure]. Two of its problems are not failures and the
-  /// sheet draws them differently: [BillingProblem.cancelled] is somebody
-  /// closing the payment sheet, and [BillingProblem.pending] means the money
-  /// moved and the webhook has not landed — in which case the plan arrives on
-  /// its own through [billing]'s change stream, possibly a minute later,
-  /// possibly on the next launch.
-  ///
-  /// Nothing here decides anybody is Pro. The entitlement it returns came back
-  /// from the server, past a signature check.
-  Future<Entitlement> purchase(BillingPlan plan) async {
-    final next = await billing.purchase(
-      plan,
-      title: AppConstants.appName,
-      description: '${plan.title} · ${AppConstants.appName} Pro',
-      // The checkout is drawn in the palette the app is in, so the one screen
-      // Tide does not draw itself still belongs to it.
-      themeColor: TideColors.lantern.toARGB32(),
-    );
-    _applyEntitlement(next);
-    // Only if somebody has already opened the billing screen. The receipt is
-    // read back from the server rather than invented from the payment that
-    // just succeeded: a store that wrote its own rows of payment history would
-    // be the one thing this whole layer is built not to be.
-    if (_receiptsStatus != ReceiptsStatus.unread) {
-      unawaited(refreshReceipts());
-    }
-    return next;
-  }
-
-  /// Asks the server what this account is entitled to. Never throws.
-  Future<void> refreshEntitlement() async =>
-      _applyEntitlement(await billing.refresh());
-
-  /// Stops the plan renewing, and on a mandate stops the charge with it.
-  /// Every day already paid for stays: Pro runs to the end of the period
-  /// either way, which is what the screen has to say before the tap as well
-  /// as after it.
-  ///
-  /// Throws [BillingFailure] — the screen draws it. Nothing here decides
-  /// anything; the entitlement applied came back from the server.
-  Future<void> cancelPlan() async =>
-      _applyEntitlement(await billing.cancelSubscription());
-
-  /// Undo of [cancelPlan], and only on a prepaid period. A cancelled mandate
-  /// throws [BillingProblem.resubscribeNeeded]: there is nothing at Razorpay
-  /// left to resume, so the screen offers a fresh checkout instead.
-  Future<void> resumePlan() async =>
-      _applyEntitlement(await billing.resumeSubscription());
-
-  /// A plan arriving: the server's answer, a webhook granting a period while
-  /// the app was in somebody's pocket, or a refund taking one back.
-  void _applyEntitlement(Entitlement next) {
-    if (next == _entitlement) return;
-    final was = _entitlement.isPro;
-    _entitlement = next;
-
-    // A plan that lapsed does not take a preference with it silently — the
-    // recap switch turns itself off rather than staying on and doing nothing,
-    // which is the version of this that generates support mail.
-    if (was && !next.isPro && weeklyRecap) weeklyRecap = false;
-
-    notifyListeners();
-    _syncWidgets();
-  }
-
   void finishTour() {
     if (!_tourPending) return;
     _tourPending = false;
@@ -988,7 +788,6 @@ class TideStore extends ChangeNotifier {
       ..markOnboardingSeen()
       ..setPendingVerification(null);
     repository.open(account.id);
-    billing.open(account.id);
     unawaited(_armTourIfOwed(account));
   }
 
@@ -1051,15 +850,7 @@ class TideStore extends ChangeNotifier {
     // as broken. A returning one opens on whatever this device kept of it,
     // and the server's copy replaces that as soon as it arrives.
     repository.open(next.id);
-    // Not conditional on [isNew] the way the habits are. A brand-new account
-    // genuinely has no history, but it can perfectly well have a plan — the
-    // same person reinstalling, or signing in on a second phone — and opening
-    // that account on the free plan would take away something they paid for.
-    billing.open(next.id);
-    _entitlement = billing.cached(next.id);
-    _forgetReceipts();
     _habits = isNew ? const [] : repository.cached(next.id);
-    _simulatedBonus = 0;
     _pendingHabitCue = null;
     _acknowledgedMilestones = isNew ? {} : _unlockedIds().toSet();
     repository.remember(_habits);
@@ -1090,11 +881,6 @@ class TideStore extends ChangeNotifier {
     // The list itself stays until the next account arrives, so the screen on
     // its way out does not flash empty. The device's copy goes now.
     unawaited(repository.close(forget: true));
-    // The plan goes immediately, list and all: the next person to pick up this
-    // phone must not find somebody else's Pro.
-    _entitlement = Entitlement.free;
-    _forgetReceipts();
-    unawaited(billing.close(forget: true));
     _session.value = null;
     notifyListeners();
     _syncWidgets();
@@ -1117,53 +903,40 @@ class TideStore extends ChangeNotifier {
   /// and always null with no project behind the app.
   DateTime? get lastSynced => repository.lastSynced;
 
-  /// Pull to refresh: sends whatever is still queued, reads the account back,
-  /// and re-reads the plan. Resolves once all of it is done or has failed;
-  /// never throws.
-  ///
-  /// The plan is in here because pull to refresh is what somebody does when
-  /// the app disagrees with what they believe they paid for.
-  Future<void> sync() async {
-    await Future.wait([
-      repository.refresh(),
-      // Receipts only once somebody has actually looked at them — pull to
-      // refresh on Today is not a reason to fetch an account's payment
-      // history. The snapshot carries the entitlement too, so this is not a
-      // second round trip.
-      if (_receiptsStatus == ReceiptsStatus.unread)
-        refreshEntitlement()
-      else
-        refreshReceipts(),
-    ]);
-  }
+  /// Pull to refresh: sends whatever is still queued and reads the account
+  /// back. Resolves once that is done or has failed; never throws.
+  Future<void> sync() => repository.refresh();
 
   // --- Settings -----------------------------------------------------------
 
-  /// There is no `isPro` here any more, and that is the point: the one thing
-  /// on this screen that costs money is not a preference, and a setter for it
-  /// would be a way to become Pro without paying.
-  void setPreference({
-    bool? dailyReminders,
-    bool? quietHours,
-    bool? weeklyRecap,
-    bool? haptics,
-  }) {
-    this.dailyReminders = dailyReminders ?? this.dailyReminders;
-    this.quietHours = quietHours ?? this.quietHours;
-    // Turning the recap *off* is always allowed; turning it on is the Pro
-    // half. A gate that also refused to let somebody out would be a trap.
-    if (weeklyRecap != null &&
-        (!weeklyRecap || allows(ProFeature.weeklyRecap))) {
+  /// Reminder switches — on or off, quiet hours — live in the reminder
+  /// store, which keeps them on the device; these are the rest.
+  void setPreference({bool? weeklyRecap, bool? haptics}) {
+    var changed = false;
+    if (weeklyRecap != null && weeklyRecap != this.weeklyRecap) {
       this.weeklyRecap = weeklyRecap;
+      flags.setWeeklyRecap(weeklyRecap);
+      changed = true;
     }
-    this.haptics = haptics ?? this.haptics;
+    if (haptics != null && haptics != this.haptics) {
+      this.haptics = haptics;
+      TideHaptics.enabled = haptics;
+      flags.setHaptics(haptics);
+      changed = true;
+    }
+    if (!changed) return;
     notifyListeners();
+    // The home-screen weekly recap follows the switch, so a widget already
+    // placed changes the moment the setting does — no restart, no refresh.
+    if (weeklyRecap != null) _syncWidgets();
   }
 
   /// Switches the app to [next] and repaints what is on screen in it.
   void setPalette(TidePalette next) {
     if (identical(next, palette)) return;
     palette = next;
+    flags.setPaletteId(next.id);
+    unawaited(widgetBridge?.setPalette(next.id));
     TideTheme.applyPalette(next);
     notifyListeners();
   }
@@ -1208,8 +981,8 @@ class TideStore extends ChangeNotifier {
   void _syncWidgets() => widgetBridge?.scheduleHabitSync(
     signedIn: signedIn,
     habits: _habits,
-    isPro: isPro,
     widgetHabits: flags.widgetHabits,
+    weeklyRecap: weeklyRecap,
   );
 
   /// Re-pushes the widget payload with nothing changed in the store — used
@@ -1226,8 +999,8 @@ class TideStore extends ChangeNotifier {
     await widgetBridge?.syncHabitsNow(
       signedIn: signedIn,
       habits: _habits,
-      isPro: isPro,
       widgetHabits: flags.widgetHabits,
+      weeklyRecap: weeklyRecap,
     );
   }
 
@@ -1245,9 +1018,7 @@ class TideStore extends ChangeNotifier {
   void dispose() {
     unawaited(_accountChanges.cancel());
     unawaited(_remoteChanges.cancel());
-    unawaited(_planChanges.cancel());
     unawaited(repository.close());
-    unawaited(billing.close());
     widgetBridge?.dispose();
     _session.dispose();
     super.dispose();

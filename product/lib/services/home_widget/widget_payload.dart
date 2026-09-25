@@ -44,11 +44,8 @@ abstract final class WidgetPayload {
   }
 
   /// Active habits ranked by current streak, each with its last seven days.
-  /// Carries [isPro] through — the native side draws the lock, so a cached
-  /// payload can never show a lapsed plan as unlocked.
   static Map<String, Object?> habitDashboard(
     List<Habit> habits, {
-    required bool isPro,
     DateTime? asOf,
   }) {
     final day = DateUtils.dateOnly(asOf ?? DateTime.now());
@@ -60,7 +57,6 @@ abstract final class WidgetPayload {
       ..sort((a, b) => streaks[b]!.compareTo(streaks[a]!));
     return {
       'signedIn': true,
-      'isPro': isPro,
       'best': ranked.isEmpty ? 0 : streaks[ranked.first],
       'rows': [
         for (final h in ranked.take(maxListRows))
@@ -189,7 +185,6 @@ abstract final class WidgetPayload {
   /// figures Insights shows, not a separate notion of "the recap".
   static Map<String, Object?> weeklyRecap(
     List<Habit> habits, {
-    required bool isPro,
     DateTime? asOf,
   }) {
     final today = DateUtils.dateOnly(asOf ?? DateTime.now());
@@ -206,7 +201,6 @@ abstract final class WidgetPayload {
     }
     return {
       'signedIn': true,
-      'isPro': isPro,
       'weekPercent': (StreakCalculator.weeklyRate(habits, asOf: today) * 100)
           .round(),
       'lastWeekPercent':

@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../config/app_constants.dart';
 import '../models/habit.dart';
+import '../models/reminder_options.dart';
 import '../models/tide_glyph.dart';
 
 /// How a [Habit] is written down: as rows in the tables
@@ -31,6 +34,7 @@ abstract final class HabitRows {
       'weekdays': weekdays,
       'reminder_enabled': habit.reminderEnabled,
       'reminder_time': _timeText(habit.reminderTime),
+      'reminder_options': habit.reminderOptions.toJson(),
       'freeze_allowance': habit.freezeAllowance,
       'freezes_remaining': habit.freezesRemaining,
       // Both, on purpose. `pauses` is what this build reads; `paused` stays
@@ -82,6 +86,30 @@ abstract final class HabitRows {
     };
   }
 
+  /// Where this device keeps [accountId]'s copy in `SharedPreferences`.
+  ///
+  /// Public because two readers need it: the repository, and the Tide Call
+  /// shown on the lock screen, which runs in its own isolate with no
+  /// repository and reads the copy to show today's streak rather than the
+  /// one the reminder was planned with.
+  static String cacheKey(String accountId) => 'tide.habits.$accountId';
+
+  /// The habits in a device copy written by [snapshot]. Empty for anything
+  /// unreadable — a copy is a convenience, never worth failing over.
+  static List<Habit> decodeCache(String? source) {
+    if (source == null) return const [];
+    try {
+      final rows = jsonDecode(source);
+      if (rows is! List) return const [];
+      return [
+        for (final row in rows)
+          if (row is Map) parseHabit(Map<String, dynamic>.from(row)),
+      ].nonNulls.toList();
+    } on FormatException {
+      return const [];
+    }
+  }
+
   /// A habit from a `habits` row, with its history when the row carries
   /// `entries`. Null when the row has no id or name to show.
   static Habit? parseHabit(Map<String, dynamic> row) {
@@ -117,6 +145,7 @@ abstract final class HabitRows {
       days: _weekdays(row['weekdays']),
       reminderEnabled: row['reminder_enabled'] == true,
       reminderTime: _time(row['reminder_time']),
+      reminderOptions: ReminderOptions.fromJson(row['reminder_options']),
       freezeAllowance: allowance,
       freezesRemaining: _whole(row['freezes_remaining']) ?? allowance,
       pauses: _pauses(row),
