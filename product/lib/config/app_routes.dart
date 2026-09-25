@@ -9,7 +9,6 @@ import '../screens/auth/auth_screen.dart';
 import '../screens/calendar/calendar_screen.dart';
 import '../screens/habit_detail/habit_detail_screen.dart';
 import '../screens/home/home_screen.dart';
-import '../screens/home_widgets/home_widgets_screen.dart';
 import '../screens/insights/insights_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/reminders/reminders_screen.dart';
@@ -45,11 +44,10 @@ abstract final class Routes {
   static const milestones = '/milestones';
   static const newHabit = '/habit/new';
   static const appearance = '/appearance';
-  static const homeWidgets = '/settings/widgets';
   static const reminders = '/settings/reminders';
 
-  /// A call answered inside the app: a reminder tapped on iOS, or a preview
-  /// from Settings → Reminders. Opened with a `CallRequest` as its extra.
+  /// A call answered inside the app: a reminder tapped on iOS. Opened with a
+  /// `CallRequest` as its extra.
   static const call = '/call';
   static const widgetSetupPath = '/widget-setup';
 
@@ -279,15 +277,6 @@ abstract final class AppRoutes {
             state,
             TaskEditorScreen(taskId: state.pathParameters['id']!),
           ),
-        ),
-
-        // The widget gallery. A full page rather than a contextual sheet —
-        // somewhere you go and look.
-        GoRoute(
-          path: Routes.homeWidgets,
-          parentNavigatorKey: _rootKey,
-          pageBuilder: (context, state) =>
-              _page(state, const HomeWidgetsScreen()),
         ),
 
         GoRoute(

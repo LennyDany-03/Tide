@@ -163,13 +163,6 @@ class SettingsScreen extends StatelessWidget {
                   showChevron: true,
                   onTap: () => context.push(Routes.appearance),
                 ),
-                SettingsRow(
-                  label: 'Home screen widgets',
-                  subtitle: 'Habits and to-dos, right on the home screen',
-                  icon: Icons.widgets_outlined,
-                  showChevron: true,
-                  onTap: () => context.push(Routes.homeWidgets),
-                ),
                 if (updates != null)
                   SettingsRow(
                     label: 'App updates',
