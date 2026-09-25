@@ -5,6 +5,7 @@ import '../../config/app_constants.dart';
 import '../../config/app_routes.dart';
 import '../../services/models/tide_glyph.dart';
 import '../../services/tide_scope.dart';
+import '../../services/weekly_recap.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
 import '../../theme/tide_typography.dart';
@@ -134,6 +135,15 @@ class _InsightsScreenState extends State<InsightsScreen> {
           ),
         ),
         const SizedBox(height: 30),
+
+        // The one line the Weekly recap switch promises, when it is on. The
+        // card is the sentence alone — the screen around it is the whole
+        // recap, and repeating the figures here would be telling the week
+        // twice.
+        if (store.weeklyRecap) ...[
+          _RecapCard(line: WeeklyRecapLine.forWeek(store.allHabits)),
+          const SizedBox(height: 30),
+        ],
 
         const _SectionHead(
           title: 'Eight weeks',
@@ -569,6 +579,33 @@ class _MilestoneTrack extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// The week's pattern, in one line, on one card.
+///
+/// Shown between the hero and the trend when Settings → Notification →
+/// Weekly recap is on. Bare text has no entry animation to choreograph — it
+/// simply belongs to the report's first settle rather than its sequence.
+class _RecapCard extends StatelessWidget {
+  const _RecapCard({required this.line});
+
+  final String line;
+
+  @override
+  Widget build(BuildContext context) {
+    return TideSurface(
+      color: TideColors.shelf,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('This week in one line', style: TideType.heading),
+          const SizedBox(height: 6),
+          Text(line, style: TideType.bodyMuted),
+        ],
+      ),
     );
   }
 }

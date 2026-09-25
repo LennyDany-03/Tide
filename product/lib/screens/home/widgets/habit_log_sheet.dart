@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../../services/haptics.dart';
 import '../../../services/models/habit.dart';
 import '../../../services/tide_scope.dart';
 import '../../../theme/tide_colors.dart';
@@ -158,7 +158,7 @@ class _LogSheetState extends State<_LogSheet>
     // Only reaching the target celebrates. Stepping back down to it after
     // an overshoot is a correction, not an arrival.
     if (delta > 0 && next >= habit.target) {
-      HapticFeedback.heavyImpact();
+      TideHaptics.heavyImpact();
     }
   }
 

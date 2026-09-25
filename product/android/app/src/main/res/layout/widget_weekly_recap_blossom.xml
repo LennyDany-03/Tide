@@ -11,11 +11,21 @@
     android:paddingEnd="14dp"
     android:paddingBottom="10dp">
 
-    <LinearLayout
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:id="@+id/recap_content"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -388,9 +398,25 @@
                 android:layout_marginTop="4dp"
                 android:fontFamily="@font/manrope_medium"
                 android:includeFontPadding="false"
-                android:text="@string/widget_day_sun"
-                android:textColor="@color/tide_blossom_silt"
-                android:textSize="10sp" />
+android:text="@string/widget_day_sun"
+            android:textColor="@color/tide_blossom_silt"
+            android:textSize="10sp" />
+        </LinearLayout>
         </LinearLayout>
     </LinearLayout>
+
+        <TextView
+            android:id="@+id/recap_off"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:fontFamily="@font/manrope_regular"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:maxLines="3"
+            android:text="@string/widget_recap_off"
+            android:textColor="@color/tide_blossom_silt"
+            android:textSize="13sp"
+            android:visibility="gone" />
+    </FrameLayout>
 </LinearLayout>

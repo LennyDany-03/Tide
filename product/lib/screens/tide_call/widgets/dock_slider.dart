@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../config/reminder_copy.dart';
+import '../../../services/haptics.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
 import '../../../theme/tide_gradients.dart';
@@ -96,7 +96,7 @@ class _DockSliderState extends State<DockSlider> with TickerProviderStateMixin {
     final crossed = _travel.value >= TideMotion.dockThreshold;
     if (crossed != _crossed) {
       setState(() => _crossed = crossed);
-      if (crossed) unawaited(HapticFeedback.selectionClick());
+      if (crossed) unawaited(TideHaptics.selectionClick());
     }
   }
 

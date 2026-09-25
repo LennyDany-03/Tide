@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
-import 'package:flutter/services.dart';
 
 import '../../../config/task_copy.dart';
+import '../../../services/haptics.dart';
 import '../../../services/tasks/task.dart';
 import '../../../theme/tide_colors.dart';
 import '../../../theme/tide_elevation.dart';
@@ -145,7 +145,7 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
         _width > 0 && _drag.abs() / _width >= TideMotion.swipeThreshold;
     if (armed != _armed) {
       _armed = armed;
-      if (armed) HapticFeedback.selectionClick();
+      if (armed) TideHaptics.selectionClick();
     }
   }
 
@@ -156,7 +156,7 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
     // TideMotion.swipeFlingVelocity.
     final flung = velocity.abs() >= TideMotion.swipeFlingVelocity;
     if (_armed && !flung && _drag > 0 && _blocked) {
-      HapticFeedback.heavyImpact();
+      TideHaptics.heavyImpact();
       _slide(0, TideMotion.swipeCancel, TideMotion.swipeCancelCurve);
       widget.onBlocked?.call();
     } else if (_armed && !flung) {
@@ -176,7 +176,7 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
   /// False if the card went away meanwhile.
   Future<bool> _leave(bool right) async {
     _leaving = true;
-    HapticFeedback.mediumImpact();
+    TideHaptics.mediumImpact();
     await _slide(
       right ? _width : -_width,
       TideMotion.swipeSettle,
@@ -268,7 +268,7 @@ class _TaskCardState extends State<TaskCard> with TickerProviderStateMixin {
                         onLongPress: widget.onMenu == null
                             ? null
                             : () {
-                                HapticFeedback.mediumImpact();
+                                TideHaptics.mediumImpact();
                                 widget.onMenu!();
                               },
                         scale: 0.985,

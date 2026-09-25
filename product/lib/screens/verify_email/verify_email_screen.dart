@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
 import '../../config/app_routes.dart';
 import '../../services/auth/auth_service.dart';
+import '../../services/haptics.dart';
 import '../../services/tide_scope.dart';
 import '../../theme/tide_colors.dart';
 import '../../theme/tide_motion.dart';
@@ -168,7 +168,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen>
     if (!mounted) return;
     _clock?.cancel();
     _focus.unfocus();
-    HapticFeedback.mediumImpact();
+    TideHaptics.mediumImpact();
     setState(() {
       _checking = false;
       _confirmed = true;

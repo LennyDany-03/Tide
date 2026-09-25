@@ -511,6 +511,8 @@ class _TideAppState extends State<TideApp> with WidgetsBindingObserver {
       case 'dashboard':
       case 'insights':
         _router.go(Routes.insights);
+      case 'settings':
+        _router.go(Routes.settings);
       case 'task':
         final id = uri.queryParameters['id'];
         if (id != null) _openTask(id);

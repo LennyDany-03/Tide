@@ -24,6 +24,24 @@ class WeeklyRecapWidgetProvider : TideHomeWidgetProvider() {
 
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, WidgetTheme.layout(context, R.layout.widget_weekly_recap))
+
+            if (!payload.signedIn) {
+                // The recap was turned off in Settings (or the account left):
+                // one clear line instead of a stale week's figures.
+                views.setViewVisibility(R.id.recap_content, View.GONE)
+                views.setViewVisibility(R.id.recap_off, View.VISIBLE)
+                WidgetUi.click(
+                    context,
+                    views,
+                    R.id.recap_container,
+                    android.net.Uri.parse("tide://widget/settings"),
+                )
+                appWidgetManager.updateAppWidget(widgetId, views)
+                return@forEach
+            }
+            views.setViewVisibility(R.id.recap_content, View.VISIBLE)
+            views.setViewVisibility(R.id.recap_off, View.GONE)
+
             val delta = payload.weekPercent - payload.lastWeekPercent
             val up = delta >= 0
 

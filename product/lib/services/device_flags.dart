@@ -19,6 +19,8 @@ class DeviceFlags {
     this._pendingVerification,
     this._widgetHabits,
     this._paletteId,
+    this._haptics,
+    this._weeklyRecap,
   );
 
   /// Remembers nothing past the process — tests, and a caller that has not
@@ -27,7 +29,9 @@ class DeviceFlags {
     bool onboardingSeen = false,
     String? pendingVerification,
     String? paletteId,
-  }) : this._(null, onboardingSeen, {}, pendingVerification, {}, paletteId);
+    bool haptics = true,
+    bool weeklyRecap = false,
+  }) : this._(null, onboardingSeen, {}, pendingVerification, {}, paletteId, haptics, weeklyRecap);
 
   static Future<DeviceFlags> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -38,6 +42,8 @@ class DeviceFlags {
       prefs.getString(_pendingKey),
       _decodeWidgetHabits(prefs.getString(_widgetHabitsKey)),
       prefs.getString(_paletteKey),
+      prefs.getBool(_hapticsKey) ?? true,
+      prefs.getBool(_weeklyRecapKey) ?? false,
     );
   }
 
@@ -46,6 +52,8 @@ class DeviceFlags {
   static const String _pendingKey = 'tide.pending_verification';
   static const String _widgetHabitsKey = 'tide.widget_habits';
   static const String _paletteKey = 'tide.palette';
+  static const String _hapticsKey = 'tide.haptics';
+  static const String _weeklyRecapKey = 'tide.weekly_recap';
 
   final SharedPreferences? _prefs;
   bool _onboardingSeen;
@@ -53,6 +61,8 @@ class DeviceFlags {
   String? _pendingVerification;
   final Map<int, String> _widgetHabits;
   String? _paletteId;
+  bool _haptics;
+  bool _weeklyRecap;
 
   bool get onboardingSeen => _onboardingSeen;
 
@@ -100,6 +110,30 @@ class DeviceFlags {
     if (id == _paletteId) return;
     _paletteId = id;
     unawaited(_prefs?.setString(_paletteKey, id));
+  }
+
+  /// Whether the app should knock when something lands (Settings → Haptics).
+  ///
+  /// A device choice, like the palette — no account should conjure a
+  /// different feel on the same phone. Defaults on, because that is the
+  /// app as it was written.
+  bool get haptics => _haptics;
+
+  void setHaptics(bool value) {
+    if (value == _haptics) return;
+    _haptics = value;
+    unawaited(_prefs?.setBool(_hapticsKey, value));
+  }
+
+  /// Whether the weekly recap is delivered on this device (Settings →
+  /// Notifications). Defaults off, so nobody is followed home by a recap
+  /// they never asked for.
+  bool get weeklyRecap => _weeklyRecap;
+
+  void setWeeklyRecap(bool value) {
+    if (value == _weeklyRecap) return;
+    _weeklyRecap = value;
+    unawaited(_prefs?.setBool(_weeklyRecapKey, value));
   }
 
   /// Which habit each placed Streak or Heatmap widget shows, by the

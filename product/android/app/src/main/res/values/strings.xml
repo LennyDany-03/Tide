@@ -30,6 +30,7 @@
     <string name="widget_vs_last_week">vs last week</string>
     <string name="widget_check_ins">check-ins</string>
     <string name="widget_recap_streak_label">best streak</string>
+    <string name="widget_recap_off">Weekly recap is off — turn it on in Settings</string>
     <string name="widget_new_habit">New habit</string>
 
     <string name="widget_today_description">What\'s due today, and how much of it is kept.</string>

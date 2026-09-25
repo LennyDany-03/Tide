@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tide/config/app_constants.dart';
 import 'package:tide/services/auth/demo_auth_service.dart';
 import 'package:tide/services/device_flags.dart';
+import 'package:tide/services/haptics.dart';
 import 'package:tide/services/models/habit.dart';
 import 'package:tide/services/tasks/task.dart';
 import 'package:tide/services/models/tide_glyph.dart';
@@ -79,6 +80,19 @@ void main() {
       expect(store.weeklyRecap, isTrue);
       store.setPreference(weeklyRecap: false);
       expect(store.weeklyRecap, isFalse);
+    });
+
+    test('haptics default on, and turning them off silences the gate', () {
+      final store = account();
+      expect(store.haptics, isTrue);
+      expect(TideHaptics.enabled, isTrue);
+
+      store.setPreference(haptics: false);
+      expect(store.haptics, isFalse);
+      expect(TideHaptics.enabled, isFalse);
+
+      store.setPreference(haptics: true);
+      expect(TideHaptics.enabled, isTrue);
     });
   });
 

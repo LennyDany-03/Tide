@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../../services/haptics.dart';
 import '../../../services/models/habit.dart';
 import '../../../services/models/tide_glyph.dart';
 import '../../../theme/tide_colors.dart';
@@ -201,7 +201,7 @@ class _HabitCardState extends State<HabitCard> with TickerProviderStateMixin {
         _cardWidth > 0 && _drag.abs() / _cardWidth >= TideMotion.swipeThreshold;
     if (armed != _armed) {
       _armed = armed;
-      if (armed) HapticFeedback.selectionClick();
+      if (armed) TideHaptics.selectionClick();
     }
   }
 
@@ -263,7 +263,7 @@ class _HabitCardState extends State<HabitCard> with TickerProviderStateMixin {
     bool gentle = false,
   }) async {
     _leaving = true;
-    gentle ? HapticFeedback.selectionClick() : HapticFeedback.mediumImpact();
+    gentle ? TideHaptics.selectionClick() : TideHaptics.mediumImpact();
     await _slide(
       right ? _cardWidth : -_cardWidth,
       TideMotion.swipeSettle,

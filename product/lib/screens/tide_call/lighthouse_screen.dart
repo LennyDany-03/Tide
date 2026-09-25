@@ -3,8 +3,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 
+import '../../services/haptics.dart';
 import '../../services/reminders/call_controller.dart';
 import '../../services/reminders/reminder_plan.dart';
 import '../../theme/tide_colors.dart';
@@ -196,7 +196,7 @@ class _LighthouseScreenState extends State<LighthouseScreen>
       return;
     }
     setState(() => _answer = _Answer.docked);
-    unawaited(HapticFeedback.heavyImpact());
+    unawaited(TideHaptics.heavyImpact());
     unawaited(widget.controller.resolve(_call, CallOutcome.done));
     await _lock.animateTo(
       1,
@@ -208,7 +208,7 @@ class _LighthouseScreenState extends State<LighthouseScreen>
   }
 
   void _blocked() {
-    unawaited(HapticFeedback.lightImpact());
+    unawaited(TideHaptics.lightImpact());
     _flash(
       _stepsLeft == 1
           ? 'One step left — tick it above to dock'
@@ -223,7 +223,7 @@ class _LighthouseScreenState extends State<LighthouseScreen>
       return;
     }
     setState(() => _answer = _Answer.snoozed);
-    unawaited(HapticFeedback.mediumImpact());
+    unawaited(TideHaptics.mediumImpact());
     unawaited(widget.controller.resolve(_call, CallOutcome.snooze));
     await Future.wait([
       _dim.animateTo(1, duration: _motion(TideMotion.callDrain)),
@@ -239,7 +239,7 @@ class _LighthouseScreenState extends State<LighthouseScreen>
   Future<void> _tomorrow() async {
     if (_answer != _Answer.none) return;
     setState(() => _answer = _Answer.tomorrow);
-    unawaited(HapticFeedback.mediumImpact());
+    unawaited(TideHaptics.mediumImpact());
     unawaited(widget.controller.resolve(_call, CallOutcome.tomorrow));
     await _leave.animateTo(
       1,
@@ -265,7 +265,7 @@ class _LighthouseScreenState extends State<LighthouseScreen>
 
   void _toggle(SlipStep step) {
     if (_answer != _Answer.none) return;
-    unawaited(HapticFeedback.selectionClick());
+    unawaited(TideHaptics.selectionClick());
     unawaited(widget.controller.toggleStep(_call, step.id, !step.done));
   }
 

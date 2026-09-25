@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/app_constants.dart';
 import '../../services/device_flags.dart';
+import '../../services/haptics.dart';
 import '../../services/reminders/call_controller.dart';
 import '../../services/reminders/reminder_plan.dart';
 import '../../services/reminders/reminder_scope.dart';
@@ -138,6 +139,9 @@ Future<void> runTideCall() async {
   // app is. Nothing else of the app is loaded.
   final flags = await DeviceFlags.load();
   TideColors.use(TidePalettes.byId(flags.paletteId ?? ''));
+  // This engine has no store to mirror the setting from, so the gate reads
+  // the flag directly — haptics off in Settings stays off over the lock.
+  TideHaptics.enabled = flags.haptics;
   SystemChrome.setSystemUIOverlayStyle(TideTheme.overlayStyle);
   final controller = NativeCallController();
   runApp(TideCallApp(controller: controller));

@@ -95,8 +95,9 @@ class HomeWidgetBridge {
     required bool signedIn,
     required List<Habit> habits,
     required Map<int, String> widgetHabits,
+    required bool weeklyRecap,
   }) {
-    _pendingHabits = _HabitState(signedIn, habits, widgetHabits);
+    _pendingHabits = _HabitState(signedIn, habits, widgetHabits, weeklyRecap);
     _habitsTimer ??= Timer(_delay, () {
       _habitsTimer = null;
       final next = _pendingHabits;
@@ -112,11 +113,12 @@ class HomeWidgetBridge {
     required bool signedIn,
     required List<Habit> habits,
     required Map<int, String> widgetHabits,
+    required bool weeklyRecap,
   }) {
     _habitsTimer?.cancel();
     _habitsTimer = null;
     _pendingHabits = null;
-    return _writeHabits(_HabitState(signedIn, habits, widgetHabits));
+    return _writeHabits(_HabitState(signedIn, habits, widgetHabits, weeklyRecap));
   }
 
   void scheduleTaskSync({required bool signedIn, required List<Task> tasks}) {
@@ -147,7 +149,7 @@ class HomeWidgetBridge {
       );
       await HomeWidget.saveWidgetData<String>(
         _keyRecap,
-        state.signedIn
+        state.signedIn && state.weeklyRecap
             ? jsonEncode(WidgetPayload.weeklyRecap(state.habits))
             : out,
       );
@@ -237,11 +239,12 @@ class HomeWidgetBridge {
 }
 
 class _HabitState {
-  _HabitState(this.signedIn, this.habits, this.widgetHabits);
+  _HabitState(this.signedIn, this.habits, this.widgetHabits, this.weeklyRecap);
 
   final bool signedIn;
   final List<Habit> habits;
   final Map<int, String> widgetHabits;
+  final bool weeklyRecap;
 
   Habit? habitFor(int widgetId) {
     final habitId = widgetHabits[widgetId];

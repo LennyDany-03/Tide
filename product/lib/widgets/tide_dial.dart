@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../config/reminder_copy.dart';
+import '../services/haptics.dart';
 import '../theme/tide_colors.dart';
 import '../theme/tide_elevation.dart';
 import '../theme/tide_gradients.dart';
@@ -105,7 +105,7 @@ class _TideDialState extends State<TideDial>
 
   void _shift(int minutes) {
     final next = (_snapped(_minutes) + minutes) % (24 * 60);
-    unawaited(HapticFeedback.selectionClick());
+    unawaited(TideHaptics.selectionClick());
     widget.onChanged(TimeOfDay(hour: next ~/ 60, minute: next % 60));
   }
 
@@ -307,7 +307,7 @@ class _DialSheetState extends State<_DialSheet> {
 
   void _hours(int by) {
     final minutes = (_time.hour * 60 + _time.minute + by * 60) % (24 * 60);
-    unawaited(HapticFeedback.selectionClick());
+    unawaited(TideHaptics.selectionClick());
     setState(
       () => _time = TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60),
     );

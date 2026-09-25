@@ -11,6 +11,7 @@ import 'auth/demo_auth_service.dart';
 import 'device_flags.dart';
 import 'habits/demo_habit_repository.dart';
 import 'habits/habit_repository.dart';
+import 'haptics.dart';
 import 'home_widget/home_widget_bridge.dart';
 import 'models/celebration_cue.dart';
 import 'models/day_summary.dart';
@@ -48,6 +49,13 @@ class TideStore extends ChangeNotifier {
     firstRun = !this.flags.onboardingSeen;
     final savedPalette = this.flags.paletteId;
     if (savedPalette != null) palette = TidePalettes.byId(savedPalette);
+    // Both settings are device choices, remembered from the last time the
+    // switch was thrown. The haptics gate has to be live before a single
+    // knock fires, and the weekly recap has to know its promise before the
+    // first habit sync pushes a widget.
+    haptics = this.flags.haptics;
+    weeklyRecap = this.flags.weeklyRecap;
+    TideHaptics.enabled = haptics;
     // Once per launch as well as on every change, so widgets placed by a
     // build from before they followed the palette catch up without a tap.
     unawaited(widgetBridge?.setPalette(palette.id));
@@ -904,9 +912,23 @@ class TideStore extends ChangeNotifier {
   /// Reminder switches — on or off, quiet hours — live in the reminder
   /// store, which keeps them on the device; these are the rest.
   void setPreference({bool? weeklyRecap, bool? haptics}) {
-    this.weeklyRecap = weeklyRecap ?? this.weeklyRecap;
-    this.haptics = haptics ?? this.haptics;
+    var changed = false;
+    if (weeklyRecap != null && weeklyRecap != this.weeklyRecap) {
+      this.weeklyRecap = weeklyRecap;
+      flags.setWeeklyRecap(weeklyRecap);
+      changed = true;
+    }
+    if (haptics != null && haptics != this.haptics) {
+      this.haptics = haptics;
+      TideHaptics.enabled = haptics;
+      flags.setHaptics(haptics);
+      changed = true;
+    }
+    if (!changed) return;
     notifyListeners();
+    // The home-screen weekly recap follows the switch, so a widget already
+    // placed changes the moment the setting does — no restart, no refresh.
+    if (weeklyRecap != null) _syncWidgets();
   }
 
   /// Switches the app to [next] and repaints what is on screen in it.
@@ -960,6 +982,7 @@ class TideStore extends ChangeNotifier {
     signedIn: signedIn,
     habits: _habits,
     widgetHabits: flags.widgetHabits,
+    weeklyRecap: weeklyRecap,
   );
 
   /// Re-pushes the widget payload with nothing changed in the store — used
@@ -977,6 +1000,7 @@ class TideStore extends ChangeNotifier {
       signedIn: signedIn,
       habits: _habits,
       widgetHabits: flags.widgetHabits,
+      weeklyRecap: weeklyRecap,
     );
   }
 

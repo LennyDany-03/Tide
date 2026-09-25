@@ -4,9 +4,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
-import 'package:flutter/services.dart';
 
 import '../../services/habits/habit_rows.dart';
+import '../../services/haptics.dart';
 import '../../services/models/tide_glyph.dart';
 import '../../services/reminders/call_controller.dart';
 import '../../services/reminders/reminder_plan.dart';
@@ -186,7 +186,7 @@ class _TideCallScreenState extends State<TideCallScreen>
     if (_answer != _Answer.none) return;
     final call = _call;
     setState(() => _answer = _Answer.done);
-    unawaited(HapticFeedback.heavyImpact());
+    unawaited(TideHaptics.heavyImpact());
     unawaited(widget.controller.resolve(call, CallOutcome.done));
     await _water.animateTo(
       1.12 - _rest,
@@ -203,7 +203,7 @@ class _TideCallScreenState extends State<TideCallScreen>
       _answer = _Answer.doneAll;
       _answeredCount = calls.length;
     });
-    unawaited(HapticFeedback.heavyImpact());
+    unawaited(TideHaptics.heavyImpact());
     for (final call in calls) {
       unawaited(widget.controller.resolve(call, CallOutcome.done));
     }
@@ -228,7 +228,7 @@ class _TideCallScreenState extends State<TideCallScreen>
       return;
     }
     setState(() => _answer = _Answer.snoozed);
-    unawaited(HapticFeedback.mediumImpact());
+    unawaited(TideHaptics.mediumImpact());
     unawaited(widget.controller.resolve(call, CallOutcome.snooze));
     final width = MediaQuery.sizeOf(context).width;
     await Future.wait([
